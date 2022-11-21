@@ -7,3 +7,6 @@
 [submodule "oryx-embedded/cyclone_crypto"]
 	path = oryx-embedded/cyclone_crypto
 	url = https://github.com/Oryx-Embedded/CycloneCRYPTO.git
+[submodule "micropython"]
+	path = micropython
+	url = https://github.com/micropython/micropython.git
