@@ -42,62 +42,68 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_2(python_blake2bCompute_obj, python_blake2bComput
 
 // Calculer cle publique a partir de la cle privee
 /* ed25519GeneratePublicKey(const uint8_t *privateKey, uint8_t *publicKey) */
-STATIC mp_obj_t python_ed25519GeneratePublickey(mp_obj_t privateKey_obj, mp_obj_t out_publicKey_obj) {
+STATIC mp_obj_t python_ed25519GeneratePublickey(mp_obj_t privateKey_obj) {
 
     mp_buffer_info_t private_key_bufinfo;
     mp_get_buffer_raise(privateKey_obj, &private_key_bufinfo, MP_BUFFER_READ);
 
-    mp_buffer_info_t public_key_bufinfo;
-    mp_get_buffer_raise(out_publicKey_obj, &public_key_bufinfo, MP_BUFFER_WRITE);
+    if(private_key_bufinfo.len != ED25519_PRIVATE_KEY_LEN) return mp_obj_new_int(-1);
 
-    if(public_key_bufinfo.len != 32) return mp_obj_new_int(-1);
+    // mp_buffer_info_t public_key_bufinfo;
+    // mp_get_buffer_raise(out_publicKey_obj, &public_key_bufinfo, MP_BUFFER_WRITE);
+    // if(public_key_bufinfo.len != 32) return mp_obj_new_int(-1);
 
-    int res = ed25519GeneratePublicKey(private_key_bufinfo.buf, public_key_bufinfo.buf);
+    uint8_t cle_publique[ED25519_PUBLIC_KEY_LEN];
 
-    return mp_obj_new_int(res);
+    int res = ed25519GeneratePublicKey(private_key_bufinfo.buf, cle_publique);
+
+    if(res != 0) return mp_const_none;  // Erreur
+
+    // return mp_obj_new_int(res);
+    return mp_obj_new_bytes(cle_publique, ED25519_PUBLIC_KEY_LEN);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(python_ed25519GeneratePublickey_obj, python_ed25519GeneratePublickey);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(python_ed25519GeneratePublickey_obj, python_ed25519GeneratePublickey);
 
 /*
     ed25519GenerateSignature(const uint8_t *privateKey,
         const uint8_t *publicKey, const void *message, size_t messageLen,
         const void *context, uint8_t contextLen, uint8_t flag, uint8_t *signature)
 */
-STATIC mp_obj_t python_ed25519Sign(mp_uint_t n_args, const mp_obj_t *args) {
+STATIC mp_obj_t python_ed25519Sign(mp_obj_t privateKey_obj, mp_obj_t publicKey_obj, mp_obj_t message_obj) {
 
-    if(n_args != 4) return mp_obj_new_int(-5);
-
+    // Charger cle privee
     mp_buffer_info_t privatekey_bufinfo;
-    mp_get_buffer_raise(args[0], &privatekey_bufinfo, MP_BUFFER_READ);
+    mp_get_buffer_raise(privateKey_obj, &privatekey_bufinfo, MP_BUFFER_READ);
+    if(privatekey_bufinfo.len != ED25519_PRIVATE_KEY_LEN) return mp_obj_new_int(-4);
 
-    if(privatekey_bufinfo.len != 32) return mp_obj_new_int(-4);
-
+    // Charger cle publique
     mp_buffer_info_t publicKey_bufinfo;
-    mp_get_buffer_raise(args[1], &publicKey_bufinfo, MP_BUFFER_READ);
+    mp_get_buffer_raise(publicKey_obj, &publicKey_bufinfo, MP_BUFFER_READ);
+    if(publicKey_bufinfo.len != ED25519_PUBLIC_KEY_LEN) return mp_obj_new_int(-3);
 
-    if(publicKey_bufinfo.len != 32) return mp_obj_new_int(-3);
-
+    // Charger message
     mp_buffer_info_t message_bufinfo;
-    mp_get_buffer_raise(args[2], &message_bufinfo, MP_BUFFER_READ);
+    mp_get_buffer_raise(message_obj, &message_bufinfo, MP_BUFFER_READ);
 
-    mp_buffer_info_t signature_bufinfo;
-    mp_get_buffer_raise(args[3], &signature_bufinfo, MP_BUFFER_WRITE);
-
-    if(signature_bufinfo.len != 64) return mp_obj_new_int(-2);
-
+    // Preparer output
     const uint8_t flag = 0;
+    uint8_t signature_out[ED25519_SIGNATURE_LEN];
 
+    // Signer
     int res = ed25519GenerateSignature(
         privatekey_bufinfo.buf, publicKey_bufinfo.buf,
         message_bufinfo.buf, message_bufinfo.len,
         0, 0, // context
         flag, 
-        signature_bufinfo.buf
+        signature_out
     );
 
-    return mp_obj_new_int(res);
+    if(res != 0) return mp_const_none;  // Erreur de signature
+
+    // Nouveau objet Python bytes avec la signature
+    return mp_obj_new_bytes(signature_out, ED25519_SIGNATURE_LEN);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(python_ed25519Sign_obj, 4, 4, python_ed25519Sign);
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(python_ed25519Sign_obj, python_ed25519Sign);
 
 /*
 error_t ed25519VerifySignature(const uint8_t *publicKey, const void *message,
