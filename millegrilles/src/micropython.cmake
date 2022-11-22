@@ -29,6 +29,9 @@ target_sources(usermod_oryx_lib PUBLIC
     ${ORYX_LIB}/cyclone_crypto/encoding/oid.c
     ${ORYX_LIB}/cyclone_crypto/encoding/radix64.c
 
+    # mpi
+    ${ORYX_LIB}/cyclone_crypto/mpi/mpi.c
+
     # pkc
     ${ORYX_LIB}/cyclone_crypto/pkc/dh.c
     ${ORYX_LIB}/cyclone_crypto/pkc/dsa.c
@@ -69,6 +72,7 @@ target_include_directories(usermod_oryx_crypto INTERFACE
     ${ORYX_LIB}/cyclone_crypto/encoding
     ${ORYX_LIB}/cyclone_crypto/hash
     ${ORYX_LIB}/cyclone_crypto/ecc
+    ${ORYX_LIB}/cyclone_crypto/mpi
     ${ORYX_LIB}/cyclone_crypto/pkc
     ${ORYX_LIB}/cyclone_crypto/pkix
 )

@@ -190,22 +190,35 @@ STATIC mp_obj_t python_x509_read_pem_certificate(mp_obj_t pem_obj) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(python_x509_read_pem_certificate_obj, python_x509_read_pem_certificate);
 
 // x509 parse
-STATIC mp_obj_t python_x509_parse_der_certificate(mp_obj_t der_obj) {
+STATIC mp_obj_t python_x509_valider_der_certificate(mp_obj_t der_obj, mp_obj_t parent_der_obj) {
     mp_buffer_info_t der_bufinfo;
     mp_get_buffer_raise(der_obj, &der_bufinfo, MP_BUFFER_READ);
-
     X509CertificateInfo certInfo;
 
-    error_t res_parse = x509ParseCertificate(der_bufinfo.buf, der_bufinfo.len, &certInfo);
+    mp_buffer_info_t parent_der_bufinfo;
+    mp_get_buffer_raise(parent_der_obj, &parent_der_bufinfo, MP_BUFFER_READ);
+    X509CertificateInfo parent_certInfo;
 
+    error_t res_parse = x509ParseCertificate(der_bufinfo.buf, der_bufinfo.len, &certInfo);
     if(res_parse != 0) {
         nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
+
+    res_parse = x509ParseCertificate(parent_der_bufinfo.buf, parent_der_bufinfo.len, &parent_certInfo);
+    if(res_parse != 0) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
+
+    // Valider le certificat
+    error_t res_validation = x509ValidateCertificate(&certInfo, &parent_certInfo, 0);
+    if(res_validation != 0) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, SIGNATURE_INVALIDE));
     }
 
     // return mp_obj_new_bytes(der, output_len);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(python_x509_parse_der_certificate_obj, python_x509_parse_der_certificate);
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(python_x509_valider_der_certificate_obj, python_x509_valider_der_certificate);
 
 // Define all properties of the module.
 // Table entries are key/value pairs of the attribute name (a string)
@@ -220,7 +233,7 @@ STATIC const mp_rom_map_elem_t example_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_ed25519verify), MP_ROM_PTR(&python_ed25519Verify_obj) },
     { MP_ROM_QSTR(MP_QSTR_ed25519generatepubkey), MP_ROM_PTR(&python_ed25519GeneratePublickey_obj) },
     { MP_ROM_QSTR(MP_QSTR_x509readpemcertificate), MP_ROM_PTR(&python_x509_read_pem_certificate_obj) },
-    { MP_ROM_QSTR(MP_QSTR_x509parsedercertificate), MP_ROM_PTR(&python_x509_parse_der_certificate_obj) },
+    { MP_ROM_QSTR(MP_QSTR_x509validercertificate), MP_ROM_PTR(&python_x509_valider_der_certificate_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(example_module_globals, example_module_globals_table);
 
