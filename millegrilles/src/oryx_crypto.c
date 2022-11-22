@@ -11,6 +11,7 @@
 const mp_rom_error_text_t LEN_INVALIDE = "len invalide";
 const mp_rom_error_text_t OPERATION_INVALIDE = "oper invalide";
 const mp_rom_error_text_t SIGNATURE_INVALIDE = "sign invalide";
+const mp_rom_error_text_t DATE_INVALIDE = "date invalide";
 
 // Blake2s
 STATIC mp_obj_t python_blake2sCompute(mp_obj_t message_data_obj) {
@@ -190,7 +191,30 @@ STATIC mp_obj_t python_x509_read_pem_certificate(mp_obj_t pem_obj) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(python_x509_read_pem_certificate_obj, python_x509_read_pem_certificate);
 
 // x509 parse
-STATIC mp_obj_t python_x509_valider_der_certificate(mp_obj_t der_obj, mp_obj_t parent_der_obj) {
+error_t x509_validate_date(const X509CertificateInfo *certInfo, time_t currentTime) {
+    DateTime currentDate;
+    const X509Validity *validity;
+
+    //Convert Unix timestamp to date
+    convertUnixTimeToDate(currentTime, &currentDate);
+
+    //The certificate validity period is the time interval during which the
+    //CA warrants that it will maintain information about the status of the
+    //certificate
+    validity = &certInfo->tbsCert.validity;
+
+    //Check the validity period
+    if(compareDateTime(&currentDate, &validity->notBefore) < 0 ||
+     compareDateTime(&currentDate, &validity->notAfter) > 0)
+    {
+        //The certificate has expired or is not yet valid
+        return ERROR_CERTIFICATE_EXPIRED;
+    }
+
+    return 0;
+}
+
+STATIC mp_obj_t python_x509_valider_der_certificate(mp_obj_t der_obj, mp_obj_t parent_der_obj, mp_obj_t validation_time) {
     mp_buffer_info_t der_bufinfo;
     mp_get_buffer_raise(der_obj, &der_bufinfo, MP_BUFFER_READ);
     X509CertificateInfo certInfo;
@@ -198,6 +222,8 @@ STATIC mp_obj_t python_x509_valider_der_certificate(mp_obj_t der_obj, mp_obj_t p
     mp_buffer_info_t parent_der_bufinfo;
     mp_get_buffer_raise(parent_der_obj, &parent_der_bufinfo, MP_BUFFER_READ);
     X509CertificateInfo parent_certInfo;
+
+    time_t valid_time = mp_obj_get_int(validation_time);
 
     error_t res_parse = x509ParseCertificate(der_bufinfo.buf, der_bufinfo.len, &certInfo);
     if(res_parse != 0) {
@@ -215,10 +241,20 @@ STATIC mp_obj_t python_x509_valider_der_certificate(mp_obj_t der_obj, mp_obj_t p
         nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, SIGNATURE_INVALIDE));
     }
 
-    // return mp_obj_new_bytes(der, output_len);
+    if(valid_time > 0) {
+        error_t cert_date_valid = x509_validate_date(&certInfo, valid_time);
+        if(cert_date_valid != 0) {
+            nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, DATE_INVALIDE));
+        }
+        //cert_date_valid = x509_validate_date(&parent_certInfo, valid_time);
+        //if(cert_date_valid != 0) {
+        //    nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, DATE_INVALIDE));
+        //}
+    }
+
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(python_x509_valider_der_certificate_obj, python_x509_valider_der_certificate);
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(python_x509_valider_der_certificate_obj, python_x509_valider_der_certificate);
 
 // Define all properties of the module.
 // Table entries are key/value pairs of the attribute name (a string)
