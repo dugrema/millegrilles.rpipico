@@ -4,62 +4,73 @@
 #include "../../oryx-embedded/cyclone_crypto/hash/blake2b.h"
 #include "../../oryx-embedded/cyclone_crypto/ecc/ed25519.h"
 
-// Blake2s
-STATIC mp_obj_t python_blake2sCompute(mp_obj_t message_data_obj, mp_obj_t digest_obj) {
+#define DIGEST_BLAKE2S_LEN 32
+#define DIGEST_BLAKE2B_LEN 64
 
+const mp_rom_error_text_t LEN_INVALIDE = "len invalide";
+const mp_rom_error_text_t OPERATION_INVALIDE = "oper invalide";
+const mp_rom_error_text_t SIGNATURE_INVALIDE = "sign invalide";
+
+// Blake2s
+STATIC mp_obj_t python_blake2sCompute(mp_obj_t message_data_obj) {
+
+    // Prep message
     mp_buffer_info_t message_bufinfo;
     mp_get_buffer_raise(message_data_obj, &message_bufinfo, MP_BUFFER_READ);
 
-    mp_buffer_info_t digest_bufinfo;
-    mp_get_buffer_raise(digest_obj, &digest_bufinfo, MP_BUFFER_WRITE);
+    // Calcul digest
+    uint8_t digest_out[DIGEST_BLAKE2S_LEN];
+    int res = blake2sCompute(0, 0, message_bufinfo.buf, message_bufinfo.len, digest_out, DIGEST_BLAKE2S_LEN);
 
-    if(digest_bufinfo.len != 32) return mp_obj_new_int(-1);
+    if(res != 0) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
 
-    int res = blake2sCompute(0, 0, message_bufinfo.buf, message_bufinfo.len, digest_bufinfo.buf, digest_bufinfo.len);
-
-    return mp_obj_new_int(res);
+    // Return bytes obj
+    return mp_obj_new_bytes(digest_out, DIGEST_BLAKE2S_LEN);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(python_blake2sCompute_obj, python_blake2sCompute);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(python_blake2sCompute_obj, python_blake2sCompute);
 
 // Blake2b
-STATIC mp_obj_t python_blake2bCompute(mp_obj_t message_data_obj, mp_obj_t digest_obj) {
+STATIC mp_obj_t python_blake2bCompute(mp_obj_t message_data_obj) {
 
+    // Prep message
     mp_buffer_info_t message_bufinfo;
     mp_get_buffer_raise(message_data_obj, &message_bufinfo, MP_BUFFER_READ);
 
-    mp_buffer_info_t digest_bufinfo;
-    mp_get_buffer_raise(digest_obj, &digest_bufinfo, MP_BUFFER_WRITE);
+    uint8_t digest_out[DIGEST_BLAKE2B_LEN];
+    int res = blake2bCompute(0, 0, message_bufinfo.buf, message_bufinfo.len, digest_out, DIGEST_BLAKE2B_LEN);
 
-    if(digest_bufinfo.len != 64) return mp_obj_new_int(-1);
+    if(res != 0) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, DIGEST_BLAKE2B_LEN));
+    }
 
-    int res = blake2bCompute(0, 0, message_bufinfo.buf, message_bufinfo.len, digest_bufinfo.buf, digest_bufinfo.len);
-
-    return mp_obj_new_int(res);
+    // Return bytes obj
+    return mp_obj_new_bytes(digest_out, DIGEST_BLAKE2B_LEN);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(python_blake2bCompute_obj, python_blake2bCompute);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(python_blake2bCompute_obj, python_blake2bCompute);
 
 // Ed25519
 
 // Calculer cle publique a partir de la cle privee
-/* ed25519GeneratePublicKey(const uint8_t *privateKey, uint8_t *publicKey) */
 STATIC mp_obj_t python_ed25519GeneratePublickey(mp_obj_t privateKey_obj) {
 
+    // Charger cle privee, valider
     mp_buffer_info_t private_key_bufinfo;
     mp_get_buffer_raise(privateKey_obj, &private_key_bufinfo, MP_BUFFER_READ);
+    if(private_key_bufinfo.len != ED25519_PRIVATE_KEY_LEN) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_ValueError, LEN_INVALIDE));
+    }
 
-    if(private_key_bufinfo.len != ED25519_PRIVATE_KEY_LEN) return mp_obj_new_int(-1);
-
-    // mp_buffer_info_t public_key_bufinfo;
-    // mp_get_buffer_raise(out_publicKey_obj, &public_key_bufinfo, MP_BUFFER_WRITE);
-    // if(public_key_bufinfo.len != 32) return mp_obj_new_int(-1);
-
+    // Calculer cle publique
     uint8_t cle_publique[ED25519_PUBLIC_KEY_LEN];
-
     int res = ed25519GeneratePublicKey(private_key_bufinfo.buf, cle_publique);
 
-    if(res != 0) return mp_const_none;  // Erreur
+    if(res != 0) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
 
-    // return mp_obj_new_int(res);
+    // Return bytes obj
     return mp_obj_new_bytes(cle_publique, ED25519_PUBLIC_KEY_LEN);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(python_ed25519GeneratePublickey_obj, python_ed25519GeneratePublickey);
@@ -74,12 +85,16 @@ STATIC mp_obj_t python_ed25519Sign(mp_obj_t privateKey_obj, mp_obj_t publicKey_o
     // Charger cle privee
     mp_buffer_info_t privatekey_bufinfo;
     mp_get_buffer_raise(privateKey_obj, &privatekey_bufinfo, MP_BUFFER_READ);
-    if(privatekey_bufinfo.len != ED25519_PRIVATE_KEY_LEN) return mp_obj_new_int(-4);
+    if(privatekey_bufinfo.len != ED25519_PRIVATE_KEY_LEN) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_ValueError, LEN_INVALIDE));
+    }
 
     // Charger cle publique
     mp_buffer_info_t publicKey_bufinfo;
     mp_get_buffer_raise(publicKey_obj, &publicKey_bufinfo, MP_BUFFER_READ);
-    if(publicKey_bufinfo.len != ED25519_PUBLIC_KEY_LEN) return mp_obj_new_int(-3);
+    if(publicKey_bufinfo.len != ED25519_PUBLIC_KEY_LEN) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_ValueError, LEN_INVALIDE));
+    }
 
     // Charger message
     mp_buffer_info_t message_bufinfo;
@@ -98,7 +113,10 @@ STATIC mp_obj_t python_ed25519Sign(mp_obj_t privateKey_obj, mp_obj_t publicKey_o
         signature_out
     );
 
-    if(res != 0) return mp_const_none;  // Erreur de signature
+    if(res != 0) {
+        // Erreur de signature
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
 
     // Nouveau objet Python bytes avec la signature
     return mp_obj_new_bytes(signature_out, ED25519_SIGNATURE_LEN);
@@ -115,12 +133,16 @@ STATIC mp_obj_t python_ed25519Verify(mp_obj_t publicKey_obj, mp_obj_t signature_
     mp_buffer_info_t publicKey_bufinfo;
     mp_get_buffer_raise(publicKey_obj, &publicKey_bufinfo, MP_BUFFER_READ);
 
-    if(publicKey_bufinfo.len != 32) return mp_obj_new_int(-3);
+    if(publicKey_bufinfo.len != 32) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_ValueError, LEN_INVALIDE));
+    }
 
     mp_buffer_info_t signature_bufinfo;
     mp_get_buffer_raise(signature_obj, &signature_bufinfo, MP_BUFFER_READ);
 
-    if(signature_bufinfo.len != 64) return mp_obj_new_int(-3);
+    if(signature_bufinfo.len != 64) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_ValueError, LEN_INVALIDE));
+    }
 
     mp_buffer_info_t message_bufinfo;
     mp_get_buffer_raise(message_obj, &message_bufinfo, MP_BUFFER_READ);
@@ -135,7 +157,12 @@ STATIC mp_obj_t python_ed25519Verify(mp_obj_t publicKey_obj, mp_obj_t signature_
         signature_bufinfo.buf
     );
 
-    return mp_obj_new_int(res);
+    if(res != 0) {
+        // Erreur de signature
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, SIGNATURE_INVALIDE));
+    }
+
+    return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(python_ed25519Verify_obj, python_ed25519Verify);
 
