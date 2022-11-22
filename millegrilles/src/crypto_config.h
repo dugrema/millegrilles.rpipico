@@ -181,12 +181,12 @@
 //Diffie-Hellman support
 #define DH_SUPPORT DISABLED
 //RSA support
-#define RSA_SUPPORT DISABLED
+#define RSA_SUPPORT ENABLED
 //DSA support
 #define DSA_SUPPORT DISABLED
 
 //Elliptic curve cryptography support
-#define EC_SUPPORT DISABLED
+#define EC_SUPPORT ENABLED
 //ECDH support
 #define ECDH_SUPPORT DISABLED
 //ECDSA support

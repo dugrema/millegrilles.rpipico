@@ -3,6 +3,7 @@
 #include "../../oryx-embedded/cyclone_crypto/hash/blake2s.h"
 #include "../../oryx-embedded/cyclone_crypto/hash/blake2b.h"
 #include "../../oryx-embedded/cyclone_crypto/ecc/ed25519.h"
+#include "../../oryx-embedded/cyclone_crypto/pkix/x509_common.h"
 
 #define DIGEST_BLAKE2S_LEN 32
 #define DIGEST_BLAKE2B_LEN 64
@@ -166,6 +167,46 @@ STATIC mp_obj_t python_ed25519Verify(mp_obj_t publicKey_obj, mp_obj_t signature_
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(python_ed25519Verify_obj, python_ed25519Verify);
 
+// x509
+
+// Parse PEM certificat
+STATIC mp_obj_t python_x509_read_pem_certificate(mp_obj_t pem_obj) {
+    mp_buffer_info_t pem_bufinfo;
+    mp_get_buffer_raise(pem_obj, &pem_bufinfo, MP_BUFFER_READ);
+
+    uint8_t der[4096];
+    size_t output_len = 4096;
+    size_t consumed;
+
+    error_t res_import = pemImportCertificate(pem_bufinfo.buf, pem_bufinfo.len, &der, &output_len, &consumed);
+
+    if(res_import != 0) {
+        // Erreur de signature
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
+
+    return mp_obj_new_bytes(der, output_len);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(python_x509_read_pem_certificate_obj, python_x509_read_pem_certificate);
+
+// x509 parse
+STATIC mp_obj_t python_x509_parse_der_certificate(mp_obj_t der_obj) {
+    mp_buffer_info_t der_bufinfo;
+    mp_get_buffer_raise(der_obj, &der_bufinfo, MP_BUFFER_READ);
+
+    X509CertificateInfo certInfo;
+
+    error_t res_parse = x509ParseCertificate(der_bufinfo.buf, der_bufinfo.len, &certInfo);
+
+    if(res_parse != 0) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
+
+    // return mp_obj_new_bytes(der, output_len);
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(python_x509_parse_der_certificate_obj, python_x509_parse_der_certificate);
+
 // Define all properties of the module.
 // Table entries are key/value pairs of the attribute name (a string)
 // and the MicroPython object reference.
@@ -178,6 +219,8 @@ STATIC const mp_rom_map_elem_t example_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_ed25519sign), MP_ROM_PTR(&python_ed25519Sign_obj) },
     { MP_ROM_QSTR(MP_QSTR_ed25519verify), MP_ROM_PTR(&python_ed25519Verify_obj) },
     { MP_ROM_QSTR(MP_QSTR_ed25519generatepubkey), MP_ROM_PTR(&python_ed25519GeneratePublickey_obj) },
+    { MP_ROM_QSTR(MP_QSTR_x509readpemcertificate), MP_ROM_PTR(&python_x509_read_pem_certificate_obj) },
+    { MP_ROM_QSTR(MP_QSTR_x509parsedercertificate), MP_ROM_PTR(&python_x509_parse_der_certificate_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(example_module_globals, example_module_globals_table);
 
