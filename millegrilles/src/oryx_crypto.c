@@ -13,6 +13,7 @@ const mp_rom_error_text_t LEN_INVALIDE = "len invalide";
 const mp_rom_error_text_t OPERATION_INVALIDE = "oper invalide";
 const mp_rom_error_text_t SIGNATURE_INVALIDE = "sign invalide";
 const mp_rom_error_text_t DATE_INVALIDE = "date invalide";
+const mp_rom_error_text_t ERREUR_PAS_X509 = "pas x509CertInfo";
 
 // Blake2s
 STATIC mp_obj_t python_blake2sCompute(mp_obj_t message_data_obj) {
@@ -265,27 +266,6 @@ typedef struct _x509CertInfo_obj_t {
     X509CertificateInfo info;
 } x509CertInfo_obj_t;
 
-STATIC void x509CertInfo_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
-    (void)kind;
-    x509CertInfo_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    mp_print_str(print, "x509 certinfo");
-//    mp_obj_print_helper(print, mp_obj_new_float(self->x), PRINT_REPR);
-//    mp_print_str(print, ", ");
-//    mp_obj_print_helper(print, mp_obj_new_float(self->y), PRINT_REPR);
-//    mp_print_str(print, ", ");
-//    mp_obj_print_helper(print, mp_obj_new_float(self->z), PRINT_REPR);
-//    mp_print_str(print, ")");
-}
-
-STATIC mp_obj_t x509CertInfo_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
-    mp_arg_check_num(n_args, n_kw, 1, 1, true);
-
-    x509CertInfo_obj_t *info = m_new_obj(x509CertInfo_obj_t);
-    info->base.type = &x509CertInfo_type;
-    //info->x = mp_obj_get_float(args[0]);
-    return MP_OBJ_FROM_PTR(info);
-}
-
 const mp_obj_type_t x509CertInfo_type = {
     { &mp_type_type },
     .name = MP_QSTR_x509CertInfo,
@@ -294,9 +274,11 @@ const mp_obj_type_t x509CertInfo_type = {
 };
 
 // x509 extraction
+
+// Extraire la cle publique de X509CertificateInfo
 STATIC mp_obj_t x509CertInfo_publicKey(mp_obj_t o_in) {
     if(!mp_obj_is_type(o_in, &x509CertInfo_type)) {
-        mp_raise_TypeError("pas x509CertInfo");
+        mp_raise_TypeError(ERREUR_PAS_X509);
     }
 
     x509CertInfo_obj_t *enveloppe = MP_OBJ_TO_PTR(o_in);
@@ -310,6 +292,23 @@ STATIC mp_obj_t x509CertInfo_publicKey(mp_obj_t o_in) {
     return mp_obj_new_bytes(publicKey->q, 32);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(x509CertInfo_publicKey_obj, x509CertInfo_publicKey);
+
+// Extraire la cle publique de X509CertificateInfo
+STATIC mp_obj_t x509CertInfo_end_date(mp_obj_t o_in) {
+    if(!mp_obj_is_type(o_in, &x509CertInfo_type)) {
+        mp_raise_TypeError(ERREUR_PAS_X509);
+    }
+
+    x509CertInfo_obj_t *enveloppe = MP_OBJ_TO_PTR(o_in);
+    X509CertificateInfo *certInfo = &enveloppe->info;
+    X509TbsCertificate *tbsCert = &certInfo->tbsCert;
+    X509Validity *validity = &tbsCert->validity;
+
+    time_t notAfter = convertDateToUnixTime(&validity->notAfter);
+
+    return mp_obj_new_int(notAfter);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(x509CertInfo_end_date_obj, x509CertInfo_end_date);
 
 STATIC mp_obj_t python_x509_certificat_info(mp_obj_t der_obj) {
     mp_buffer_info_t der_bufinfo;
@@ -351,7 +350,8 @@ STATIC const mp_rom_map_elem_t oryxcrypto_module_globals_table[] = {
 
     { MP_OBJ_NEW_QSTR(MP_QSTR_x509CertInfo), (mp_obj_t)&x509CertInfo_type },
     { MP_ROM_QSTR(MP_QSTR_x509certificatinfo), MP_ROM_PTR(&python_x509_certificat_info_obj) },
-    { MP_ROM_QSTR(MP_QSTR_x509PublicKeyInfo), MP_ROM_PTR(&x509CertInfo_publicKey_obj) },
+    { MP_ROM_QSTR(MP_QSTR_x509PublicKey), MP_ROM_PTR(&x509CertInfo_publicKey_obj) },
+    { MP_ROM_QSTR(MP_QSTR_x509EndDate), MP_ROM_PTR(&x509CertInfo_end_date_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(oryxcrypto_module_globals, oryxcrypto_module_globals_table);
 
