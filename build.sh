@@ -11,7 +11,10 @@ rm "${REP_BASE}/firmware.uf2"
 
 cd "$REP_RP2"
 
-make clean
+if [ -z $NOCLEAN ]; then
+  echo "Cleaning project by default"
+  make clean
+fi
 make
 
 cp "${REP_BASE}/micropython/ports/rp2/build-PICO_W/firmware.uf2" "${REP_BASE}"

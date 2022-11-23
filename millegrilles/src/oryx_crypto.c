@@ -1,4 +1,5 @@
 // Include MicroPython API.
+#include "py/obj.h"
 #include "py/runtime.h"
 #include "../../oryx-embedded/cyclone_crypto/hash/blake2s.h"
 #include "../../oryx-embedded/cyclone_crypto/hash/blake2b.h"
@@ -246,22 +247,82 @@ STATIC mp_obj_t python_x509_valider_der_certificate(mp_obj_t der_obj, mp_obj_t p
         if(cert_date_valid != 0) {
             nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, DATE_INVALIDE));
         }
-        //cert_date_valid = x509_validate_date(&parent_certInfo, valid_time);
-        //if(cert_date_valid != 0) {
-        //    nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, DATE_INVALIDE));
-        //}
+        cert_date_valid = x509_validate_date(&parent_certInfo, valid_time);
+        if(cert_date_valid != 0) {
+            nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, DATE_INVALIDE));
+        }
     }
 
     return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(python_x509_valider_der_certificate_obj, python_x509_valider_der_certificate);
 
+// Information certificat x509
+const mp_obj_type_t x509CertInfo_type;
+
+typedef struct _x509CertInfo_obj_t {
+    mp_obj_base_t base;
+    X509CertificateInfo info;
+} x509CertInfo_obj_t;
+
+STATIC void x509CertInfo_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
+    (void)kind;
+    x509CertInfo_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    mp_print_str(print, "x509 certinfo");
+//    mp_obj_print_helper(print, mp_obj_new_float(self->x), PRINT_REPR);
+//    mp_print_str(print, ", ");
+//    mp_obj_print_helper(print, mp_obj_new_float(self->y), PRINT_REPR);
+//    mp_print_str(print, ", ");
+//    mp_obj_print_helper(print, mp_obj_new_float(self->z), PRINT_REPR);
+//    mp_print_str(print, ")");
+}
+
+STATIC mp_obj_t x509CertInfo_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 1, 1, true);
+
+    x509CertInfo_obj_t *info = m_new_obj(x509CertInfo_obj_t);
+    info->base.type = &x509CertInfo_type;
+    //info->x = mp_obj_get_float(args[0]);
+    return MP_OBJ_FROM_PTR(info);
+}
+
+const mp_obj_type_t x509CertInfo_type = {
+    { &mp_type_type },
+    .name = MP_QSTR_x509CertInfo,
+    // .print = x509CertInfo_print,
+    // .make_new = x509CertInfo_make_new,
+};
+
+// x509 extraction
+STATIC mp_obj_t python_x509_certificat_info(mp_obj_t der_obj) {
+    mp_buffer_info_t der_bufinfo;
+    mp_get_buffer_raise(der_obj, &der_bufinfo, MP_BUFFER_READ);
+    X509CertificateInfo certInfo;
+
+    error_t res_parse = x509ParseCertificate(der_bufinfo.buf, der_bufinfo.len, &certInfo);
+    if(res_parse != 0) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
+
+//    X509TbsCertificate *tbsCert = &certInfo.tbsCert;
+//    // Extraire la cle publique du certificat
+//    X509SubjectPublicKeyInfo *spki = &tbsCert->subjectPublicKeyInfo;
+//    X509EcPublicKey *publicKey = &spki->ecPublicKey;
+//    return mp_obj_new_bytes(publicKey->q, 32);
+
+    x509CertInfo_obj_t *result = m_new_obj(x509CertInfo_obj_t);
+    result->base.type = &x509CertInfo_type;
+    result->info = certInfo;
+    return MP_OBJ_FROM_PTR(result);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(python_x509_certificat_info_obj, python_x509_certificat_info);
+
 // Define all properties of the module.
 // Table entries are key/value pairs of the attribute name (a string)
 // and the MicroPython object reference.
 // All identifiers and strings are written as MP_QSTR_xxx and will be
 // optimized to word-sized integers by the build system (interned strings).
-STATIC const mp_rom_map_elem_t example_module_globals_table[] = {
+STATIC const mp_rom_map_elem_t oryxcrypto_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_oryx_crypto) },
     { MP_ROM_QSTR(MP_QSTR_blake2s), MP_ROM_PTR(&python_blake2sCompute_obj) },
     { MP_ROM_QSTR(MP_QSTR_blake2b), MP_ROM_PTR(&python_blake2bCompute_obj) },
@@ -270,14 +331,15 @@ STATIC const mp_rom_map_elem_t example_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_ed25519generatepubkey), MP_ROM_PTR(&python_ed25519GeneratePublickey_obj) },
     { MP_ROM_QSTR(MP_QSTR_x509readpemcertificate), MP_ROM_PTR(&python_x509_read_pem_certificate_obj) },
     { MP_ROM_QSTR(MP_QSTR_x509validercertificate), MP_ROM_PTR(&python_x509_valider_der_certificate_obj) },
+    { MP_ROM_QSTR(MP_QSTR_x509certificatinfo), MP_ROM_PTR(&python_x509_certificat_info_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(example_module_globals, example_module_globals_table);
+STATIC MP_DEFINE_CONST_DICT(oryxcrypto_module_globals, oryxcrypto_module_globals_table);
 
 // Define module object.
-const mp_obj_module_t example_user_cmodule = {
+const mp_obj_module_t oryxcrypto_user_cmodule = {
     .base = { &mp_type_module },
-    .globals = (mp_obj_dict_t *)&example_module_globals,
+    .globals = (mp_obj_dict_t *)&oryxcrypto_module_globals,
 };
 
 // Register the module to make it available in Python.
-MP_REGISTER_MODULE(MP_QSTR_oryx_crypto, example_user_cmodule);
+MP_REGISTER_MODULE(MP_QSTR_oryx_crypto, oryxcrypto_user_cmodule);
