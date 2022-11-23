@@ -30,5 +30,6 @@
 #define _OS_PORT_CONFIG_H
 
 #define USE_NO_RTOS
+#define X509_MAX_CUSTOM_EXTENSIONS 5
 
 #endif

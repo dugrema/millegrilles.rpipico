@@ -15,6 +15,8 @@ const mp_rom_error_text_t SIGNATURE_INVALIDE = "sign invalide";
 const mp_rom_error_text_t DATE_INVALIDE = "date invalide";
 const mp_rom_error_text_t ERREUR_PAS_X509 = "pas x509CertInfo";
 
+// const uint8_t X509_MG_EXTENSION_EXCHANGES[4] = {0x2a, 0x03, 0x04, 0x00};
+
 // Blake2s
 STATIC mp_obj_t python_blake2sCompute(mp_obj_t message_data_obj) {
 
@@ -293,7 +295,7 @@ STATIC mp_obj_t x509CertInfo_publicKey(mp_obj_t o_in) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(x509CertInfo_publicKey_obj, x509CertInfo_publicKey);
 
-// Extraire la cle publique de X509CertificateInfo
+// Extraire date d'expiration de X509CertificateInfo
 STATIC mp_obj_t x509CertInfo_end_date(mp_obj_t o_in) {
     if(!mp_obj_is_type(o_in, &x509CertInfo_type)) {
         mp_raise_TypeError(ERREUR_PAS_X509);
@@ -309,6 +311,36 @@ STATIC mp_obj_t x509CertInfo_end_date(mp_obj_t o_in) {
     return mp_obj_new_int(notAfter);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(x509CertInfo_end_date_obj, x509CertInfo_end_date);
+
+// Extraire roles du certificat
+STATIC mp_obj_t x509CertInfo_extension(mp_obj_t o_in, mp_obj_t oid_extension) {
+    if(!mp_obj_is_type(o_in, &x509CertInfo_type)) {
+        mp_raise_TypeError(ERREUR_PAS_X509);
+    }
+
+    // OID de l'extension
+    mp_buffer_info_t oid_bufinfo;
+    mp_get_buffer_raise(oid_extension, &oid_bufinfo, MP_BUFFER_READ);
+
+    x509CertInfo_obj_t *enveloppe = MP_OBJ_TO_PTR(o_in);
+    X509CertificateInfo *certInfo = &enveloppe->info;
+    X509TbsCertificate *tbsCert = &certInfo->tbsCert;
+    X509Extensions *extensions = &tbsCert->extensions;
+
+    uint_t numExtensions = extensions->numCustomExtensions;
+    for(uint_t extNo=0; extNo < numExtensions; extNo++) {
+        X509Extension *ext = &extensions->customExtensions[extNo];
+        // return mp_obj_new_bytes(ext->oid, ext->oidLen);
+        if(ext->oidLen != oid_bufinfo.len) continue;  // Skip, mismatch len
+        if(memcmp(ext->oid, oid_bufinfo.buf, ext->oidLen) == 0) {
+            return mp_obj_new_str(ext->value, ext->valueLen);
+        }
+    }
+
+    return mp_const_none;
+    // return mp_obj_new_int(numExtensions);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(x509CertInfo_extension_obj, x509CertInfo_extension);
 
 STATIC mp_obj_t python_x509_certificat_info(mp_obj_t der_obj) {
     mp_buffer_info_t der_bufinfo;
@@ -352,6 +384,7 @@ STATIC const mp_rom_map_elem_t oryxcrypto_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_x509certificatinfo), MP_ROM_PTR(&python_x509_certificat_info_obj) },
     { MP_ROM_QSTR(MP_QSTR_x509PublicKey), MP_ROM_PTR(&x509CertInfo_publicKey_obj) },
     { MP_ROM_QSTR(MP_QSTR_x509EndDate), MP_ROM_PTR(&x509CertInfo_end_date_obj) },
+    { MP_ROM_QSTR(MP_QSTR_x509Extension), MP_ROM_PTR(&x509CertInfo_extension_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(oryxcrypto_module_globals, oryxcrypto_module_globals_table);
 
