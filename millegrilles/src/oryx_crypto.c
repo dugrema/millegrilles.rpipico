@@ -308,7 +308,7 @@ STATIC mp_obj_t x509CertInfo_end_date(mp_obj_t o_in) {
 
     time_t notAfter = convertDateToUnixTime(&validity->notAfter);
 
-    return mp_obj_new_int(notAfter);
+    return mp_obj_new_int_from_ll(notAfter);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(x509CertInfo_end_date_obj, x509CertInfo_end_date);
 
