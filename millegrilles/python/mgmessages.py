@@ -15,6 +15,8 @@ OID_EXCHANGES = bytearray([0x2a, 0x03, 0x04, 0x00])
 OID_ROLES = bytearray([0x2a, 0x03, 0x04, 0x01])
 OID_DOMAINES = bytearray([0x2a, 0x03, 0x04, 0x02])
 
+PATH_CA_CERT = 'certs/ca.der'
+
 
 def calculer_fingerprint(contenu_der):
     """ Calculer le fingerprint d'un certificat """
@@ -41,12 +43,6 @@ def split_pem(pem_contenu):
             contenu_der = oryx_crypto.x509readpemcertificate(pem)
             certs.append(contenu_der)
     return certs
-
-
-#def valider_ca():
-#    contenu_der = load_pem('ca.pem')
-#    current_time = time.time()
-#    oryx_crypto.x509validercertificate(contenu_der[0], contenu_der[0], current_time)
 
 
 def calcul_idmg(ca_der):
@@ -144,18 +140,26 @@ def prep_message_1(message, conserver_entete=True):
         if key == 'en-tete' and conserver_entete is False:
             continue
         
-        if isinstance(value, float):
-            # Retirer le .0 (convertir en int) si applicable
-            if math.floor(value) == value:
-                value = int(value)
-        
-        elif isinstance(value, dict):
-            # Appel recursif
-            value = prep_message_1(value)
-            
-        message_prep[key] = value
+        message_prep[key] = __traiter_value(value)
     
     return message_prep
+
+
+def __traiter_value(value):
+    if isinstance(value, float):
+        # Retirer le .0 (convertir en int) si applicable
+        if math.floor(value) == value:
+            value = int(value)
+    
+    elif isinstance(value, dict):
+        # Appel recursif
+        value = prep_message_1(value)
+    
+    elif isinstance(value, list):
+        for i, liste_value in enumerate(value):
+            value[i] = __traiter_value(liste_value)
+    
+    return value
 
 
 def message_stringify(message):
@@ -168,6 +172,7 @@ def verifier_message(message: dict):
     # Valider le certificat - raise Exception si erreur
     info_certificat = valider_certificats(message['_certificat'])
     del message['_certificat']
+    print("Info certificat %s " % info_certificat)
 
     # Verifier la signature du message
     signature = message['_signature']
@@ -226,4 +231,21 @@ def verifier_signature(message, signature, cle_publique):
     
     hachage = oryx_crypto.blake2b(message_stringify(message))
     oryx_crypto.ed25519verify(cle_publique, signature[1:], hachage)
+
+
+def sauvegarder_ca(ca_pem):
+    
+    if isinstance(ca_pem, str):
+        ca_pem = bytes(ca_pem)
+    elif not isinstance(ca_pem, bytes):
+        raise TypeError("ca_pem")
+    
+    # Convertir en DER
+    ca_der = oryx_crypto.x509readpemcertificate(pem)
+    
+    # Valider (self-signed) - raise Exception si invalide
+    oryx_crypto.x509validercertificate(ca_der, ca_der, time.time())
+    
+    with open(PATH_CA_CERT, 'wb') as fichier:
+        fichier.write(ca_der)
 
