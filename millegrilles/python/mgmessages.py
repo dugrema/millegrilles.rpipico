@@ -4,6 +4,11 @@ import json
 import os
 import math
 import time
+import ubinascii
+
+from struct import pack
+from random import getrandbits
+
 from multiformats import multibase, multihash
 from collections import OrderedDict
 
@@ -18,6 +23,7 @@ OID_DOMAINES = bytearray([0x2a, 0x03, 0x04, 0x02])
 
 PATH_CERTS = 'certs'
 PATH_CA_CERT = 'certs/ca.der'
+PATH_CLE_PRIVEE = 'certs/secret.key'
 
 
 def calculer_fingerprint(contenu_der):
@@ -47,7 +53,7 @@ def split_pem(pem_contenu):
     return certs
 
 
-def calcul_idmg(ca_der):
+def calculer_idmg(ca_der):
     import struct
     
     x509_info = oryx_crypto.x509certificatinfo(ca_der)
@@ -68,18 +74,18 @@ def calcul_idmg(ca_der):
     return multibase.encode('base58btc', bytes(valeur_combinee))
 
 
-def signer_message(message, cle_privee):
+def signer_message(message, cle_privee=None, fingerprint=None):
     """ Genere l'en-tete et la signature d'un message """
-    entete, signature = __signer_message(message, cle_privee)
+    entete, signature = __signer_message(message, cle_privee, fingerprint)
     message['en-tete'] = entete
     message['_signature'] = signature
     return message    
 
 
-def __signer_message(message, cle_privee):
+def __signer_message(message, cle_privee=None, fingerprint=None):
     message = prep_message_1(message)
     hachage = hacher_message(message).decode('utf-8')
-    entete = generer_entete(hachage)
+    entete = generer_entete(hachage, fingerprint)
     message['en-tete'] = entete
     
     # Re-trier le message
@@ -91,7 +97,11 @@ def __signer_message(message, cle_privee):
     return entete, signature
 
 
-def __signer_message_2(message, cle_privee):
+def __signer_message_2(message, cle_privee=None):
+    if cle_privee is None:
+        # Charger la cle locale
+        with open(PATH_CLE_PRIVEE, 'rb') as fichier:
+            cle_privee = fichier.read()
     cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
 
     hachage = oryx_crypto.blake2b(message_stringify(message))
@@ -106,24 +116,26 @@ def generer_entete(hachage,
                    domaine: str = None,
                    version: int = 1,
                    action: str = None,
-                   partition: str = None):
+                   partition: str = None,
+                   fingerprint: str = None):
     entete = OrderedDict([])
 
     with open(PATH_CA_CERT, 'rb') as fichier:
         ca_der = fichier.read()
-    idmg = calculer_idmg(ca_der)
+    idmg = calculer_idmg(ca_der).decode('utf-8')
 
     if action is not None:
         entete['action'] = action
     if domaine is not None:
         entete['domaine'] = domaine
     entete['estampille'] = time.time()
-    entete['fingerprint'] = 'DUMMY_FINGERPRINT'
+    if fingerprint is not None:
+        entete['fingerprint'] = fingerprint
     entete['hachage_contenu'] = hachage
     entete['idmg'] = idmg
     if partition is not None:
         entete['partition'] = partition
-    entete['uuid_transaction'] = 'DUMMY_UUID'
+    entete['uuid_transaction'] = str(uuid4())
 
     return entete
 
@@ -259,7 +271,7 @@ def sauvegarder_ca(ca_pem, idmg=None):
     
     if idmg is not None:
         # Valider le idmg
-        if calcul_idmg(ca_der) != idmg.encode('utf-8'):
+        if calculer_idmg(ca_der) != idmg.encode('utf-8'):
             raise Exception("Mismatch IDMG")
     
     # Valider (self-signed) - raise Exception si invalide
@@ -269,4 +281,40 @@ def sauvegarder_ca(ca_pem, idmg=None):
         fichier.write(ca_der)
 
 
+def rnd_bytes(nb_bytes):
+    bytes_courant = nb_bytes
+    rnd_val = bytes()
+    while bytes_courant > 0:
+        bytes_courant -= 4
+        rnd_bits = getrandbits(32)  # 4 bytes
+        rnd_val += bytes(pack('L', rnd_bits))
+    
+    return rnd_val[:nb_bytes]
+
+
+# From : https://github.com/pfalcon/pycopy-lib
+class UUID:
+    def __init__(self, bytes):
+        if len(bytes) != 16:
+            raise ValueError('bytes arg must be 16 bytes long')
+        self._bytes = bytes
+
+    @property
+    def hex(self):
+        return ubinascii.hexlify(self._bytes).decode()
+
+    def __str__(self):
+        h = self.hex
+        return '-'.join((h[0:8], h[8:12], h[12:16], h[16:20], h[20:32]))
+
+    def __repr__(self):
+        return "<UUID: %s>" % str(self)
+
+
+def uuid4():
+    """Generates a random UUID compliant to RFC 4122 pg.14"""
+    random = bytearray(rnd_bytes(16))
+    random[6] = (random[6] & 0x0F) | 0x40
+    random[8] = (random[8] & 0x3F) | 0x80
+    return UUID(bytes=random)
 
