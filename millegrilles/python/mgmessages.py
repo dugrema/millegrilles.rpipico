@@ -1,10 +1,7 @@
 # Test PEM
 import oryx_crypto
-import binascii
-import gc
 import json
 import math
-import struct
 import time
 from multiformats import multibase, multihash
 from collections import OrderedDict
@@ -53,6 +50,8 @@ def split_pem(pem_contenu):
 
 
 def calcul_idmg(ca_der):
+    import struct
+    
     x509_info = oryx_crypto.x509certificatinfo(ca_der)
     
     fingerprint = oryx_crypto.blake2s(ca_der)
@@ -227,3 +226,4 @@ def verifier_signature(message, signature, cle_publique):
     
     hachage = oryx_crypto.blake2b(message_stringify(message))
     oryx_crypto.ed25519verify(cle_publique, signature[1:], hachage)
+
