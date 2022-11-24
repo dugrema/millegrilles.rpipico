@@ -281,6 +281,12 @@ def sauvegarder_ca(ca_pem, idmg=None):
         fichier.write(ca_der)
 
 
+def generer_cle_secrete():
+    cle_privee = mgmessages.rnd_bytes(32)
+    with open(PATH_CLE_PRIVEE, 'wb') as fichier:
+        fichier.write(cle_privee)
+
+
 def rnd_bytes(nb_bytes):
     bytes_courant = nb_bytes
     rnd_val = bytes()
