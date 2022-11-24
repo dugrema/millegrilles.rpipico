@@ -1,6 +1,7 @@
 # Test PEM
 import oryx_crypto
 import json
+import os
 import math
 import time
 from multiformats import multibase, multihash
@@ -15,6 +16,7 @@ OID_EXCHANGES = bytearray([0x2a, 0x03, 0x04, 0x00])
 OID_ROLES = bytearray([0x2a, 0x03, 0x04, 0x01])
 OID_DOMAINES = bytearray([0x2a, 0x03, 0x04, 0x02])
 
+PATH_CERTS = 'certs'
 PATH_CA_CERT = 'certs/ca.der'
 
 
@@ -107,6 +109,10 @@ def generer_entete(hachage,
                    partition: str = None):
     entete = OrderedDict([])
 
+    with open(PATH_CA_CERT, 'rb') as fichier:
+        ca_der = fichier.read()
+    idmg = calculer_idmg(ca_der)
+
     if action is not None:
         entete['action'] = action
     if domaine is not None:
@@ -114,7 +120,7 @@ def generer_entete(hachage,
     entete['estampille'] = time.time()
     entete['fingerprint'] = 'DUMMY_FINGERPRINT'
     entete['hachage_contenu'] = hachage
-    entete['idmg'] = 'DUMMY_IDMG'
+    entete['idmg'] = idmg
     if partition is not None:
         entete['partition'] = partition
     entete['uuid_transaction'] = 'DUMMY_UUID'
@@ -172,7 +178,6 @@ def verifier_message(message: dict):
     # Valider le certificat - raise Exception si erreur
     info_certificat = valider_certificats(message['_certificat'])
     del message['_certificat']
-    print("Info certificat %s " % info_certificat)
 
     # Verifier la signature du message
     signature = message['_signature']
@@ -206,7 +211,8 @@ def valider_certificats(pem_certs: list, date_validation=time.time(), is_der=Fal
         oryx_crypto.x509validercertificate(cert, parent, date_validation)
         cert = parent  # Poursuivre la chaine
     else:
-        parent = load_pem_certificat('ca.pem')[0]
+        with open(PATH_CA_CERT, 'rb') as fichier:
+            parent = fichier.read()
         oryx_crypto.x509validercertificate(cert, parent, date_validation)
         
     enveloppe = {
@@ -233,19 +239,34 @@ def verifier_signature(message, signature, cle_publique):
     oryx_crypto.ed25519verify(cle_publique, signature[1:], hachage)
 
 
-def sauvegarder_ca(ca_pem):
+def sauvegarder_ca(ca_pem, idmg=None):
+    
+    try:
+        os.mkdir(PATH_CERTS)
+    except OSError as e:
+        if e.errno == 17:
+            pass
+        else:
+            raise e
     
     if isinstance(ca_pem, str):
-        ca_pem = bytes(ca_pem)
+        ca_pem = ca_pem.encode('utf-8')
     elif not isinstance(ca_pem, bytes):
         raise TypeError("ca_pem")
     
     # Convertir en DER
-    ca_der = oryx_crypto.x509readpemcertificate(pem)
+    ca_der = oryx_crypto.x509readpemcertificate(ca_pem)
+    
+    if idmg is not None:
+        # Valider le idmg
+        if calcul_idmg(ca_der) != idmg.encode('utf-8'):
+            raise Exception("Mismatch IDMG")
     
     # Valider (self-signed) - raise Exception si invalide
     oryx_crypto.x509validercertificate(ca_der, ca_der, time.time())
     
     with open(PATH_CA_CERT, 'wb') as fichier:
         fichier.write(ca_der)
+
+
 
