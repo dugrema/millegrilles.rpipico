@@ -12,7 +12,9 @@ class ThreadExecutor():
         self.__core_asyncio = uasyncio.Event()
         self.__core_asyncio.set()  # Pret par defaut
         
-        self.__internal = uasyncio.Event()
+        # self.__internal_set = True
+        self.__internal_set = True
+        self.__internal = uasyncio.ThreadSafeFlag()
         
         # Lock interne entre cores
         self.__ioloop_local = ioloop_local
@@ -26,14 +28,19 @@ class ThreadExecutor():
         """ Faire executer sur core a gerer """
         self.__ioloop_local = True
         while self.__ioloop_local:
-            try:
-                if self.__core_asyncio.is_set() is False:
+            time.sleep(0.5)
+            if self.__internal_set is False:
+                try:
                     # Executer runnable
-                    self.__resultat = self.__runnable(*self.__args)
-            except Exception as e:
-                self.__exception = e
-            finally:
-                self.__internal.set()
+                    if self.__args is None:
+                        self.__resultat = self.__runnable()
+                    else:
+                        self.__resultat = self.__runnable(*self.__args)
+                except Exception as e:
+                    self.__exception = e
+                finally:
+                    self.__internal_set = True
+                    self.__internal.set()
 
     def stop(self):
         self.__ioloop_local = False
@@ -53,16 +60,18 @@ class ThreadExecutor():
         try:
             # Mettre en attente autres runners
             self.__core_asyncio.clear()
-            
-            # Demarrer la thread - non blocking
-            self.__internal.clear()
 
             output = dict()
             if self.__ioloop_local is True:
                 self.__runnable = runnable
                 self.__args = args
                 self.__timeout = timeout
-            else:
+                
+            # Demarrer la thread - non blocking
+            self.__internal.clear()
+            self.__internal_set = False
+                
+            if self.__ioloop_local is False:
                 # Mode thread sans ioloop local
                 print('start_new_thread core1')
                 _thread.start_new_thread(self.__wrap_execution, (runnable, output, args))
