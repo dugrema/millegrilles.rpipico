@@ -32,4 +32,8 @@
 #define USE_NO_RTOS
 #define X509_MAX_CUSTOM_EXTENSIONS 5
 
+// #define LWIP_IPV6
+// #define LWIP_IPV6_AUTOCONFIG
+// #define LWIP_IPV6_SEND_ROUTER_SOLICIT
+
 #endif
