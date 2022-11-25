@@ -19,7 +19,6 @@ class Response:
             try:
                 self._cached = self.raw.read()
                 if self._cached is None:
-                    print("Echec json, attente")
                     uasyncio.sleep(1)  # Attendre download, tenter a nouveau
                     self._cached = self.raw.read()
             finally:
@@ -83,7 +82,6 @@ async def request(
         resp_d = {}
 
     s = usocket.socket(ai[0], usocket.SOCK_STREAM, ai[2])
-    await uasyncio.sleep(0.01)  # Yield
     s.setblocking(False)
 
     if timeout is not None:
@@ -99,6 +97,7 @@ async def request(
         except OSError as er:
             if er.errno != EINPROGRESS:
                 raise er        
+        
         if proto == "https:":
             s = ussl.wrap_socket(s, server_hostname=host)
             await uasyncio.sleep(0.01)  # Yield
@@ -146,7 +145,6 @@ async def request(
                 break
             await uasyncio.sleep(0.5)
         
-        print(l)
         l = l.split(None, 2)
         if len(l) < 2:
             # Invalid response
@@ -199,7 +197,7 @@ async def request(
         return resp
 
 
-def head(url, **kw):
+async def head(url, **kw):
     return request("HEAD", url, **kw)
 
 
@@ -207,17 +205,18 @@ async def get(url, **kw):
     return await request("GET", url, **kw)
 
 
-def post(url, **kw):
+async def post(url, **kw):
     return request("POST", url, **kw)
 
 
-def put(url, **kw):
+async def put(url, **kw):
     return request("PUT", url, **kw)
 
 
-def patch(url, **kw):
+async def patch(url, **kw):
     return request("PATCH", url, **kw)
 
 
-def delete(url, **kw):
+async def delete(url, **kw):
     return request("DELETE", url, **kw)
+
