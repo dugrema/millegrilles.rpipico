@@ -43,6 +43,7 @@ async def request(
     auth=None,
     timeout=None,
     parse_headers=True,
+    thread_executor=None,
 ):
     redirect = None  # redirection url, None means no redirection
     chunked_data = data and getattr(data, "__iter__", None) and not getattr(data, "__len__", None)
@@ -73,8 +74,11 @@ async def request(
         host, port = host.split(":", 1)
         port = int(port)
 
+    #if thread_executor is None:
     ai = usocket.getaddrinfo(host, port, 0, usocket.SOCK_STREAM)
     await uasyncio.sleep(0.01)  # Yield
+    #else:
+    #    ai = await thread_executor(usocket.getaddrinfo, host, port, 0, usocket.SOCK_STREAM)
     ai = ai[0]
 
     resp_d = None
@@ -91,6 +95,7 @@ async def request(
 
     try:
         try:
+            # Note : cause un probleme si execute dans un core separe (thread_executor)
             await uasyncio.sleep(0.01)  # Yield
             s.connect(ai[-1])
             await uasyncio.sleep(0.01)  # Yield
@@ -198,7 +203,7 @@ async def request(
 
 
 async def head(url, **kw):
-    return request("HEAD", url, **kw)
+    return await request("HEAD", url, **kw)
 
 
 async def get(url, **kw):
@@ -206,17 +211,19 @@ async def get(url, **kw):
 
 
 async def post(url, **kw):
-    return request("POST", url, **kw)
+    return await request("POST", url, **kw)
 
 
 async def put(url, **kw):
-    return request("PUT", url, **kw)
+    return await request("PUT", url, **kw)
 
 
 async def patch(url, **kw):
-    return request("PATCH", url, **kw)
+    return await request("PATCH", url, **kw)
 
 
 async def delete(url, **kw):
-    return request("DELETE", url, **kw)
+    return await request("DELETE", url, **kw)
+
+
 
