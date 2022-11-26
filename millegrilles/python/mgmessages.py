@@ -5,6 +5,7 @@ import os
 import math
 import time
 import ubinascii
+import uasyncio
 
 from struct import pack
 from random import getrandbits
@@ -74,24 +75,25 @@ def calculer_idmg(ca_der):
     return multibase.encode('base58btc', bytes(valeur_combinee))
 
 
-def signer_message(message, cle_privee=None, fingerprint=None):
+async def signer_message(message, cle_privee=None, **kwargs):
     """ Genere l'en-tete et la signature d'un message """
-    entete, signature = __signer_message(message, cle_privee, fingerprint)
+    entete, signature = await __signer_message(message, cle_privee, **kwargs)
     message['en-tete'] = entete
     message['_signature'] = signature
     return message    
 
 
-def __signer_message(message, cle_privee=None, fingerprint=None):
+async def __signer_message(message, cle_privee=None, **kwargs):
     message = prep_message_1(message)
     hachage = hacher_message(message).decode('utf-8')
-    entete = generer_entete(hachage, fingerprint)
+    entete = await generer_entete(hachage, **kwargs)
     message['en-tete'] = entete
     
     # Re-trier le message
     message = prep_message_1(message)
     
     # Signer
+    uasyncio.sleep(0.01)
     signature = __signer_message_2(message, cle_privee).decode('utf-8')
     # signature = __signer_message_2(message, cle_privee)
 
@@ -114,23 +116,26 @@ def __signer_message_2(message, cle_privee=None):
     return signature
 
 
-def generer_entete(hachage,
-                   domaine: str = None,
-                   version: int = 1,
-                   action: str = None,
-                   partition: str = None,
-                   fingerprint: str = None):
+async def generer_entete(hachage,
+                         domaine: str = None,
+                         version: int = 1,
+                         action: str = None,
+                         partition: str = None,
+                         fingerprint: str = None):
     entete = OrderedDict([])
 
     with open(PATH_CA_CERT, 'rb') as fichier:
         ca_der = fichier.read()
+    uasyncio.sleep(0.01)
     idmg = calculer_idmg(ca_der).decode('utf-8')
     
     cle_publique = None
     if fingerprint is None:
         with open(PATH_CLE_PRIVEE, 'rb') as fichier:
             cle_privee = fichier.read()
+        uasyncio.sleep(0.01)
         cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
+        uasyncio.sleep(0.01)
         cle_privee = None
         cle_publique = multibase.encode('base64', cle_publique)
 
@@ -198,9 +203,9 @@ def message_stringify(message):
     return json.dumps(message, separators=(',', ':')).encode('utf-8')
 
 
-def verifier_message(message: dict):
+async def verifier_message(message: dict):
     # Valider le certificat - raise Exception si erreur
-    info_certificat = valider_certificats(message['_certificat'])
+    info_certificat = await valider_certificats(message['_certificat'])
     del message['_certificat']
 
     # Verifier la signature du message
@@ -210,12 +215,13 @@ def verifier_message(message: dict):
     # Trier tous les champs
     message = prep_message_1(message)
 
+    uasyncio.sleep(0.01)
     verifier_signature(message, signature, info_certificat['public_key'])
     
     return info_certificat
 
 
-def valider_certificats(pem_certs: list, date_validation=time.time(), is_der=False):
+async def valider_certificats(pem_certs: list, date_validation=time.time(), is_der=False):
     """ Valide la chaine de certificats, incluant le dernier avec le CA.
         @return Information du certificat leaf
         @raises Exception Si la chaine est invalide. """
@@ -226,17 +232,20 @@ def valider_certificats(pem_certs: list, date_validation=time.time(), is_der=Fal
     # Conserver l'information du certificat leaf
     x509_info = oryx_crypto.x509certificatinfo(cert)
     fingerprint = calculer_fingerprint(cert)
+    uasyncio.sleep(0.01)  # Yield
     
     # Parcourir la chaine. Valider le dernier certificat avec le CA
     while len(pem_certs) > 0:
         parent = pem_certs.pop(0)
         if is_der is False:
             parent = oryx_crypto.x509readpemcertificate(parent)
+        uasyncio.sleep(0.01)  # Yield
         oryx_crypto.x509validercertificate(cert, parent, date_validation)
         cert = parent  # Poursuivre la chaine
     else:
         with open(PATH_CA_CERT, 'rb') as fichier:
             parent = fichier.read()
+        uasyncio.sleep(0.01)  # Yield
         oryx_crypto.x509validercertificate(cert, parent, date_validation)
         
     enveloppe = {
