@@ -55,9 +55,9 @@ def split_pem(pem_contenu):
 
 def calculer_idmg(ca_der):
     import struct
-
+    
     x509_info = oryx_crypto.x509certificatinfo(ca_der)
-
+    
     fingerprint = oryx_crypto.blake2s(ca_der)
     fingerprint = multihash.wrap(CONST_HACHAGE_FINGERPRINT, fingerprint)
 
@@ -65,12 +65,12 @@ def calculer_idmg(ca_der):
     date_expiration = float(date_expiration) / 1000.0
     date_expiration = math.ceil(date_expiration)
     date_expiration = int(date_expiration)
-
+    
     IDMG_VERSION_PACK = '<BI'
-
+    
     valeur_combinee = struct.pack(IDMG_VERSION_PACK, IDMG_VERSION_ACTIVE, date_expiration)
     valeur_combinee = valeur_combinee + fingerprint
-
+    
     return multibase.encode('base58btc', bytes(valeur_combinee))
 
 
@@ -79,7 +79,7 @@ def signer_message(message, cle_privee=None, fingerprint=None):
     entete, signature = __signer_message(message, cle_privee, fingerprint)
     message['en-tete'] = entete
     message['_signature'] = signature
-    return message
+    return message    
 
 
 def __signer_message(message, cle_privee=None, fingerprint=None):
@@ -87,12 +87,13 @@ def __signer_message(message, cle_privee=None, fingerprint=None):
     hachage = hacher_message(message).decode('utf-8')
     entete = generer_entete(hachage, fingerprint)
     message['en-tete'] = entete
-
+    
     # Re-trier le message
     message = prep_message_1(message)
-
+    
     # Signer
     signature = __signer_message_2(message, cle_privee).decode('utf-8')
+    # signature = __signer_message_2(message, cle_privee)
 
     return entete, signature
 
@@ -104,11 +105,12 @@ def __signer_message_2(message, cle_privee=None):
             cle_privee = fichier.read()
     cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
 
-    hachage = oryx_crypto.blake2b(message_stringify(message))
-
+    message_str = message_stringify(message)
+    hachage = oryx_crypto.blake2b(message_str)
+    
     signature = bytes([VERSION_SIGNATURE]) + oryx_crypto.ed25519sign(cle_privee, cle_publique, hachage)
     signature = multibase.encode('base64', signature)
-
+    
     return signature
 
 
@@ -123,7 +125,7 @@ def generer_entete(hachage,
     with open(PATH_CA_CERT, 'rb') as fichier:
         ca_der = fichier.read()
     idmg = calculer_idmg(ca_der).decode('utf-8')
-
+    
     cle_publique = None
     if fingerprint is None:
         with open(PATH_CLE_PRIVEE, 'rb') as fichier:
@@ -161,15 +163,15 @@ def prep_message_1(message, conserver_entete=True):
 
     # Re-inserer toutes les key/values en ordre
     # Filtrer/transformer les valeurs au besoin
-    for (key, value) in sorted(message.items(), key=lambda ele: ele[0]):
+    for (key, value) in sorted(message.items(), key = lambda ele: ele[0]):
         if key.startswith('_'):
             continue
-
+        
         if key == 'en-tete' and conserver_entete is False:
             continue
-
+        
         message_prep[key] = __traiter_value(value)
-
+    
     return message_prep
 
 
@@ -178,21 +180,21 @@ def __traiter_value(value):
         # Retirer le .0 (convertir en int) si applicable
         if math.floor(value) == value:
             value = int(value)
-
+    
     elif isinstance(value, dict):
         # Appel recursif
         value = prep_message_1(value)
-
+    
     elif isinstance(value, list):
         for i, liste_value in enumerate(value):
             value[i] = __traiter_value(liste_value)
-
+    
     return value
 
 
 def message_stringify(message):
-    # message_prep_hachage = prep_message_1(message)
-    # print("Message prep hacahge avant json\n%s" % message_prep_hachage)
+    #message_prep_hachage = prep_message_1(message)
+    #print("Message prep hachage avant json\n%s" % message_prep_hachage)
     return json.dumps(message, separators=(',', ':')).encode('utf-8')
 
 
@@ -209,7 +211,7 @@ def verifier_message(message: dict):
     message = prep_message_1(message)
 
     verifier_signature(message, signature, info_certificat['public_key'])
-
+    
     return info_certificat
 
 
@@ -220,11 +222,11 @@ def valider_certificats(pem_certs: list, date_validation=time.time(), is_der=Fal
     cert = pem_certs.pop(0)
     if is_der is False:
         cert = oryx_crypto.x509readpemcertificate(cert)
-
+    
     # Conserver l'information du certificat leaf
     x509_info = oryx_crypto.x509certificatinfo(cert)
     fingerprint = calculer_fingerprint(cert)
-
+    
     # Parcourir la chaine. Valider le dernier certificat avec le CA
     while len(pem_certs) > 0:
         parent = pem_certs.pop(0)
@@ -236,7 +238,7 @@ def valider_certificats(pem_certs: list, date_validation=time.time(), is_der=Fal
         with open(PATH_CA_CERT, 'rb') as fichier:
             parent = fichier.read()
         oryx_crypto.x509validercertificate(cert, parent, date_validation)
-
+        
     enveloppe = {
         'fingerprint': fingerprint,
         'public_key': oryx_crypto.x509PublicKey(x509_info),
@@ -245,7 +247,7 @@ def valider_certificats(pem_certs: list, date_validation=time.time(), is_der=Fal
         'roles': oryx_crypto.x509Extension(x509_info, OID_ROLES).split(','),
         'domaines': oryx_crypto.x509Extension(x509_info, OID_DOMAINES).split(','),
     }
-
+    
     return enveloppe
 
 
@@ -256,12 +258,13 @@ def verifier_signature(message, signature, cle_publique):
     version_signature = signature[0]
     if version_signature != VERSION_SIGNATURE:
         raise Exception("Signature non supportee")
-
+    
     hachage = oryx_crypto.blake2b(message_stringify(message))
     oryx_crypto.ed25519verify(cle_publique, signature[1:], hachage)
 
 
 def sauvegarder_ca(ca_pem, idmg=None):
+    
     try:
         os.mkdir(PATH_CERTS)
     except OSError as e:
@@ -269,23 +272,23 @@ def sauvegarder_ca(ca_pem, idmg=None):
             pass
         else:
             raise e
-
+    
     if isinstance(ca_pem, str):
         ca_pem = ca_pem.encode('utf-8')
     elif not isinstance(ca_pem, bytes):
         raise TypeError("ca_pem")
-
+    
     # Convertir en DER
     ca_der = oryx_crypto.x509readpemcertificate(ca_pem)
-
+    
     if idmg is not None:
         # Valider le idmg
         if calculer_idmg(ca_der) != idmg.encode('utf-8'):
             raise Exception("Mismatch IDMG")
-
+    
     # Valider (self-signed) - raise Exception si invalide
     oryx_crypto.x509validercertificate(ca_der, ca_der, time.time())
-
+    
     with open(PATH_CA_CERT, 'wb') as fichier:
         fichier.write(ca_der)
 
@@ -303,7 +306,7 @@ def rnd_bytes(nb_bytes):
         bytes_courant -= 4
         rnd_bits = getrandbits(32)  # 4 bytes
         rnd_val += bytes(pack('L', rnd_bits))
-
+    
     return rnd_val[:nb_bytes]
 
 
@@ -332,5 +335,4 @@ def uuid4():
     random[6] = (random[6] & 0x0F) | 0x40
     random[8] = (random[8] & 0x3F) | 0x80
     return UUID(bytes=random)
-
 

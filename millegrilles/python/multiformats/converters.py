@@ -49,12 +49,10 @@ class BaseByteStringConverter(object):
 
     def _chunk_with_padding(self, iterable, n, fillvalue=None):
         "Collect data into fixed-length chunks or blocks"
-        #if fillvalue is not None:
-        #    raise NotImplementedError("fillvalue Not implemented %s" % fillvalue)
         # _chunk_with_padding('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
         args = [iter(iterable)] * n
-        # return zip_longest(*args, fillvalue=fillvalue)
-        return zip(*args)
+        return zip_longest(*args, fillvalue=fillvalue)
+        # return zip(*args)
 
     def _chunk_without_padding(self, iterable, n):
         return map(''.join, zip(*[iter(iterable)] * n))
@@ -134,3 +132,25 @@ class IdentityConverter(object):
 
     def decode(self, x):
         return x
+
+
+# https://stackoverflow.com/questions/1277278/is-there-a-zip-like-function-that-pads-to-longest-length
+def zip_longest(*lists, fillvalue=None):
+    def g(l):
+        for item in l:
+            yield item, False
+        while True:
+            yield fillvalue, True
+    gens = [g(l) for l in lists]
+
+    items_trouves = True
+    while items_trouves is True:
+        items_trouves = False
+        items = list()
+        for g in gens:
+            val, fini = next(g)
+            if fini is False:
+                items_trouves = True
+            items.append(val)
+        if items_trouves:
+            yield tuple(items)
