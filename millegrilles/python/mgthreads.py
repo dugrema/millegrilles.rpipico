@@ -1,5 +1,6 @@
 import time
 import uasyncio
+from gc import collect
 import _thread
 
 class ThreadExecutor():
@@ -19,7 +20,8 @@ class ThreadExecutor():
         # Lock interne entre cores
         self.__ioloop_local = ioloop_local
         self.__runnable = None
-        self.__args = None
+        self.__args = ()
+        self.__kwargs = dict()
         self.__timeout = None
         self.__resultat = None
         self.__exception = None
@@ -32,10 +34,7 @@ class ThreadExecutor():
             if self.__internal_set is False:
                 try:
                     # Executer runnable
-                    if self.__args is None:
-                        self.__resultat = self.__runnable()
-                    else:
-                        self.__resultat = self.__runnable(*self.__args)
+                    self.__resultat = self.__runnable(*self.__args, **self.__kwargs)
                 except Exception as e:
                     self.__exception = e
                 finally:
@@ -45,7 +44,7 @@ class ThreadExecutor():
     def stop(self):
         self.__ioloop_local = False
 
-    async def run(self, runnable, *args, timeout=None):
+    async def run(self, runnable, *args, timeout=None, **kwargs):
         """
         Execute une methode blocking lorsque core1 est disponible.
         @param runnable: Methode a executer
@@ -65,6 +64,7 @@ class ThreadExecutor():
             if self.__ioloop_local is True:
                 self.__runnable = runnable
                 self.__args = args
+                self.__kwargs = kwargs
                 self.__timeout = timeout
                 
             # Demarrer la thread - non blocking
@@ -74,11 +74,14 @@ class ThreadExecutor():
             if self.__ioloop_local is False:
                 # Mode thread sans ioloop local
                 print('start_new_thread core1')
-                _thread.start_new_thread(self.__wrap_execution, (runnable, output, args))
+                _thread.start_new_thread(self.__wrap_execution, (runnable, output, args, kwargs))
             
             # Attendre que l'execution soit completee
             await self.__internal.wait()
             
+            # Core1 libere, run GC
+            collect()
+
             if self.__ioloop_local is True:
                 output['exception'] = self.__exception
                 output['resultat'] = self.__resultat
@@ -88,9 +91,10 @@ class ThreadExecutor():
             
         except Exception as e:
             print("Erreur %s" % e)
+            if output.get('exception') is None:
+                output['exception'] = e
         finally:
             # S'assurer de liberer l'event
-            print('fin thread core - liberer asyncio')
             self.__core_asyncio.set()
         
         if output.get('exception'):
@@ -98,17 +102,57 @@ class ThreadExecutor():
         
         return output.get('resultat')
     
-    def __wrap_execution(self, runnable, output, args):
+    def __wrap_execution(self, runnable, output, args, kwargs):
         print("__wrap_execution debut")
         try:
-            resultat = runnable(*args)
+            resultat = runnable(*args, **kwargs)
             output['resultat'] = resultat
         except Exception as e:
             print("Exception : %s" % e)
-            _thread.exit()  # S'assurer d'arreter la thread
+            #_thread.exit()  # S'assurer d'arreter la thread
             output['exception'] = e
         finally:
             print("__wrap_execution done!")
             self.__internal.set()  # Reset execution
 
 
+async def connect_wifi():
+    import network
+
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    # print("WLAN status : %d" % wlan.status())
+    status = wlan.ifconfig()
+    # print( 'ip = ' + status[0] )
+
+    with open('wifi.txt', 'r') as fichier:
+        ssid = fichier.readline().strip()
+        password = fichier.readline().strip()
+
+    try:
+        wlan.connect(ssid, password)
+    except OSError as e:
+        if e.errno == 1:
+            toggle(wlan)
+        else:
+            raise e
+
+    # Wait for connect or fail
+    max_wait = 20
+    while max_wait > 0:
+
+        if wlan.status() < -1 or wlan.status() >= 3:
+            break
+
+        max_wait -= 1
+        # print('waiting for connection...')
+        uasyncio.sleep(1)
+        
+    # Handle connection error
+    if wlan.status() != 3:
+        print("WLAN Status %s" % wlan.status())
+        raise RuntimeError('network connection failed')
+    else:
+        #print('connected')
+        status = wlan.ifconfig()
+        print( 'ip = ' + status[0] )
