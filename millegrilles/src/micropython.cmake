@@ -21,6 +21,7 @@ target_sources(usermod_oryx_lib PUBLIC
     ${ORYX_LIB}/cyclone_crypto/ecc/ec.c
     ${ORYX_LIB}/cyclone_crypto/ecc/ec_curves.c
     ${ORYX_LIB}/cyclone_crypto/ecc/ed25519.c
+    ${ORYX_LIB}/cyclone_crypto/ecc/eddsa.c
     ${ORYX_LIB}/cyclone_crypto/ecc/x25519.c
 
     # encoding

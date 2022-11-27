@@ -360,39 +360,48 @@ STATIC mp_obj_t python_x509_certificat_info(mp_obj_t der_obj) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(python_x509_certificat_info_obj, python_x509_certificat_info);
 
 STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
+    // Vars
+    const char namedCurve = "Ed22519";
     mp_buffer_info_t cleprivee_bufinfo;
+    mp_buffer_info_t cn_bufinfo;
+    uint8_t cle_publique[ED25519_PUBLIC_KEY_LEN];
+    X509SignatureAlgoId signatureAlgoId;
+    X509CertRequestInfo certReqInfo;
+    error_t error;
+    EddsaPrivateKey privateKey;
+    EddsaPublicKey publicKey;
+    uint8_t output[2048];
+    size_t outputLen = 0;
+
+    // Importer params
     mp_get_buffer_raise(cleprivee_obj, &cleprivee_bufinfo, MP_BUFFER_READ);
     if(cleprivee_bufinfo.len != 32) {
         nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, LEN_INVALIDE));
     }
-
-    mp_buffer_info_t cn_bufinfo;
     mp_get_buffer_raise(cn_obj, &cn_bufinfo, MP_BUFFER_READ);
 
     // Calculer la cle publique Ed25519
-    uint8_t cle_publique[ED25519_PUBLIC_KEY_LEN];
     if(ed25519GeneratePublicKey(cleprivee_bufinfo.buf, cle_publique) != 0) {
         nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
     }
 
-    uint8_t oidSignatureEd25519[4];
-    X509SignatureAlgoId signatureAlgoId;
-    signatureAlgoId.oid = &oidSignatureEd25519;
+    // uint8_t oidSignatureEd25519[4];
+    signatureAlgoId.oid = &ED25519_OID;
+    signatureAlgoId.oidLen = sizeof(ED25519_OID);
 
     // oidFromString(const char_t *str, uint8_t *oid, size_t maxOidLen, size_t *oidLen)
-    oidFromString("1.3.101.112", &oidSignatureEd25519, sizeof(oidSignatureEd25519), &signatureAlgoId.oidLen);
+    // oidFromString("1.3.101.112", &oidSignatureEd25519, sizeof(oidSignatureEd25519), &signatureAlgoId.oidLen);
 
     // return mp_obj_new_bytes(oidSignatureEd25519, signatureAlgoId.oidLen);
 
-    PrngAlgo prngAlgo;  // Reste vide, pas necessaire pour Ed25519
-    uint8_t prngContext = 0;
+    // PrngAlgo prngAlgo;  // Reste vide, pas necessaire pour Ed25519
+    // uint8_t prngContext = 1;
 
-    X509CertRequestInfo certReqInfo;
     certReqInfo.rawData = NULL;
     certReqInfo.rawDataLen = 0;
 
     // X509Version version;
-    certReqInfo.version = X509_VERSION_3;
+    certReqInfo.version = 0x02;  // X509_VERSION_3;
 
     // X509Name subject;
     certReqInfo.subject.rawData = NULL;
@@ -408,12 +417,22 @@ STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
     certReqInfo.subject.organizationalUnitNameLen = 0;
 
     // X509SubjectPublicKeyInfo subjectPublicKeyInfo;
+    // const uint8_t *rawData;
     certReqInfo.subjectPublicKeyInfo.rawData = NULL;
+    // size_t rawDataLen;
     certReqInfo.subjectPublicKeyInfo.rawDataLen = 0;
-    certReqInfo.subjectPublicKeyInfo.oid = &oidSignatureEd25519;
-    certReqInfo.subjectPublicKeyInfo.oidLen = sizeof(oidSignatureEd25519);
+    // const uint8_t *oid;
+    certReqInfo.subjectPublicKeyInfo.oid = &ED25519_OID;
+    // size_t oidLen;
+    certReqInfo.subjectPublicKeyInfo.oidLen = sizeof(ED25519_OID);
+    // X509EcParameters ecParams;
+    // const uint8_t *namedCurve;
+    certReqInfo.subjectPublicKeyInfo.ecParams.namedCurve = &namedCurve;
+    // size_t namedCurveLen;
+    certReqInfo.subjectPublicKeyInfo.ecParams.namedCurveLen = sizeof(namedCurve);
+    // X509EcPublicKey ecPublicKey;
     certReqInfo.subjectPublicKeyInfo.ecPublicKey.q = &cle_publique;
-    certReqInfo.subjectPublicKeyInfo.ecPublicKey.qLen = sizeof(cle_publique);
+    certReqInfo.subjectPublicKeyInfo.ecPublicKey.qLen = sizeof(ED25519_PUBLIC_KEY_LEN);
 
     // X509Attributes attributes;
     certReqInfo.attributes.rawData = NULL;
@@ -497,8 +516,20 @@ STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
     // uint_t numCustomExtensions;
     certReqInfo.attributes.extensionReq.numCustomExtensions = 0;
 
-    uint8_t output[2048];
-    size_t outputLen = 0;
+    // Preparer cles publiques et privees
+    eddsaInitPublicKey(&publicKey);
+    error = mpiImport(&publicKey.q, &cle_publique, ED25519_PUBLIC_KEY_LEN, MPI_FORMAT_LITTLE_ENDIAN);
+    if(error != 0) {
+        return mp_obj_new_int(error);
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
+
+    eddsaInitPrivateKey(&privateKey);
+    error = mpiImport(&privateKey.d, cleprivee_bufinfo.buf, ED25519_PRIVATE_KEY_LEN, MPI_FORMAT_LITTLE_ENDIAN);
+    if(error != 0) {
+        return mp_obj_new_int(error);
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
 
     // Generer nouveau CSR
     //    x509CreateCsr(const PrngAlgo *prngAlgo, void *prngContext,
@@ -506,12 +537,13 @@ STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
     //       const X509SignatureAlgoId *signatureAlgo, const void *signerPrivateKey,
     //       uint8_t *output, size_t *written)
 
-    error_t error = x509CreateCsr(&prngAlgo, &prngContext,
-       &certReqInfo, &certReqInfo.subjectPublicKeyInfo,
-       &signatureAlgoId, cleprivee_bufinfo.buf,
+    error = x509CreateCsr(NULL, NULL,
+       &certReqInfo, &publicKey,
+       &signatureAlgoId, &privateKey,
        &output, &outputLen);
 
     if(error != 0) {
+        return mp_obj_new_int(error);
         nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
     }
 
