@@ -13,6 +13,7 @@ target_sources(usermod_oryx_lib PUBLIC
     # hash
     ${ORYX_LIB}/cyclone_crypto/hash/blake2s.c
     ${ORYX_LIB}/cyclone_crypto/hash/blake2b.c
+    ${ORYX_LIB}/cyclone_crypto/hash/sha1.c
     ${ORYX_LIB}/cyclone_crypto/hash/sha512.c
 
     # ecc
@@ -45,6 +46,7 @@ target_sources(usermod_oryx_lib PUBLIC
     ${ORYX_LIB}/cyclone_crypto/pkix/x509_cert_parse.c
     ${ORYX_LIB}/cyclone_crypto/pkix/x509_cert_validate.c
     ${ORYX_LIB}/cyclone_crypto/pkix/x509_common.c
+    ${ORYX_LIB}/cyclone_crypto/pkix/x509_cert_create.c
     ${ORYX_LIB}/cyclone_crypto/pkix/x509_csr_create.c
     ${ORYX_LIB}/cyclone_crypto/pkix/x509_key_format.c
     ${ORYX_LIB}/cyclone_crypto/pkix/x509_key_parse.c
@@ -63,7 +65,6 @@ target_sources(usermod_oryx_crypto INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/crypto_config.h
     ${CMAKE_CURRENT_LIST_DIR}/oryx_crypto.c
     ${ORYX_LIB}/common/os_port_none.h
-    ${ORYX_LIB}/cyclone_crypto/hash/blake2s.h
 )
 
 target_include_directories(usermod_oryx_crypto INTERFACE

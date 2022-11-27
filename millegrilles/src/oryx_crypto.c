@@ -352,18 +352,172 @@ STATIC mp_obj_t python_x509_certificat_info(mp_obj_t der_obj) {
         nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
     }
 
-//    X509TbsCertificate *tbsCert = &certInfo.tbsCert;
-//    // Extraire la cle publique du certificat
-//    X509SubjectPublicKeyInfo *spki = &tbsCert->subjectPublicKeyInfo;
-//    X509EcPublicKey *publicKey = &spki->ecPublicKey;
-//    return mp_obj_new_bytes(publicKey->q, 32);
-
     x509CertInfo_obj_t *result = m_new_obj(x509CertInfo_obj_t);
     result->base.type = &x509CertInfo_type;
     result->info = certInfo;
     return MP_OBJ_FROM_PTR(result);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(python_x509_certificat_info_obj, python_x509_certificat_info);
+
+STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
+    mp_buffer_info_t cleprivee_bufinfo;
+    mp_get_buffer_raise(cleprivee_obj, &cleprivee_bufinfo, MP_BUFFER_READ);
+    if(cleprivee_bufinfo.len != 32) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, LEN_INVALIDE));
+    }
+
+    mp_buffer_info_t cn_bufinfo;
+    mp_get_buffer_raise(cn_obj, &cn_bufinfo, MP_BUFFER_READ);
+
+    // Calculer la cle publique Ed25519
+    uint8_t cle_publique[ED25519_PUBLIC_KEY_LEN];
+    if(ed25519GeneratePublicKey(cleprivee_bufinfo.buf, cle_publique) != 0) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
+
+    uint8_t oidSignatureEd25519[4];
+    X509SignatureAlgoId signatureAlgoId;
+    signatureAlgoId.oid = &oidSignatureEd25519;
+
+    // oidFromString(const char_t *str, uint8_t *oid, size_t maxOidLen, size_t *oidLen)
+    oidFromString("1.3.101.112", &oidSignatureEd25519, sizeof(oidSignatureEd25519), &signatureAlgoId.oidLen);
+
+    // return mp_obj_new_bytes(oidSignatureEd25519, signatureAlgoId.oidLen);
+
+    PrngAlgo prngAlgo;  // Reste vide, pas necessaire pour Ed25519
+    uint8_t prngContext = 0;
+
+    X509CertRequestInfo certReqInfo;
+    certReqInfo.rawData = NULL;
+    certReqInfo.rawDataLen = 0;
+
+    // X509Version version;
+    certReqInfo.version = X509_VERSION_3;
+
+    // X509Name subject;
+    certReqInfo.subject.rawData = NULL;
+    certReqInfo.subject.rawDataLen = 0;
+    certReqInfo.subject.commonName = cn_bufinfo.buf;
+    certReqInfo.subject.commonNameLen = cn_bufinfo.len;
+    certReqInfo.subject.organizationalUnitNameLen = 0;
+    certReqInfo.subject.organizationNameLen = 0;
+    certReqInfo.subject.localityNameLen = 0;
+    certReqInfo.subject.stateOrProvinceNameLen = 0;
+    certReqInfo.subject.countryNameLen = 0;
+    certReqInfo.subject.organizationalUnitNameLen = 0;
+    certReqInfo.subject.organizationalUnitNameLen = 0;
+
+    // X509SubjectPublicKeyInfo subjectPublicKeyInfo;
+    certReqInfo.subjectPublicKeyInfo.rawData = NULL;
+    certReqInfo.subjectPublicKeyInfo.rawDataLen = 0;
+    certReqInfo.subjectPublicKeyInfo.oid = &oidSignatureEd25519;
+    certReqInfo.subjectPublicKeyInfo.oidLen = sizeof(oidSignatureEd25519);
+    certReqInfo.subjectPublicKeyInfo.ecPublicKey.q = &cle_publique;
+    certReqInfo.subjectPublicKeyInfo.ecPublicKey.qLen = sizeof(cle_publique);
+
+    // X509Attributes attributes;
+    certReqInfo.attributes.rawData = NULL;
+    certReqInfo.attributes.rawDataLen = 0;
+
+    // X509ChallengePassword attributes.challengePwd
+    certReqInfo.attributes.challengePwd.value = NULL;
+    certReqInfo.attributes.challengePwd.length = 0;
+
+    // X509Extensions extensionReq
+    // const uint8_t *rawData;
+    certReqInfo.attributes.extensionReq.rawData = NULL;
+    // size_t rawDataLen;
+    certReqInfo.attributes.extensionReq.rawDataLen = 0;
+
+    // X509BasicConstraints basicConstraints;
+    // bool_t critical;
+    certReqInfo.attributes.extensionReq.basicConstraints.critical = FALSE;
+    // bool_t cA;
+    certReqInfo.attributes.extensionReq.basicConstraints.cA = FALSE;
+    // int_t pathLenConstraint;
+    certReqInfo.attributes.extensionReq.basicConstraints.pathLenConstraint = 0;
+
+    // X509NameConstraints nameConstraints;
+    // bool_t critical;
+    certReqInfo.attributes.extensionReq.nameConstraints.critical = FALSE;
+    // const uint8_t *permittedSubtrees;
+    certReqInfo.attributes.extensionReq.nameConstraints.permittedSubtrees = NULL;
+    // size_t permittedSubtreesLen;
+    certReqInfo.attributes.extensionReq.nameConstraints.permittedSubtreesLen = 0;
+    // const uint8_t *excludedSubtrees;
+    certReqInfo.attributes.extensionReq.nameConstraints.excludedSubtrees = NULL;
+    // size_t excludedSubtreesLen;
+    certReqInfo.attributes.extensionReq.nameConstraints.excludedSubtreesLen = 0;
+
+    // X509KeyUsage keyUsage;
+    // bool_t critical;
+    certReqInfo.attributes.extensionReq.keyUsage.critical = FALSE;
+    // uint16_t bitmap;
+    certReqInfo.attributes.extensionReq.keyUsage.bitmap = 0;
+
+    // X509ExtendedKeyUsage extKeyUsage;
+    // bool_t critical;
+    certReqInfo.attributes.extensionReq.extKeyUsage.critical = FALSE;
+    // uint8_t bitmap;
+    certReqInfo.attributes.extensionReq.extKeyUsage.bitmap = 0;
+
+    // X509SubjectAltName subjectAltName;
+    // bool_t critical;
+    certReqInfo.attributes.extensionReq.subjectAltName.critical = FALSE;
+    // const uint8_t *rawData;
+    certReqInfo.attributes.extensionReq.subjectAltName.rawData = NULL;
+    // size_t rawDataLen;
+    certReqInfo.attributes.extensionReq.subjectAltName.rawDataLen = 0;
+    // uint_t numGeneralNames;
+    certReqInfo.attributes.extensionReq.subjectAltName.numGeneralNames = 0;
+    // X509GeneralName generalNames[X509_MAX_SUBJECT_ALT_NAMES];
+
+    // X509SubjectKeyId subjectKeyId;
+    // bool_t critical;
+    certReqInfo.attributes.extensionReq.subjectKeyId.critical = FALSE;
+    // const uint8_t *value;
+    certReqInfo.attributes.extensionReq.subjectKeyId.value = NULL;
+    // size_t length;
+    certReqInfo.attributes.extensionReq.subjectKeyId.length = 0;
+
+    // X509AuthorityKeyId authKeyId;
+    // bool_t critical;
+    certReqInfo.attributes.extensionReq.authKeyId.critical = FALSE;
+    // const uint8_t *keyId;
+    certReqInfo.attributes.extensionReq.authKeyId.keyId = NULL;
+    // size_t keyIdLen;
+    certReqInfo.attributes.extensionReq.authKeyId.keyIdLen = 0;
+
+    // X509NsCertType nsCertType;
+    // bool_t critical;
+    certReqInfo.attributes.extensionReq.nsCertType.critical = FALSE;
+    // uint8_t bitmap;
+    certReqInfo.attributes.extensionReq.nsCertType.bitmap = 0;
+
+    // uint_t numCustomExtensions;
+    certReqInfo.attributes.extensionReq.numCustomExtensions = 0;
+
+    uint8_t output[2048];
+    size_t outputLen = 0;
+
+    // Generer nouveau CSR
+    //    x509CreateCsr(const PrngAlgo *prngAlgo, void *prngContext,
+    //       const X509CertRequestInfo *certReqInfo, const void *subjectPublicKey,
+    //       const X509SignatureAlgoId *signatureAlgo, const void *signerPrivateKey,
+    //       uint8_t *output, size_t *written)
+
+    error_t error = x509CreateCsr(&prngAlgo, &prngContext,
+       &certReqInfo, &certReqInfo.subjectPublicKeyInfo,
+       &signatureAlgoId, cleprivee_bufinfo.buf,
+       &output, &outputLen);
+
+    if(error != 0) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
+
+    return mp_obj_new_bytes(output, outputLen);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(python_x509_csr_new_obj, python_x509_csr_new);
 
 // Define all properties of the module.
 // Table entries are key/value pairs of the attribute name (a string)
@@ -385,6 +539,7 @@ STATIC const mp_rom_map_elem_t oryxcrypto_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_x509PublicKey), MP_ROM_PTR(&x509CertInfo_publicKey_obj) },
     { MP_ROM_QSTR(MP_QSTR_x509EndDate), MP_ROM_PTR(&x509CertInfo_end_date_obj) },
     { MP_ROM_QSTR(MP_QSTR_x509Extension), MP_ROM_PTR(&x509CertInfo_extension_obj) },
+    { MP_ROM_QSTR(MP_QSTR_x509CsrNew), MP_ROM_PTR(&python_x509_csr_new_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(oryxcrypto_module_globals, oryxcrypto_module_globals_table);
 

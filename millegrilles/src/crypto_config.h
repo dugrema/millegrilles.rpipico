@@ -58,7 +58,7 @@
 //RIPEMD-160 hash support
 #define RIPEMD160_SUPPORT DISABLED
 //SHA-1 hash support
-#define SHA1_SUPPORT DISABLED
+#define SHA1_SUPPORT ENABLED
 //SHA-224 hash support
 #define SHA224_SUPPORT DISABLED
 //SHA-256 hash support
