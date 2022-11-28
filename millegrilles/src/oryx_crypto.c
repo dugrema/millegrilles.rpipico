@@ -520,14 +520,17 @@ STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
     eddsaInitPublicKey(&publicKey);
     error = mpiImport(&publicKey.q, &cle_publique, ED25519_PUBLIC_KEY_LEN, MPI_FORMAT_LITTLE_ENDIAN);
     if(error != 0) {
-        return mp_obj_new_int(error);
+        // Free mem
+        eddsaFreePublicKey(&publicKey);
         nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
     }
 
     eddsaInitPrivateKey(&privateKey);
     error = mpiImport(&privateKey.d, cleprivee_bufinfo.buf, ED25519_PRIVATE_KEY_LEN, MPI_FORMAT_LITTLE_ENDIAN);
     if(error != 0) {
-        return mp_obj_new_int(error);
+        // Free mem
+        eddsaFreePrivateKey(&privateKey);
+        eddsaFreePublicKey(&publicKey);
         nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
     }
 
@@ -541,6 +544,10 @@ STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
        &certReqInfo, &publicKey,
        &signatureAlgoId, &privateKey,
        &output, &outputLen);
+
+    // Free mem
+    eddsaFreePrivateKey(&privateKey);
+    eddsaFreePublicKey(&publicKey);
 
     if(error != 0) {
         return mp_obj_new_int(error);
