@@ -233,7 +233,7 @@ async def valider_certificats(pem_certs: list, date_validation=time.time(), is_d
     x509_info = oryx_crypto.x509certificatinfo(cert)
     fingerprint = calculer_fingerprint(cert)
     uasyncio.sleep(0.01)  # Yield
-    
+
     # Parcourir la chaine. Valider le dernier certificat avec le CA
     while len(pem_certs) > 0:
         parent = pem_certs.pop(0)
@@ -248,13 +248,23 @@ async def valider_certificats(pem_certs: list, date_validation=time.time(), is_d
         uasyncio.sleep(0.01)  # Yield
         oryx_crypto.x509validercertificate(cert, parent, date_validation)
         
+    exchanges = oryx_crypto.x509Extension(x509_info, OID_EXCHANGES)
+    if exchanges is not None:
+        exchanges = exchanges.split(',')
+    roles = oryx_crypto.x509Extension(x509_info, OID_ROLES)
+    if roles is not None:
+        roles = roles.split(',')
+    domaines = oryx_crypto.x509Extension(x509_info, OID_DOMAINES)
+    if domaines is not None:
+        domaines = domaines.split(',')
+        
     enveloppe = {
         'fingerprint': fingerprint,
         'public_key': oryx_crypto.x509PublicKey(x509_info),
         'expiration': oryx_crypto.x509EndDate(x509_info),
-        'exchanges': oryx_crypto.x509Extension(x509_info, OID_EXCHANGES).split(','),
-        'roles': oryx_crypto.x509Extension(x509_info, OID_ROLES).split(','),
-        'domaines': oryx_crypto.x509Extension(x509_info, OID_DOMAINES).split(','),
+        'exchanges': exchanges,
+        'roles': roles,
+        'domaines': domaines,
     }
     
     return enveloppe
@@ -303,10 +313,15 @@ def sauvegarder_ca(ca_pem, idmg=None):
 
 
 def generer_cle_secrete():
-    cle_privee = mgmessages.rnd_bytes(32)
+    cle_privee = rnd_bytes(32)
     with open(PATH_CLE_PRIVEE, 'wb') as fichier:
         fichier.write(cle_privee)
 
+    # Cleanup, retirer certs/cert.pem si present
+    try:
+        os.remove('certs/cert.pem')
+    except OSError:
+        pass
 
 def rnd_bytes(nb_bytes):
     bytes_courant = nb_bytes
