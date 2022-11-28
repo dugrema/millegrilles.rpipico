@@ -401,7 +401,7 @@ STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
     certReqInfo.rawDataLen = 0;
 
     // X509Version version;
-    certReqInfo.version = 0x02;  // X509_VERSION_3;
+    certReqInfo.version = 0x00;
 
     // X509Name subject;
     certReqInfo.subject.rawData = NULL;
