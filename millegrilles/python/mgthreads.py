@@ -150,9 +150,10 @@ async def connect_wifi():
         
     # Handle connection error
     if wlan.status() != 3:
-        print("WLAN Status %s" % wlan.status())
+        # print("WLAN Status %s" % wlan.status())
         raise RuntimeError('network connection failed')
     else:
         #print('connected')
         status = wlan.ifconfig()
-        print( 'ip = ' + status[0] )
+        # print( 'ip = ' + status[0] )
+        return status
