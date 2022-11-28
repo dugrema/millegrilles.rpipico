@@ -25,6 +25,7 @@ OID_DOMAINES = bytearray([0x2a, 0x03, 0x04, 0x02])
 PATH_CERTS = 'certs'
 PATH_CA_CERT = 'certs/ca.der'
 PATH_CLE_PRIVEE = 'certs/secret.key'
+PATH_CERT = 'certs/cert.pem'
 
 
 def calculer_fingerprint(contenu_der):
@@ -35,22 +36,27 @@ def calculer_fingerprint(contenu_der):
     return fingerprint
 
 
-def load_pem_certificat(pem_path):
+def load_pem_certificat(pem_path, format_str=False):
     """ Charge un PEM de certificat et split la chaine. Retourne en format DER. """
     with open(pem_path, 'b') as fichier:
         pem = fichier.read()
-    return split_pem(pem)
+    return split_pem(pem, format_str)
 
 
-def split_pem(pem_contenu):
+def split_pem(pem_contenu, format_str=False):
     """ Split une str de certificats PEM, transforme en DER """
+    if isinstance(pem_contenu, str):
+        pem_contenu = pem_contenu.encode('utf-8')
     certs = []
     for pem in pem_contenu.split(MARQUEUR_END_CERTIFICATE):
-        if pem != b'\n':
+        if pem not in [b'', b'\n']:
             pem = pem + MARQUEUR_END_CERTIFICATE
             pem = pem.strip()
-            contenu_der = oryx_crypto.x509readpemcertificate(pem)
-            certs.append(contenu_der)
+            if format_str is False:
+                contenu = oryx_crypto.x509readpemcertificate(pem)
+            else:
+                contenu = pem.decode('utf-8')
+            certs.append(contenu)
     return certs
 
 
@@ -80,13 +86,31 @@ async def signer_message(message, cle_privee=None, **kwargs):
     entete, signature = await __signer_message(message, cle_privee, **kwargs)
     message['en-tete'] = entete
     message['_signature'] = signature
+    if entete.get('fingerprint_certificat') is not None:
+        message['_certificat'] = split_pem(get_certificat_local(), format_str=True)
     return message    
+
+
+def get_certificat_local():
+    try:
+        with open(PATH_CERT, 'r') as fichier:
+            return fichier.read()
+        return load_pem_certificat(PATH_CERT)
+    except OSError:
+        return None
 
 
 async def __signer_message(message, cle_privee=None, **kwargs):
     message = prep_message_1(message)
     hachage = hacher_message(message).decode('utf-8')
-    entete = await generer_entete(hachage, **kwargs)
+
+    try:
+        cert_local = load_pem_certificat(PATH_CERT)[0]
+        fingerprint = calculer_fingerprint(cert_local)
+    except OSError:
+        fingerprint = None
+    
+    entete = await generer_entete(hachage, fingerprint=fingerprint, **kwargs)
     message['en-tete'] = entete
     
     # Re-trier le message
@@ -147,7 +171,7 @@ async def generer_entete(hachage,
         entete['domaine'] = domaine
     entete['estampille'] = time.time()
     if fingerprint is not None:
-        entete['fingerprint'] = fingerprint
+        entete['fingerprint_certificat'] = fingerprint
     entete['hachage_contenu'] = hachage
     entete['idmg'] = idmg
     if partition is not None:
