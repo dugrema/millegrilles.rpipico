@@ -1,11 +1,11 @@
 # Generateur d'etat interne
-async def generer_etat():
+async def generer_etat(timeout_http=60):
     import wifi
     from mgmessages import signer_message
     etat = {
         'wifi': wifi.get_etat_wifi(),
         'temperature_interne': lire_temperature_interne(),
-        'timeout_http': 20
+        'timeout_http': timeout_http,
     }
     return await signer_message(etat, domaine='SenseursPassifs', action='etatAppareil')
 
