@@ -33,8 +33,8 @@ async def initialiser_wifi():
     wifi_ok = False
     for _ in range(0, 5):
         try:
-            await wifi.connect_wifi()
-            wifi_ok = True
+            status = await wifi.connect_wifi()
+            return status
         except (RuntimeError, OSError) as e:
             print("Wifi error %s" % e)
             await asyncio.sleep(3)
@@ -162,9 +162,12 @@ async def entretien():
             if mode_operation > 1:
                 if wifi_ok is False:
                     print("Start wifi")
-                    await initialiser_wifi()
-                    wifi_ok = True
-                    print("Wifi OK")
+                    ip = await initialiser_wifi()
+                    if ip is not None:
+                        wifi_ok = True
+                        print("Wifi OK : ", ip)
+                    else:
+                        print("Wifi echec")
                 
                 if wifi_ok is True and ntp_ok is False:
                     print("NTP")
