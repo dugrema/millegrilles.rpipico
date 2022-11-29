@@ -7,11 +7,19 @@ import time
 
 import mgmessages
 
-mode_operation = 0
+CONST_MODE_INIT = 1
+CONST_MODE_RECUPERER_CA = 2
+CONST_MODE_SIGNER_CERTIFICAT = 3
+CONST_MODE_POLLING = 99
+
+CONST_HTTP_TIMEOUT_DEFAULT = 60
 
 PATH_FICHIER_CONN = 'conn.json'
 PATH_FICHIER_IDMG = 'idmg.txt'
 PATH_FICHIER_WIFI = 'wifi.txt'
+
+mode_operation = 0
+
 
 async def initialisation():
     """
@@ -69,9 +77,20 @@ async def charger_fiche():
 
 def get_url_relai():
     import json
-    with open('conn.json', 'rb') as fichier:
+    with open(PATH_FICHIER_CONN, 'rb') as fichier:
         url_relai = json.load(fichier)['relai']
     return url_relai
+
+
+def get_http_timeout():
+    import json
+    try:
+        with open(PATH_FICHIER_CONN, 'rb') as fichier:
+            return json.load(fichier)['polling_timeout']
+    except Exception:
+        pass
+    
+    return CONST_HTTP_TIMEOUT_DEFAULT
 
 
 async def recuperer_ca():
@@ -117,9 +136,11 @@ async def polling():
     """
     import polling_messages
     global mode_operation
-    while mode_operation == 99:
+    while mode_operation == CONST_MODE_POLLING:
         try:
-            await polling_messages.polling_thread(10)
+            http_timeout = get_http_timeout()
+            print("http timeout : %d" % http_timeout)
+            await polling_messages.polling_thread(http_timeout)
         except Exception as e:
             print("Erreur polling")
             sys.print_exception(e)
@@ -131,6 +152,7 @@ async def entretien():
     """
     Thread d'entretient durant polling
     """
+    global mode_operation
     wifi_ok = False
     ntp_ok = False
     
@@ -150,7 +172,7 @@ async def entretien():
                     ntp_ok = True
                     print("Time : ", time.gmtime())
             
-            if mode_operation == 99:
+            if mode_operation == CONST_MODE_POLLING:
                 # Faire entretien
                 pass
         except Exception as e:
@@ -168,21 +190,21 @@ async def detecter_mode_operation():
         os.stat(PATH_FICHIER_CONN)
     except:
         print("Mode initialisation")
-        return 1
+        return CONST_MODE_INIT
     
     try:
         os.stat('certs/ca.der')
     except:
         print("Mode recuperer ca.der")
-        return 2
+        return CONST_MODE_RECUPERER_CA
     
     try:
         os.stat("certs/cert.pem")
     except:
         print("Mode signer certificat")
-        return 3
+        return CONST_MODE_SIGNER_CERTIFICAT
 
-    return 99  # Mode polling
+    return CONST_MODE_POLLING  # Mode polling
 
 
 async def main():
@@ -195,13 +217,14 @@ async def main():
         try:
             mode_operation = await detecter_mode_operation()
             print("Mode operation: %s" % mode_operation)
-            if mode_operation == 1:
+
+            if mode_operation == CONST_MODE_INIT:
                 await initialisation()
-            elif mode_operation == 2:
+            elif mode_operation == CONST_MODE_RECUPERER_CA:
                 await recuperer_ca()
-            elif mode_operation == 3:
+            elif mode_operation == CONST_MODE_SIGNER_CERTIFICAT:
                 await signature_certificat()
-            elif mode_operation == 99:
+            elif mode_operation == CONST_MODE_POLLING:
                 await polling()
             else:
                 print("Mode operation non supporte : %d" % mode_operation)
