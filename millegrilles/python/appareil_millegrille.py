@@ -1,49 +1,171 @@
 # Programme appareil millegrille
 import uasyncio as asyncio
+import ledblink
+import ntptime
+import sys
+import time
 
+import mgmessages
+
+mode_operation = 0
+
+PATH_FICHIER_CONN = 'conn.json'
+PATH_FICHIER_IDMG = 'idmg.txt'
+PATH_FICHIER_WIFI = 'wifi.txt'
 
 async def initialisation():
     """
     Mode initial si aucun parametres charges
     """
-    pass
+    await ledblink.led_executer_sequence([1,2], executions=None)
+
+
+async def initialiser_wifi():
+    import wifi
+    wifi_ok = False
+    for _ in range(0, 5):
+        try:
+            await wifi.connect_wifi()
+            wifi_ok = True
+        except (RuntimeError, OSError) as e:
+            print("Wifi error %s" % e)
+            await asyncio.sleep(3)
+    if wifi_ok is False:
+        raise RuntimeError('wifi')
+            
+
+async def get_idmg():
+    with open(PATH_FICHIER_IDMG, 'r') as fichier:
+        idmg = fichier.read()
+    asyncio.sleep(0)  # Yield
+    idmg = idmg.strip()
+    return idmg
+
+
+# Recuperer la fiche (CA, chiffrage, etc)
+async def charger_fiche():
+    import json
+    import urequests
+
+    await initialiser_wifi()
+
+    try:
+        fiche_url = get_url_relai() + '/fiche.json'
+    except OSError:
+        print("Fichier connexion absent")
+        return
+
+    # Downloader la fiche
+    print("Recuperer fiche a %s" % fiche_url)
+    reponse = urequests.get(fiche_url)
+    await asyncio.sleep(0)  # Yield
+    if reponse.status_code != 200:
+        raise Exception("http %d" % reponse.status_code)
+    fiche_json = reponse.json()
+    print("Fiche recue")
+    
+    return fiche_json
+
+
+def get_url_relai():
+    import json
+    with open('conn.json', 'rb') as fichier:
+        url_relai = json.load(fichier)['relai']
+    return url_relai
 
 
 async def recuperer_ca():
-    """
-    Mode de chargement du certificat CA.
-    """
-    pass
+    print("Init millegrille")
+    idmg, fiche = await asyncio.gather(
+        get_idmg(),
+        charger_fiche(),
+    )
+    del fiche['_millegrille']
+    
+    if fiche['idmg'] != idmg:
+        raise Exception('IDMG mismatch')
+    
+    print("IDMG OK : %s" % idmg)
+    
+    # Sauvegarder le certificat CA
+    mgmessages.sauvegarder_ca(fiche['ca'], idmg)
+
+
+async def init_cle_privee(force=False):
+    import os
+    try:
+        os.stat(mgmessages.PATH_CLE_PRIVEE)
+    except OSError:
+        mgmessages.generer_cle_secrete()
+        print("Cle privee initialisee")
 
 
 async def signature_certificat():
     """
     Mode d'attente de signature de certificat
     """
-    pass
+    import message_inscription
+    await initialiser_wifi()
+    await init_cle_privee()
+    
+    await message_inscription.run_inscription(get_url_relai())
 
 
 async def polling():
     """
     Main thread d'execution du polling/commandes
     """
-    pass
+    import polling_messages
+    global mode_operation
+    while mode_operation == 99:
+        try:
+            await polling_messages.polling_thread(10)
+        except Exception as e:
+            print("Erreur polling")
+            sys.print_exception(e)
+            await ledblink.led_executer_sequence([2, 1], 2)
+        asyncio.sleep(2)
 
 
 async def entretien():
     """
     Thread d'entretient durant polling
     """
-    pass
+    wifi_ok = False
+    ntp_ok = False
+    
+    while True:
+        print("Entretien mode %d" % mode_operation)
+        try:
+            if mode_operation > 1:
+                if wifi_ok is False:
+                    print("Start wifi")
+                    await initialiser_wifi()
+                    wifi_ok = True
+                    print("Wifi OK")
+                
+                if wifi_ok is True and ntp_ok is False:
+                    print("NTP")
+                    ntptime.settime()
+                    ntp_ok = True
+                    print("Time : ", time.gmtime())
+            
+            if mode_operation == 99:
+                # Faire entretien
+                pass
+        except Exception as e:
+            print("Erreur entretien: %s" % e)
+        
+        await asyncio.sleep(20)
 
 
 async def detecter_mode_operation():
     # Si wifi.txt/idmg.txt manquants, on est en mode initial.
     import os
     try:
-        os.stat('wifi.txt')
-        os.stat('idmg.txt')
-        os.stat('conn.json')
+        os.stat(PATH_FICHIER_WIFI)
+        os.stat(PATH_FICHIER_IDMG)
+        os.stat(PATH_FICHIER_CONN)
     except:
         print("Mode initialisation")
         return 1
@@ -64,7 +186,31 @@ async def detecter_mode_operation():
 
 
 async def main():
-    pass
+    global mode_operation
+    mode_operation = await detecter_mode_operation()
+    print("Mode operation initial %d" % mode_operation)
+    asyncio.create_task(entretien())
+    await ledblink.led_executer_sequence([4], executions=1)
+    while True:
+        try:
+            mode_operation = await detecter_mode_operation()
+            print("Mode operation: %s" % mode_operation)
+            if mode_operation == 1:
+                await initialisation()
+            elif mode_operation == 2:
+                await recuperer_ca()
+            elif mode_operation == 3:
+                await signature_certificat()
+            elif mode_operation == 99:
+                await polling()
+            else:
+                print("Mode operation non supporte : %d" % mode_operation)
+                await ledblink.led_executer_sequence([1,1], executions=None)
+        except Exception as e:
+            print("Erreur main")
+            sys.print_exception(e)
+        
+        await ledblink.led_executer_sequence([1, 3], 4)
 
 
 if __name__ == '__main__':
