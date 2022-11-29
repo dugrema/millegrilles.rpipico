@@ -1,7 +1,7 @@
 MPYCROSS = ../../micropython/mpy-cross/build/mpy-cross
 
 SRC_PYTHON = \
-    appareil.main.mpy baseconv.mpy etat.mpy handler_commandes.mpy ledblink.mpy message_inscription.mpy \
+    appareil_millegrille.mpy baseconv.mpy etat.mpy handler_commandes.mpy ledblink.mpy message_inscription.mpy \
     mgmessages.mpy mgthreads.mpy morphys.mpy polling_messages.mpy urequests2.mpy wifi.mpy
 
 SRC_MULTIFORMATS = \

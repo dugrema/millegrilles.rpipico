@@ -9,7 +9,7 @@ import ledblink
 NOM_APPAREIL = 'rpi-pico-' + binascii.hexlify(machine.unique_id()).decode('utf-8')
 print("Nom appareil : %s" % NOM_APPAREIL)
 
-CONST_PATH_INSCRIPTION = '/appareils/inscrire'
+CONST_PATH_INSCRIPTION = '/senseurspassifs_relai/inscrire'
 
 
 async def generer_message_inscription():

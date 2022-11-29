@@ -1,9 +1,10 @@
 import uasyncio as asyncio
 from mgmessages import verifier_message
 from handler_commandes import traiter_commande
+import urequests2 as urequests
 
 # url_poll = 'http://mg-dev1.maple.maceroc.com:4443/appareils/poll'
-PATHNAME_POLL = '/appareils/poll'
+PATHNAME_POLL = '/senseurspassifs_relai/poll'
 
 
 def get_url_relai():
@@ -14,7 +15,6 @@ def get_url_relai():
 
 
 async def poll(timeout_http=60):
-    import urequests2 as urequests
     from etat import generer_etat
     etat = await generer_etat(timeout_http=timeout_http)
     url_poll = get_url_relai() + PATHNAME_POLL
@@ -25,9 +25,10 @@ async def verifier_reponse(reponse):
     status = reponse.status_code
 
     if status != 200:
+        reponse.close()
         raise Exception('poll err http:%d' % status)
 
-    reponse = await reponse.json()
+    reponse = await reponse.json()  # Note : close la reponse automatiquement
     return reponse
 
 
