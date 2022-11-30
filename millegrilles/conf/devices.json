@@ -1,0 +1,10 @@
+{
+    "bus": [
+        {"driver": "i2c", "bus": 0, "sda_pin": 8, "scl_pin": 9, "freq": 100000}
+    ],
+    "devices": [
+        {"driver": "dht", "model": "DHT11", "pin": 28},
+        {"driver": "onewire", "models": ["DS18X20"], "pin": 22}
+        {"driver": "bmp180", "bus": 0}
+    ]
+}
