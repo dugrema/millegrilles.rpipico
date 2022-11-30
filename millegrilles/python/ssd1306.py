@@ -108,6 +108,9 @@ class SSD1306_I2C(SSD1306):
         self.temp = bytearray(2)
         self.write_list = [b"\x40", None]  # Co=0, D/C#=1
         super().__init__(width, height, external_vcc)
+        
+        if addr not in i2c.scan():
+            raise Exception('SSD1306_I2C not found')
 
     def write_cmd(self, cmd):
         self.temp[0] = 0x80  # Co=1, D/C#=0
