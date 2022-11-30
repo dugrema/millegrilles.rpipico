@@ -1,4 +1,5 @@
 # Module de gestions des drivers/devices
+import ubinascii as binascii
 import uasyncio as asyncio
 import sys
 from json import load
@@ -16,13 +17,27 @@ class Driver:
     
     @staticmethod
     def parse(params):
-        driver_name = params['driver']
+        driver_name = params['driver'].upper()
         driver_class = DRIVERS[driver_name]
         return driver_class(params)
 
     @property
     def device_id(self):
         return self._params['driver']
+
+
+class Bus:
+    
+    def __init__(self, params):
+        self.__instance = None
+    
+    @staticmethod
+    def parse(params):
+        driver_name = params['driver'].upper()
+        
+        if driver_name == 'I2C':
+            pass
+        raise Exception('not implemented')
 
 
 class DriverDHT(Driver):
@@ -48,18 +63,76 @@ class DriverDHT(Driver):
         else:
             raise ValueError('DHT inconnu : %s' % modele_str)
 
-        return self.__instance
-
     async def lire(self):
         self.__instance.measure()
         await asyncio.sleep(0.001)  # Yield
         return {
-            'temperature': self.__instance.temperature(),
-            'humidite': self.__instance.humidity(),
+            self.device_id: {
+                'temperature': self.__instance.temperature(),
+                'humidite': self.__instance.humidity(),
+            }
         }
+
+    @property
+    def device_id(self):
+        pin = self._params['pin']
+        modele_str = self._params['model'].upper()
+        return '%s_p%d' % (modele_str, pin)
 
 
 DRIVERS['DHT'] = DriverDHT
+
+
+class DriverOnewire(Driver):
+    
+    def __init__(self, params):
+        super().__init__(params)
+        self.__bus = None
+        self.__ds18s20_driver = None
+
+    async def load(self):
+        import machine
+        import onewire
+
+        # Charger bus 1W
+        pin_id = self._params['pin']
+        ds_pin = machine.Pin(pin_id)
+        self.__bus = onewire.OneWire(ds_pin)
+
+        # Activer drivers modeles
+        modeles_str = [m.upper() for m in self._params['models']]
+        if 'DS18X20' in modeles_str:
+            import ds18x20
+            self.__ds18s20_driver = ds18x20.DS18X20(self.__bus)
+            print("1W ds18x20 active")
+
+    async def lire(self):
+        if self.__ds18s20_driver is not None:
+            return await self.lire_temperatures()
+        
+        return dict()
+
+    async def lire_temperatures(self):
+        roms = self.__bus.scan()
+        asyncio.sleep(0.001)  # Yield
+
+        self.__ds18s20_driver.convert_temp()
+        # Donner le temps de faire la preparation de temperature (non-blocking)
+        asyncio.sleep(0.750)
+        
+        lectures = dict()
+        for rom in roms:
+            sname = '1W_' + binascii.hexlify(rom).decode('utf-8')
+            temp = round(self.__ds18s20_driver.read_temp(rom), 1)
+            lectures[sname] = {
+                'temperature': temp,
+            }
+            asyncio.sleep(0.001)  # Yield
+
+        return lectures
+
+
+DRIVERS['ONEWIRE'] = DriverOnewire
 
 
 class DeviceHandler:
