@@ -36,7 +36,6 @@ class BMP180:
       cal = self.__i2c_bus.readfrom_mem(self.__addr, REG_CALIB, 22)
 
       # Convert byte data to word values
-      print("cal : ", binascii.hexlify(cal))
       (AC1, AC2, AC3, AC4, AC5, AC6, B1, B2, MB, MC, MD) = unpack(">hhhHHHhhhhh", cal)
 
       # Read temperature
@@ -47,9 +46,7 @@ class BMP180:
       val = self.__i2c_bus.readfrom_mem(self.__addr, REG_MSB, 2)
       (msb, lsb) = val
       val2 = unpack('>h', val)
-      print("MSB %s, LSB %s" % (msb, lsb))
       UT = (msb << 8) + lsb
-      print("UT = %s, UT val2 : %s" % (UT, val2))
 
       # Read pressure
       # bus.write_byte_data(addr, REG_MEAS, CRV_PRES + (OVERSAMPLE << 6))
@@ -86,27 +83,11 @@ class BMP180:
       X1 = (X1 * 3038) >> 16
       X2 = int(-7357 * P) >> 16
       pressure = int(P + ((X1 + X2 + 3791) >> 4))
-      pressure = float(pressure / 100.0)
-      
-      
+      pressure = float(pressure / 1000.0)  # kPa
+
+      # Altitude
       altitude = 44330.0 * (1.0 - pow(pressure / 101325.0, (1.0/5.255)))
-      # altitude = round(altitude,2)
+      altitude = round(altitude,2)
 
       return (temperature,pressure,altitude)
-
-
-async def main():
-    i2c = I2C(0, sda=Pin(8), scl=Pin(9), freq=100000)
-    # val = i2c.readfrom_mem(0X77, 0XD0, 1)[0]
-
-    bmp180 = BMP180(i2c)
-    chip_id, chip_version = bmp180.readBmp180Id()
-    print("ID: %s, version: %s" % (chip_id, chip_version))
-
-    (temperature,pressure,altitude) = await bmp180.readBmp180()
-    print("Temperature: %sC, pressure: %s, altitude: %s" % (temperature, pressure, altitude))
-
-
-if __name__ == '__main__':
-    asyncio.run(main())
 
