@@ -18,6 +18,10 @@ class I2cLcd(LcdApi):
     #Implements a HD44780 character LCD connected via PCF8574 on I2C
 
     def __init__(self, i2c, i2c_addr, num_lines, num_columns):
+        
+        if i2c_addr not in i2c.scan():
+            raise Exception('I2cLcd not found')
+        
         self.i2c = i2c
         self.i2c_addr = i2c_addr
         self.i2c.writeto(self.i2c_addr, bytes([0]))
