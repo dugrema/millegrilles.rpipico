@@ -6,7 +6,7 @@ import time
 from json import load
 
 
-CONST_FICHIER_DEVICES = 'devices.json'
+CONST_FICHIER_DEVICES = const('devices.json')
 
 DRIVERS = dict()
 
@@ -157,7 +157,6 @@ class DriverBmp180(Driver):
         from bmp180_rpi import BMP180
         bus_no = self._params['bus']
         i2c = self.__busses[bus_no]
-        print("Bus i2c ", i2c)
         if i2c is None:
             raise Exception('Bus %d non configure' % bus_no)
         self.__instance = BMP180(i2c)
@@ -178,6 +177,80 @@ class DriverBmp180(Driver):
 
     
 DRIVERS['BMP180'] = DriverBmp180
+
+
+class DummyOutput(Driver):
+    
+    def __init__(self, params, busses):
+        super().__init__(params, busses)
+        self.__instance = None
+        self.__busses = busses
+    
+    async def load(self):
+        pass
+    
+    async def run_display(self, feeds):
+        methode_feed = feeds()
+        while True:
+            lignes = methode_feed()
+            for ligne in lignes:
+                print("Dummy output ligne : %s" % ligne)
+                await asyncio.sleep(5)
+
+
+DRIVERS['DUMMYOUTPUT'] = DummyOutput
+
+
+class LCD1602(Driver):
+    
+    def __init__(self, params, busses):
+        super().__init__(params, busses)
+        self.__instance = None
+        self.__busses = busses
+    
+    async def load(self):
+        from pico_i2c_lcd import I2cLcd
+        
+        bus_no = self._params['bus']
+        i2c = self.__busses[bus_no]
+        if i2c is None:
+            raise Exception('Bus %d non configure' % bus_no)
+        
+        I2C_ADDR = 0x27  # scan_result[0]
+        self.__instance = I2cLcd(i2c, I2C_ADDR, 2, 16)
+
+    
+    async def run_display(self, feeds):
+        methode_feed = feeds()
+        while True:
+            # Affichage heure
+            await self.afficher_datetime()
+            compteur = 0
+            for ligne in methode_feed():
+                compteur += 1
+                ligne_prep = '{:<16}'.format(ligne[:16])
+                print("Ligne prep '%s'" % ligne_prep)
+                self.__instance.putstr(ligne_prep)
+                if compteur == 2:
+                    compteur = 0
+                    await asyncio.sleep(5)
+            
+            if compteur > 0:
+                # Afficher la derniere page (incomplete)
+                for _ in range(compteur, 2):
+                    self.__instance.putstr('{:<16}'.format(''))
+                await asyncio.sleep(5)
+    
+    async def afficher_datetime(self):
+        for _ in range(0, 10):
+            (year, month, day, hour, minutes, seconds, _, _) = time.localtime()
+            self.__instance.putstr('{:<16}'.format('{:d}-{:0>2d}-{:0>2d}'.format(year, month, day)))
+            self.__instance.putstr('{:<16}'.format('{:0>2d}:{:0>2d}:{:0>2d}'.format(hour, minutes, seconds)))
+            nouv_sec = (time.ticks_ms() % 1000) / 1000
+            await asyncio.sleep(nouv_sec)
+            
+
+DRIVERS['LCD1602'] = LCD1602
 
 
 class DeviceHandler:
@@ -228,15 +301,33 @@ class DeviceHandler:
         lectures = dict()
         ts_courant = time.time()
         for dev in self.__devices.values():
-            lectures_dev = await dev.lire()
-            for l in lectures_dev.values():
-                l['timestamp'] = ts_courant
-            lectures.update(lectures_dev)  # Transferer lectures
-            await asyncio.sleep(0.01)  # Liberer
-        
+            try:
+                lectures_dev = await dev.lire()
+                for l in lectures_dev.values():
+                    l['timestamp'] = ts_courant
+                lectures.update(lectures_dev)  # Transferer lectures
+                await asyncio.sleep(0.01)  # Liberer
+            except AttributeError:
+                pass  # Pas d'attribut .lire
+            except Exception as e:
+                print("Erreur lecture")
+                sys.print_exception(e)
+                
         sink_method(lectures)
+        
+    async def _output_devices(self, feeds):
+        for dev in self.__devices.values():
+            try:
+                coro = dev.run_display(feeds)
+                print("Demarrage display %s" % dev.device_id)
+                asyncio.create_task(coro)
+            except AttributeError:
+                print("Dev %s sans output" % dev.device_id)
 
-    async def run(self, sink_method):
+    async def run(self, sink_method, feeds=None):
+        if feeds is not None:
+            asyncio.create_task(self._output_devices(feeds))
+        
         while True:
             await self._lire_devices(sink_method)
             await asyncio.sleep(5)
