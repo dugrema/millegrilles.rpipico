@@ -249,6 +249,8 @@ async def valider_certificats(pem_certs: list, date_validation=time.time(), is_d
     """ Valide la chaine de certificats, incluant le dernier avec le CA.
         @return Information du certificat leaf
         @raises Exception Si la chaine est invalide. """
+    print("valider_certificats avec time %s" % date_validation)
+
     cert = pem_certs.pop(0)
     if is_der is False:
         cert = oryx_crypto.x509readpemcertificate(cert)

@@ -49,3 +49,12 @@ def get_etat_wifi():
     status = wlan.ifconfig()
     
     return {'ip': status[0]}
+
+
+def is_wifi_ok():
+    wlan = network.WLAN(network.STA_IF)
+    status = wlan.status()
+    if status == 3:
+        return True
+    return False
+    

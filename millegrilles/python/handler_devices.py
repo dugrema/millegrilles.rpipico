@@ -47,7 +47,7 @@ class Driver:
         return self._params['driver']
 
 
-class RPiPicoTemperature(Driver):
+class RPiPicoW(Driver):
     
     def __init__(self, params, busses):
         super().__init__(params, busses)
@@ -59,6 +59,8 @@ class RPiPicoTemperature(Driver):
         self.__instance = machine.ADC(4)
 
     async def lire(self):
+        from wifi import get_etat_wifi
+        
         temperature = 0.0
         conversion_factor = 3.3 / (65535)
         for _ in range(0, self.__nb_lectures):
@@ -73,31 +75,11 @@ class RPiPicoTemperature(Driver):
             '%s/temperature' % device_id: {
                 'valeur': temperature,
                 'type': 'temperature',
-            }
-        }
-
-    @property
-    def device_id(self):
-        return 'rp2pico'
-
-
-class RPiPicoWifi(Driver):
-    
-    def __init__(self, params, busses):
-        super().__init__(params, busses)
-        self.__instance = None
-
-    async def load(self):
-        pass
-
-    async def lire(self):
-        from wifi import get_etat_wifi
-        device_id = self.device_id
-        return {
+            },
             '%s/wifi' % device_id: {
                 'valeur_str': get_etat_wifi()['ip'],
                 'type': 'ip',
-            }
+            }            
         }
 
     @property
@@ -105,7 +87,7 @@ class RPiPicoWifi(Driver):
         return 'rp2pico'
 
 
-DRIVERS['RPIPICOWIFI'] = RPiPicoWifi
+DRIVERS['RPIPICOW'] = RPiPicoW
 
 
 class DriverDHT(Driver):
@@ -253,23 +235,32 @@ class DummyOutput(Driver):
     async def run_display(self, feeds):
         methode_feed = feeds()
         while True:
+            data_lu = False
+            
             lignes = methode_feed()
-            for ligne in lignes:
-                print("Dummy output ligne : %s" % ligne)
-                await asyncio.sleep(5)
+            if lignes is not None:
+                for ligne in lignes:
+                    print("Dummy output ligne : %s" % ligne)
+                    data_lu = True
+                    await asyncio.sleep(5)
+            
+            if data_lu is False:
+                # Aucun data
+                await asyncio.sleep(10)
 
 
 DRIVERS['DUMMYOUTPUT'] = DummyOutput
 
 
-class OutputLCD(Driver):
+class OutputLignes(Driver):
     
-    def __init__(self, params, busses, nb_chars=16, nb_lignes=2):
+    def __init__(self, params, busses, nb_chars=16, nb_lignes=2, duree_afficher_datetime=10):
         super().__init__(params, busses)
         self._instance = None
         self.__busses = busses
         self._nb_lignes = nb_lignes
         self._nb_chars = nb_chars
+        self.__duree_afficher_datetime = duree_afficher_datetime
 
     async def load(self):
         self._instance = self._get_instance()
@@ -289,21 +280,24 @@ class OutputLCD(Driver):
             # Affichage heure
             await self.afficher_datetime()
             compteur = 0
-            for ligne in methode_feed():
-                compteur += 1
-                self.preparer_ligne(ligne[:self._nb_chars])
-                if compteur == self._nb_lignes:
-                    compteur = 0
+            lignes = methode_feed()
+            if lignes is not None:
+                for ligne in methode_feed():
+                    compteur += 1
+                    self.preparer_ligne(ligne[:self._nb_chars])
+                    if compteur == self._nb_lignes:
+                        compteur = 0
+                        await self.show()
+                
+                if compteur > 0:
+                    # Afficher la derniere page (incomplete)
+                    for _ in range(compteur, self._nb_lignes):
+                        self.preparer_ligne('')
                     await self.show()
-            
-            if compteur > 0:
-                # Afficher la derniere page (incomplete)
-                for _ in range(compteur, self._nb_lignes):
-                    self.preparer_ligne('')
-                await self.show()
     
     async def afficher_datetime(self):
-        for _ in range(0, 10):
+        temps_limite = time.time() + self.__duree_afficher_datetime
+        while temps_limite >= time.time():
             (year, month, day, hour, minutes, seconds, _, _) = time.localtime()
             self.preparer_ligne('{:d}-{:0>2d}-{:0>2d}'.format(year, month, day))
             self.preparer_ligne('{:0>2d}:{:0>2d}:{:0>2d}'.format(hour, minutes, seconds))
@@ -311,7 +305,7 @@ class OutputLCD(Driver):
             await self.show(nouv_sec)
 
 
-class LCD1602(OutputLCD):
+class LCD1602(OutputLignes):
     
     def __init__(self, params, busses):
         super().__init__(params, busses, 16, 2)
@@ -339,15 +333,14 @@ class LCD1602(OutputLCD):
 DRIVERS['LCD1602'] = LCD1602
 
 
-class Ssd1306(OutputLCD):
+class Ssd1306(OutputLignes):
     
-    WIDTH = const(128)
-    HEIGHT = const(32)
-    HEIGHT_CHARS = const(8)
-    
-    def __init__(self, params, busses):
+    def __init__(self, params, busses, width=128, height=32, char_size=8):
         super().__init__(params, busses, 16, 4)
         self.__ligne = 0
+        self.__width = width
+        self.__height = height
+        self.__char_size = char_size
 
     def _get_instance(self):
         from ssd1306 import SSD1306_I2C
@@ -357,10 +350,10 @@ class Ssd1306(OutputLCD):
         if i2c is None:
             raise Exception('Bus %d non configure' % bus_no)
 
-        return SSD1306_I2C(Ssd1306.WIDTH, Ssd1306.HEIGHT, i2c)
+        return SSD1306_I2C(self.__width, self.__height, i2c)
 
     def preparer_ligne(self, data):
-        self._instance.text(data, 0, self.__ligne * Ssd1306.HEIGHT_CHARS)
+        self._instance.text(data, 0, self.__ligne * self.__char_size)
         self.__ligne += 1
 
     async def show(self, attente=5.0):
@@ -450,4 +443,4 @@ class DeviceHandler:
         
         while True:
             await self._lire_devices(sink_method)
-            await asyncio.sleep(30)
+            await asyncio.sleep(5)

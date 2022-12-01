@@ -58,6 +58,7 @@ async def post_inscription(url, message):
     print("status code : %s" % status)
 
     if status not in [200, 202]:
+        reponse.close()
         raise Exception('err http:%d' % status)
     
     # Valider la reponse
@@ -69,7 +70,7 @@ async def post_inscription(url, message):
     if status == 200:
         # Valider le message
         if 'senseurspassifs' not in roles or '4.secure' not in exchanges is None:
-            raise Exception('role certificat invalide')
+            raise Exception('role certificat invalide : %s, exchanges %s' % (roles, exchanges))
         
         if reponse['ok'] is not True:
             raise Exception("Reponse ok:false")
@@ -92,8 +93,8 @@ async def post_inscription(url, message):
             await run_challenge(challenge)
         
     elif status == 202:
-        if 'senseurspassifs_hub' not in roles or exchanges is None:
-            raise Exception('role certificat invalide')
+        if 'senseurspassifs_relai' not in roles or exchanges is None:
+            raise Exception('role serveur invalide : %s' % roles)
     elif reponse.get('ok') is False:
         print("Erreur inscription : %s" % reponse.get('err'))
         

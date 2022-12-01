@@ -6,6 +6,8 @@ import sys
 import time
 
 from handler_devices import DeviceHandler
+from wifi import is_wifi_ok
+
 import mgmessages
 
 CONST_MODE_INIT = const(1)
@@ -168,11 +170,28 @@ class Runner:
         await self._device_handler.load()
     
     def recevoir_lectures(self, lectures):
-        print("recevoir_lectures: %s" % lectures)
+        # print("recevoir_lectures: %s" % lectures)
         self._lectures_courantes = lectures
     
     async def get_etat(self):
         return {'lectures_senseurs': self._lectures_courantes}
+    
+    def feed_default(self):
+        try:
+            wifi_ip = self._lectures_courantes['rp2pico/wifi']['valeur_str']
+        except KeyError:
+            print("No wifi lectures")
+            #from wifi import get_etat_wifi
+            #wifi_ip = get_etat_wifi()['ip']
+            wifi_ip = 'N/A'
+        data_lignes = ['WIFI IP', wifi_ip]
+        while len(data_lignes) > 0:
+            yield data_lignes.pop(0)
+        # return []
+        #return None
+
+    def get_feeds(self, name=None):
+        return self.feed_default
     
     async def entretien(self):
         """
@@ -184,9 +203,12 @@ class Runner:
         while True:
             print("Entretien mode %d" % self._mode_operation)
             try:
-                if self._mode_operation > 1:
+                if self._mode_operation >= 1:
+                    # Verifier etat wifi
+                    wifi_ok = is_wifi_ok()
+                    
                     if wifi_ok is False:
-                        print("Start wifi")
+                        print("Restart wifi")
                         ip = await initialiser_wifi()
                         if ip is not None:
                             wifi_ok = True
@@ -199,6 +221,7 @@ class Runner:
                         ntptime.settime()
                         ntp_ok = True
                         print("Time : ", time.gmtime())
+                        print("Time epoch %s" % time.time())
                 
                 if self._mode_operation == CONST_MODE_POLLING:
                     # Faire entretien
@@ -257,7 +280,7 @@ class Runner:
         
         # Charger configuration
         await self.configurer_devices()
-        asyncio.create_task(self._device_handler.run(self.recevoir_lectures))
+        asyncio.create_task(self._device_handler.run(self.recevoir_lectures, self.get_feeds))
 
         # Executer main loop
         await self.__main()
@@ -269,4 +292,4 @@ async def main():
 
 
 if __name__ == '__main__':
-    asyncio.run(runner.run())
+    asyncio.run(main())
