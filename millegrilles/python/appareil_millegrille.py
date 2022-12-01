@@ -263,6 +263,10 @@ class Runner:
         await self.__main()
 
 
-if __name__ == '__main__':
+async def main():
     runner = Runner()
+    await runner.run()
+
+
+if __name__ == '__main__':
     asyncio.run(runner.run())
