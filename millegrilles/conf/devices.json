@@ -4,7 +4,10 @@
     ],
     "devices": [
         {"driver": "dht", "model": "DHT11", "pin": 28},
-        {"driver": "onewire", "models": ["DS18X20"], "pin": 22}
-        {"driver": "bmp180", "bus": 0}
+        {"driver": "onewire", "models": ["DS18X20"], "pin": 22},
+        {"driver": "bmp180", "bus": 0},
+        {"driver": "dummyoutput"},
+        {"driver": "lcd1602", "model": "i2c", "bus": 0},
+        {"driver": "ssd1306", "model": "i2c", "bus": 0}
     ]
 }

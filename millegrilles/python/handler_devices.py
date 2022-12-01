@@ -201,25 +201,27 @@ class DummyOutput(Driver):
 DRIVERS['DUMMYOUTPUT'] = DummyOutput
 
 
-class LCD1602(Driver):
+class OutputLCD(Driver):
     
-    def __init__(self, params, busses):
+    def __init__(self, params, busses, nb_chars=16, nb_lignes=2):
         super().__init__(params, busses)
-        self.__instance = None
+        self._instance = None
         self.__busses = busses
-    
-    async def load(self):
-        from pico_i2c_lcd import I2cLcd
-        
-        bus_no = self._params['bus']
-        i2c = self.__busses[bus_no]
-        if i2c is None:
-            raise Exception('Bus %d non configure' % bus_no)
-        
-        I2C_ADDR = 0x27  # scan_result[0]
-        self.__instance = I2cLcd(i2c, I2C_ADDR, 2, 16)
+        self._nb_lignes = nb_lignes
+        self._nb_chars = nb_chars
 
-    
+    async def load(self):
+        self._instance = self._get_instance()
+        
+    def _get_instance(self):
+        raise Exception('Not implemented')
+
+    def preparer_ligne(self, data):
+        raise Exception('Not implemented')
+
+    async def show(self, attente=5.0):
+        raise Exception('Not implemented')
+
     async def run_display(self, feeds):
         methode_feed = feeds()
         while True:
@@ -228,29 +230,86 @@ class LCD1602(Driver):
             compteur = 0
             for ligne in methode_feed():
                 compteur += 1
-                ligne_prep = '{:<16}'.format(ligne[:16])
-                print("Ligne prep '%s'" % ligne_prep)
-                self.__instance.putstr(ligne_prep)
-                if compteur == 2:
+                self.preparer_ligne(ligne[:self._nb_chars])
+                if compteur == self._nb_lignes:
                     compteur = 0
-                    await asyncio.sleep(5)
+                    await self.show()
             
             if compteur > 0:
                 # Afficher la derniere page (incomplete)
-                for _ in range(compteur, 2):
-                    self.__instance.putstr('{:<16}'.format(''))
-                await asyncio.sleep(5)
+                for _ in range(compteur, self._nb_lignes):
+                    self.preparer_ligne('')
+                await self.show()
     
     async def afficher_datetime(self):
         for _ in range(0, 10):
             (year, month, day, hour, minutes, seconds, _, _) = time.localtime()
-            self.__instance.putstr('{:<16}'.format('{:d}-{:0>2d}-{:0>2d}'.format(year, month, day)))
-            self.__instance.putstr('{:<16}'.format('{:0>2d}:{:0>2d}:{:0>2d}'.format(hour, minutes, seconds)))
+            self.preparer_ligne('{:d}-{:0>2d}-{:0>2d}'.format(year, month, day))
+            self.preparer_ligne('{:0>2d}:{:0>2d}:{:0>2d}'.format(hour, minutes, seconds))
             nouv_sec = (time.ticks_ms() % 1000) / 1000
-            await asyncio.sleep(nouv_sec)
-            
+            await self.show(nouv_sec)
+
+
+class LCD1602(OutputLCD):
+    
+    def __init__(self, params, busses):
+        super().__init__(params, busses, 16, 2)
+
+        # Configuration LCD1602
+        self._addr = 0x27
+
+    def _get_instance(self):
+        from pico_i2c_lcd import I2cLcd
+        
+        bus_no = self._params['bus']
+        i2c = self.__busses[bus_no]
+        if i2c is None:
+            raise Exception('Bus %d non configure' % bus_no)
+
+        return I2cLcd(i2c, self._addr, self._nb_lignes, self._nb_chars)
+
+    def preparer_ligne(self, data):
+        self._instance.putstr('{:<16}'.format(data))
+
+    async def show(self, attente=5.0):
+        await asyncio.sleep(attente)
+
 
 DRIVERS['LCD1602'] = LCD1602
+
+
+class Ssd1306(OutputLCD):
+    
+    WIDTH = const(128)
+    HEIGHT = const(32)
+    HEIGHT_CHARS = const(8)
+    
+    def __init__(self, params, busses):
+        super().__init__(params, busses, 16, 4)
+        self.__ligne = 0
+
+    def _get_instance(self):
+        from ssd1306 import SSD1306_I2C
+        
+        bus_no = self._params['bus']
+        i2c = self.__busses[bus_no]
+        if i2c is None:
+            raise Exception('Bus %d non configure' % bus_no)
+
+        return SSD1306_I2C(Ssd1306.WIDTH, Ssd1306.HEIGHT, i2c)
+
+    def preparer_ligne(self, data):
+        self._instance.text(data, 0, self.__ligne * Ssd1306.HEIGHT_CHARS)
+        self.__ligne += 1
+
+    async def show(self, attente=5.0):
+        self.__ligne = 0
+        self._instance.show()
+        await asyncio.sleep(attente)
+        self._instance.fill(0)
+        
+        
+DRIVERS['SSD1306'] = Ssd1306
 
 
 class DeviceHandler:
