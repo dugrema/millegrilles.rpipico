@@ -4,6 +4,7 @@ import mgmessages
 import urequests2 as urequests
 import uasyncio as asyncio
 import ledblink
+import time
 
 # Generer le nom d'appareil avec le machine unique_id du RPi PICO
 NOM_APPAREIL = 'rpi-pico-' + binascii.hexlify(machine.unique_id()).decode('utf-8')
@@ -103,7 +104,9 @@ async def post_inscription(url, message):
 
 async def recevoir_certificat(certificat):
     # Valider le certificat
-    info_certificat = await mgmessages.valider_certificats(certificat.copy())
+    ts = time.time()
+    print("Recevoir cert avec date : %s" % ts)
+    info_certificat = await mgmessages.valider_certificats(certificat.copy(), ts)
     print("Certificat recu valide, info : %s" % info_certificat)
     await asyncio.sleep(0.01)  # Yield
     

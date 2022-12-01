@@ -245,10 +245,15 @@ async def verifier_message(message: dict):
     return info_certificat
 
 
-async def valider_certificats(pem_certs: list, date_validation=time.time(), is_der=False):
+async def valider_certificats(pem_certs: list, date_validation=None, is_der=False):
     """ Valide la chaine de certificats, incluant le dernier avec le CA.
         @return Information du certificat leaf
         @raises Exception Si la chaine est invalide. """
+    
+    if date_validation is None:
+        date_validation = time.time()
+    elif date_validation is False:
+        date_validation = 0  # Invalide la date
     print("valider_certificats avec time %s" % date_validation)
 
     cert = pem_certs.pop(0)

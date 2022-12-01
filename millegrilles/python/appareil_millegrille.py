@@ -201,7 +201,7 @@ class Runner:
         ntp_ok = False
         
         while True:
-            print("Entretien mode %d" % self._mode_operation)
+            print("Entretien mode %d, date %s" % (self._mode_operation, time.time()))
             try:
                 if self._mode_operation >= 1:
                     # Verifier etat wifi
