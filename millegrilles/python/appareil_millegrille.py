@@ -5,18 +5,19 @@ import ntptime
 import sys
 import time
 
+from handler_devices import DeviceHandler
 import mgmessages
 
-CONST_MODE_INIT = 1
-CONST_MODE_RECUPERER_CA = 2
-CONST_MODE_SIGNER_CERTIFICAT = 3
-CONST_MODE_POLLING = 99
+CONST_MODE_INIT = const(1)
+CONST_MODE_RECUPERER_CA = const(2)
+CONST_MODE_SIGNER_CERTIFICAT = const(3)
+CONST_MODE_POLLING = const(99)
 
-CONST_HTTP_TIMEOUT_DEFAULT = 60
+CONST_HTTP_TIMEOUT_DEFAULT = const(60)
 
-PATH_FICHIER_CONN = 'conn.json'
-PATH_FICHIER_IDMG = 'idmg.txt'
-PATH_FICHIER_WIFI = 'wifi.txt'
+PATH_FICHIER_CONN = const('conn.json')
+PATH_FICHIER_IDMG = const('idmg.txt')
+PATH_FICHIER_WIFI = const('wifi.txt')
 
 mode_operation = 0
 
@@ -130,60 +131,6 @@ async def signature_certificat():
     await message_inscription.run_inscription(get_url_relai())
 
 
-async def polling():
-    """
-    Main thread d'execution du polling/commandes
-    """
-    import polling_messages
-    global mode_operation
-    while mode_operation == CONST_MODE_POLLING:
-        try:
-            http_timeout = get_http_timeout()
-            print("http timeout : %d" % http_timeout)
-            await polling_messages.polling_thread(http_timeout)
-        except Exception as e:
-            print("Erreur polling")
-            sys.print_exception(e)
-            await ledblink.led_executer_sequence([2, 1], 2)
-        asyncio.sleep(2)
-
-
-async def entretien():
-    """
-    Thread d'entretient durant polling
-    """
-    global mode_operation
-    wifi_ok = False
-    ntp_ok = False
-    
-    while True:
-        print("Entretien mode %d" % mode_operation)
-        try:
-            if mode_operation > 1:
-                if wifi_ok is False:
-                    print("Start wifi")
-                    ip = await initialiser_wifi()
-                    if ip is not None:
-                        wifi_ok = True
-                        print("Wifi OK : ", ip)
-                    else:
-                        print("Wifi echec")
-                
-                if wifi_ok is True and ntp_ok is False:
-                    print("NTP")
-                    ntptime.settime()
-                    ntp_ok = True
-                    print("Time : ", time.gmtime())
-            
-            if mode_operation == CONST_MODE_POLLING:
-                # Faire entretien
-                pass
-        except Exception as e:
-            print("Erreur entretien: %s" % e)
-        
-        await asyncio.sleep(20)
-
-
 async def detecter_mode_operation():
     # Si wifi.txt/idmg.txt manquants, on est en mode initial.
     import os
@@ -210,34 +157,112 @@ async def detecter_mode_operation():
     return CONST_MODE_POLLING  # Mode polling
 
 
-async def main():
-    global mode_operation
-    mode_operation = await detecter_mode_operation()
-    print("Mode operation initial %d" % mode_operation)
-    asyncio.create_task(entretien())
-    await ledblink.led_executer_sequence([4], executions=1)
-    while True:
-        try:
-            mode_operation = await detecter_mode_operation()
-            print("Mode operation: %s" % mode_operation)
-
-            if mode_operation == CONST_MODE_INIT:
-                await initialisation()
-            elif mode_operation == CONST_MODE_RECUPERER_CA:
-                await recuperer_ca()
-            elif mode_operation == CONST_MODE_SIGNER_CERTIFICAT:
-                await signature_certificat()
-            elif mode_operation == CONST_MODE_POLLING:
-                await polling()
-            else:
-                print("Mode operation non supporte : %d" % mode_operation)
-                await ledblink.led_executer_sequence([1,1], executions=None)
-        except Exception as e:
-            print("Erreur main")
-            sys.print_exception(e)
+class Runner:
+    
+    def __init__(self):
+        self._mode_operation = 0
+        self._device_handler = DeviceHandler()
+        self._lectures_courantes = dict()
+    
+    async def configurer_devices(self):
+        await self._device_handler.load()
+    
+    def recevoir_lectures(self, lectures):
+        print("recevoir_lectures: %s" % lectures)
+        self._lectures_courantes = lectures
+    
+    async def get_etat(self):
+        return {'lectures_senseurs': self._lectures_courantes}
+    
+    async def entretien(self):
+        """
+        Thread d'entretien
+        """
+        wifi_ok = False
+        ntp_ok = False
         
-        await ledblink.led_executer_sequence([1, 3], 4)
+        while True:
+            print("Entretien mode %d" % self._mode_operation)
+            try:
+                if self._mode_operation > 1:
+                    if wifi_ok is False:
+                        print("Start wifi")
+                        ip = await initialiser_wifi()
+                        if ip is not None:
+                            wifi_ok = True
+                            print("Wifi OK : ", ip)
+                        else:
+                            print("Wifi echec")
+                    
+                    if wifi_ok is True and ntp_ok is False:
+                        print("NTP")
+                        ntptime.settime()
+                        ntp_ok = True
+                        print("Time : ", time.gmtime())
+                
+                if self._mode_operation == CONST_MODE_POLLING:
+                    # Faire entretien
+                    pass
+            except Exception as e:
+                print("Erreur entretien: %s" % e)
+            
+            await asyncio.sleep(20)
+
+    async def _polling(self):
+        """
+        Main thread d'execution du polling/commandes
+        """
+        import polling_messages
+        while self._mode_operation == CONST_MODE_POLLING:
+            try:
+                http_timeout = get_http_timeout()
+                print("http timeout : %d" % http_timeout)
+                await polling_messages.polling_thread(http_timeout, self.get_etat)
+            except Exception as e:
+                print("Erreur polling")
+                sys.print_exception(e)
+                await ledblink.led_executer_sequence([2, 1], 2)
+            await asyncio.sleep(2)
+
+    async def __main(self):
+        self._mode_operation = await detecter_mode_operation()
+        print("Mode operation initial %d" % mode_operation)
+        
+        await ledblink.led_executer_sequence([4], executions=1)
+        while True:
+            try:
+                self._mode_operation = await detecter_mode_operation()
+                print("Mode operation: %s" % self._mode_operation)
+
+                if self._mode_operation == CONST_MODE_INIT:
+                    await initialisation()
+                elif self._mode_operation == CONST_MODE_RECUPERER_CA:
+                    await recuperer_ca()
+                elif self._mode_operation == CONST_MODE_SIGNER_CERTIFICAT:
+                    await signature_certificat()
+                elif self._mode_operation == CONST_MODE_POLLING:
+                    await self._polling()
+                else:
+                    print("Mode operation non supporte : %d" % self._mode_operation)
+                    await ledblink.led_executer_sequence([1,1], executions=None)
+            except Exception as e:
+                print("Erreur main")
+                sys.print_exception(e)
+            
+            await ledblink.led_executer_sequence([1, 3], 4)
+    
+    async def run(self):
+        # Demarrer thread entretien (wifi, date, configuration)
+        asyncio.create_task(self.entretien())
+        
+        # Charger configuration
+        await self.configurer_devices()
+        asyncio.create_task(self._device_handler.run(self.recevoir_lectures))
+
+        # Executer main loop
+        await self.__main()
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    runner = Runner()
+    asyncio.run(runner.run())
