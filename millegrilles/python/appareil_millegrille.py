@@ -1,16 +1,12 @@
 # Programme appareil millegrille
 import json
 import ledblink
-import ntptime
 import sys
 import time
 import uasyncio as asyncio
-import urequests2 as requests
 
 from handler_devices import DeviceHandler
 from wifi import is_wifi_ok
-
-import mgmessages
 
 CONST_MODE_INIT = const(1)
 CONST_MODE_CHARGER_URL_RELAIS = const(2)
@@ -54,8 +50,8 @@ def get_idmg():
 
 # Recuperer la fiche (CA, chiffrage, etc)
 async def charger_fiche():
-    await initialiser_wifi()
-
+    import urequests2 as requests
+    
     try:
         fiche_url = get_url_instance() + '/fiche.json'
     except OSError:
@@ -65,13 +61,15 @@ async def charger_fiche():
     # Downloader la fiche
     print("Recuperer fiche a %s" % fiche_url)
     reponse = await requests.get(fiche_url)
-    await asyncio.sleep(0)  # Yield
-    if reponse.status_code != 200:
+    try:
+        await asyncio.sleep(0)  # Yield
+        if reponse.status_code != 200:
+            raise Exception("http %d" % reponse.status_code)
+        fiche_json = await reponse.json()
+        print("Fiche recue")
+    finally:
         reponse.close()
-        raise Exception("http %d" % reponse.status_code)
-    fiche_json = await reponse.json()
-    print("Fiche recue")
-    
+        
     return fiche_json
 
 
@@ -91,6 +89,7 @@ def get_http_timeout():
 
 
 async def recuperer_ca():
+    from mgmessages import sauvegarder_ca
     print("Init millegrille")
     idmg = get_idmg()
     fiche = await charger_fiche()
@@ -102,27 +101,18 @@ async def recuperer_ca():
     print("IDMG OK : %s" % idmg)
     
     # Sauvegarder le certificat CA
-    mgmessages.sauvegarder_ca(fiche['ca'], idmg)
+    sauvegarder_ca(fiche['ca'], idmg)
 
 
 async def init_cle_privee(force=False):
     import os
-    try:
-        os.stat(mgmessages.PATH_CLE_PRIVEE)
-    except OSError:
-        mgmessages.generer_cle_secrete()
-        print("Cle privee initialisee")
-
-
-async def signature_certificat():
-    """
-    Mode d'attente de signature de certificat
-    """
-    import message_inscription
-    await initialiser_wifi()
-    await init_cle_privee()
+    from mgmessages import PATH_CLE_PRIVEE, generer_cle_secrete
     
-    await message_inscription.run_inscription(get_url_instance())
+    try:
+        os.stat(PATH_CLE_PRIVEE)
+    except OSError:
+        generer_cle_secrete()
+        print("Cle privee initialisee")
 
 
 async def detecter_mode_operation():
@@ -149,6 +139,14 @@ async def detecter_mode_operation():
     return CONST_MODE_POLLING  # Mode polling
 
 
+def set_time():
+    from ntptime import settime
+    print("NTP")
+    settime()
+    print("Time : ", time.gmtime())
+    print("Time epoch %s" % time.time())
+
+
 class Runner:
     
     def __init__(self):
@@ -166,7 +164,21 @@ class Runner:
     
     async def get_etat(self):
         return {'lectures_senseurs': self._lectures_courantes}
-    
+
+    async def _signature_certificat(self):
+        """
+        Mode d'attente de signature de certificat
+        """
+        from message_inscription import run_inscription
+        await init_cle_privee()
+        
+        try:
+            url_relai = self.__url_relais.pop()
+            await run_inscription(url_relai)
+        except (AttributeError, IndexError):
+            print("Aucun url relais")
+            self.__url_relais = None  # Garanti un chargement via entretien
+
     def feed_default(self):
         try:
             wifi_ip = self._lectures_courantes['rp2pico/wifi']['valeur_str']
@@ -210,11 +222,8 @@ class Runner:
                 if wifi_ok is True:
                 
                     if ntp_ok is False:
-                            print("NTP")
-                            ntptime.settime()
-                            ntp_ok = True
-                            print("Time : ", time.gmtime())
-                            print("Time epoch %s" % time.time())
+                        set_time()
+                        ntp_ok = True
 
                     if self._mode_operation >= CONST_MODE_CHARGER_URL_RELAIS:
                         if self.__url_relais is None:
@@ -230,8 +239,9 @@ class Runner:
             await asyncio.sleep(20)
 
     async def charger_urls(self):
+        from mgmessages import verifier_message
         fiche = await charger_fiche()
-        info_cert = await mgmessages.verifier_message(fiche)
+        info_cert = await verifier_message(fiche)
         print("Info cert fiche : %s" % info_cert)
         if 'core' in info_cert['roles']:
             url_relais = [app['url'] for app in fiche['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
@@ -276,7 +286,7 @@ class Runner:
                 elif self._mode_operation == CONST_MODE_RECUPERER_CA:
                     await recuperer_ca()
                 elif self._mode_operation == CONST_MODE_SIGNER_CERTIFICAT:
-                    await signature_certificat()
+                    await self._signature_certificat()
                 elif self._mode_operation == CONST_MODE_POLLING:
                     await self._polling()
                 else:

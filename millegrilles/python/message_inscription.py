@@ -1,19 +1,18 @@
-import binascii
 import machine
-import mgmessages
-import urequests2 as urequests
 import uasyncio as asyncio
 import ledblink
-import time
+
+from binascii import hexlify
 
 # Generer le nom d'appareil avec le machine unique_id du RPi PICO
-NOM_APPAREIL = 'rpi-pico-' + binascii.hexlify(machine.unique_id()).decode('utf-8')
+NOM_APPAREIL = 'rpi-pico-' + hexlify(machine.unique_id()).decode('utf-8')
 print("Nom appareil : %s" % NOM_APPAREIL)
 
-CONST_PATH_INSCRIPTION = '/senseurspassifs_relai/inscrire'
+CONST_PATH_INSCRIPTION = '/inscrire'
 
 
 async def generer_message_inscription():
+    from mgmessages import signer_message
     
     # Generer message d'inscription
     message_inscription = {
@@ -21,15 +20,17 @@ async def generer_message_inscription():
         "csr": generer_csr(),
     }
 
-    return await mgmessages.signer_message(message_inscription, action='inscrire')
+    return await signer_message(message_inscription, action='inscrire')
 
 
 def generer_csr():
+    from ubinascii import b2a_base64
     from oryx_crypto import x509CsrNew
+
     with open('certs/secret.key', 'rb') as fichier:
         cle_privee = fichier.read()
     resultat = x509CsrNew(cle_privee, NOM_APPAREIL.encode('utf-8'))
-    return format_pem(binascii.b2a_base64(resultat, newline=False).decode('utf-8'))
+    return format_pem(b2a_base64(resultat, newline=False).decode('utf-8'))
 
 
 def charger_cle_publique():
@@ -52,23 +53,34 @@ def format_pem(value):
 
 
 async def post_inscription(url, message):
+    from urequests2 import post
+    print("post_inscription ", url)
+    
     certificat_recu = False
     
-    reponse = await urequests.post(url, json=message)
-    status = reponse.status_code
-    print("status code : %s" % status)
+    reponse = await post(url, json=message)
+    try:
+        status_code = reponse.status_code
+        print("status code : %s" % status_code)
 
-    if status not in [200, 202]:
+        if status_code not in [200, 202]:
+            raise Exception('err http:%d' % status_code)
+        
+        # Valider la reponse
+        return status_code, await reponse.json()
+    finally:
         reponse.close()
-        raise Exception('err http:%d' % status)
+
+
+async def valider_reponse(status_code, reponse):
+    from mgmessages import verifier_message
     
-    # Valider la reponse
-    reponse = await reponse.json()
-    info_certificat = await mgmessages.verifier_message(reponse)
+    info_certificat = await verifier_message(reponse)
     print("reponse valide, info certificat:\n%s" % info_certificat)
     roles = info_certificat.get('roles') or list()
     exchanges = info_certificat.get('exchanges') or list()
-    if status == 200:
+    
+    if status_code == 200:
         # Valider le message
         if 'senseurspassifs' not in roles or '4.secure' not in exchanges is None:
             raise Exception('role certificat invalide : %s, exchanges %s' % (roles, exchanges))
@@ -76,37 +88,25 @@ async def post_inscription(url, message):
         if reponse['ok'] is not True:
             raise Exception("Reponse ok:false")
 
-        # Extraire Certificat
-        try:
-            certificat = reponse['certificat']
-        except KeyError:
-            pass  # On n'a pas recu le certificat
-        else:
-            await recevoir_certificat(certificat)
-            certificat_recu = True
+        return True
         
-        # Extraire challenge/confirmation
-        try:
-            challenge = reponse['challenge']
-        except KeyError:
-            pass
-        else:
-            await run_challenge(challenge)
-        
-    elif status == 202:
+    elif status_code == 202:
         if 'senseurspassifs_relai' not in roles or exchanges is None:
             raise Exception('role serveur invalide : %s' % roles)
     elif reponse.get('ok') is False:
         print("Erreur inscription : %s" % reponse.get('err'))
         
     return certificat_recu
-
+    
 
 async def recevoir_certificat(certificat):
+    from mgmessages import valider_certificats
+    from time import time as currentime
+
     # Valider le certificat
-    ts = time.time()
+    ts = currentime()
     print("Recevoir cert avec date : %s" % ts)
-    info_certificat = await mgmessages.valider_certificats(certificat.copy(), ts)
+    info_certificat = await valider_certificats(certificat.copy(), ts)
     print("Certificat recu valide, info : %s" % info_certificat)
     await asyncio.sleep(0.01)  # Yield
     
@@ -133,18 +133,38 @@ async def run_challenge(challenge):
 
 
 async def run_inscription(url_relai: str):
-    import sys
+    from sys import print_exception
+
     url_inscription = url_relai + CONST_PATH_INSCRIPTION
     message_signe = await generer_message_inscription()
     print("Message signe\n%s" % message_signe)
     certificat_recu = False
     while certificat_recu is False:
         try:
-            certificat_recu = await post_inscription(url_inscription, message_signe)
+            status_code, reponse_dict = await post_inscription(url_inscription, message_signe)
+            if await valider_reponse(status_code, reponse_dict) is True:
+                # Extraire Certificat
+                try:
+                    certificat = reponse_dict['certificat']
+                except KeyError:
+                    pass  # On n'a pas recu le certificat
+                else:
+                    await recevoir_certificat(certificat)
+                    certificat_recu = True
+                
+                # Extraire challenge/confirmation
+                try:
+                    challenge = reponse_dict['challenge']
+                except KeyError:
+                    pass
+                else:
+                    await run_challenge(challenge)
+                
         except Exception as e:
             print("Erreur reception certificat")
-            sys.print_exception(e)
-            await asyncio.sleep(10)
+            print_exception(e)
+
+        await asyncio.sleep(10)
 
     print("Certificat recu")
 
