@@ -1,1 +1,8 @@
-{"relai": "http://mg-dev1.maple.maceroc.com:4443", "polling_timeout": 10}
+{
+    "idmg": "zeYncRqEqZ6eTEmUZ8whJFuHG796eSvCTWE4M432izXrp22bAtwGm7Jf",
+    "user_id": "z2i3XjxBFtRz1xtsD1BpL1ktAi8162e5fbUCSPWypkeqGcxDfYV",
+    "wifi_ssid": "MKD-Harpg"
+    "wifi_password": "je)<oj+jbj-ay'`\\R8+JZAsGG;3(&-X@Z_?Z=&k7M\\jRED-Pas0siCt\"p[",
+    "http_instance": "https://mg-dev1.maple.maceroc.com", 
+    "http_timeout": 25
+}

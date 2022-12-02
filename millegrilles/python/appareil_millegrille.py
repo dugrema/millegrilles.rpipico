@@ -1,9 +1,11 @@
 # Programme appareil millegrille
-import uasyncio as asyncio
+import json
 import ledblink
 import ntptime
 import sys
 import time
+import uasyncio as asyncio
+import urequests2 as requests
 
 from handler_devices import DeviceHandler
 from wifi import is_wifi_ok
@@ -11,15 +13,15 @@ from wifi import is_wifi_ok
 import mgmessages
 
 CONST_MODE_INIT = const(1)
-CONST_MODE_RECUPERER_CA = const(2)
-CONST_MODE_SIGNER_CERTIFICAT = const(3)
+CONST_MODE_CHARGER_URL_RELAIS = const(2)
+CONST_MODE_RECUPERER_CA = const(3)
+CONST_MODE_SIGNER_CERTIFICAT = const(4)
 CONST_MODE_POLLING = const(99)
 
 CONST_HTTP_TIMEOUT_DEFAULT = const(60)
 
-PATH_FICHIER_CONN = const('conn.json')
-PATH_FICHIER_IDMG = const('idmg.txt')
-PATH_FICHIER_WIFI = const('wifi.txt')
+CONST_PATH_FICHIER_CONN = const('conn.json')
+CONST_CHAMP_HTTP_INSTANCE = const('http_instance')
 
 mode_operation = 0
 
@@ -45,51 +47,43 @@ async def initialiser_wifi():
         raise RuntimeError('wifi')
             
 
-async def get_idmg():
-    with open(PATH_FICHIER_IDMG, 'r') as fichier:
-        idmg = fichier.read()
-    asyncio.sleep(0)  # Yield
-    idmg = idmg.strip()
-    return idmg
+def get_idmg():
+    with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
+        return json.load(fichier)['idmg']
 
 
 # Recuperer la fiche (CA, chiffrage, etc)
 async def charger_fiche():
-    import json
-    import urequests
-
     await initialiser_wifi()
 
     try:
-        fiche_url = get_url_relai() + '/fiche.json'
+        fiche_url = get_url_instance() + '/fiche.json'
     except OSError:
         print("Fichier connexion absent")
         return
 
     # Downloader la fiche
     print("Recuperer fiche a %s" % fiche_url)
-    reponse = urequests.get(fiche_url)
+    reponse = await requests.get(fiche_url)
     await asyncio.sleep(0)  # Yield
     if reponse.status_code != 200:
+        reponse.close()
         raise Exception("http %d" % reponse.status_code)
-    fiche_json = reponse.json()
+    fiche_json = await reponse.json()
     print("Fiche recue")
     
     return fiche_json
 
 
-def get_url_relai():
-    import json
-    with open(PATH_FICHIER_CONN, 'rb') as fichier:
-        url_relai = json.load(fichier)['relai']
-    return url_relai
+def get_url_instance():
+    with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
+        return json.load(fichier)[CONST_CHAMP_HTTP_INSTANCE]
 
 
 def get_http_timeout():
-    import json
     try:
-        with open(PATH_FICHIER_CONN, 'rb') as fichier:
-            return json.load(fichier)['polling_timeout']
+        with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
+            return json.load(fichier)['http_timeout']
     except Exception:
         pass
     
@@ -98,10 +92,8 @@ def get_http_timeout():
 
 async def recuperer_ca():
     print("Init millegrille")
-    idmg, fiche = await asyncio.gather(
-        get_idmg(),
-        charger_fiche(),
-    )
+    idmg = get_idmg()
+    fiche = await charger_fiche()
     del fiche['_millegrille']
     
     if fiche['idmg'] != idmg:
@@ -130,16 +122,14 @@ async def signature_certificat():
     await initialiser_wifi()
     await init_cle_privee()
     
-    await message_inscription.run_inscription(get_url_relai())
+    await message_inscription.run_inscription(get_url_instance())
 
 
 async def detecter_mode_operation():
     # Si wifi.txt/idmg.txt manquants, on est en mode initial.
     import os
     try:
-        os.stat(PATH_FICHIER_WIFI)
-        os.stat(PATH_FICHIER_IDMG)
-        os.stat(PATH_FICHIER_CONN)
+        os.stat(CONST_PATH_FICHIER_CONN)
     except:
         print("Mode initialisation")
         return CONST_MODE_INIT
@@ -165,6 +155,7 @@ class Runner:
         self._mode_operation = 0
         self._device_handler = DeviceHandler()
         self._lectures_courantes = dict()
+        self.__url_relais = None
     
     async def configurer_devices(self):
         await self._device_handler.load()
@@ -215,21 +206,37 @@ class Runner:
                             print("Wifi OK : ", ip)
                         else:
                             print("Wifi echec")
-                    
-                    if wifi_ok is True and ntp_ok is False:
-                        print("NTP")
-                        ntptime.settime()
-                        ntp_ok = True
-                        print("Time : ", time.gmtime())
-                        print("Time epoch %s" % time.time())
                 
-                if self._mode_operation == CONST_MODE_POLLING:
-                    # Faire entretien
-                    pass
+                if wifi_ok is True:
+                
+                    if ntp_ok is False:
+                            print("NTP")
+                            ntptime.settime()
+                            ntp_ok = True
+                            print("Time : ", time.gmtime())
+                            print("Time epoch %s" % time.time())
+
+                    if self._mode_operation >= CONST_MODE_CHARGER_URL_RELAIS:
+                        if self.__url_relais is None:
+                            await self.charger_urls()
+                
+                    if self._mode_operation == CONST_MODE_POLLING:
+                        # Faire entretien
+                        pass
+
             except Exception as e:
                 print("Erreur entretien: %s" % e)
             
             await asyncio.sleep(20)
+
+    async def charger_urls(self):
+        fiche = await charger_fiche()
+        info_cert = await mgmessages.verifier_message(fiche)
+        print("Info cert fiche : %s" % info_cert)
+        if 'core' in info_cert['roles']:
+            url_relais = [app['url'] for app in fiche['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
+            self.__url_relais = url_relais
+            print("URL relais : %s" % self.__url_relais)
 
     async def _polling(self):
         """
@@ -237,15 +244,22 @@ class Runner:
         """
         import polling_messages
         while self._mode_operation == CONST_MODE_POLLING:
+            # Rotation relais pour en trouver un qui fonctionne
+            # Entretien va rafraichir la liste via la fiche
             try:
+                url_relai = self.__url_relais.pop(0)
                 http_timeout = get_http_timeout()
                 print("http timeout : %d" % http_timeout)
-                await polling_messages.polling_thread(http_timeout, self.get_etat)
+                await polling_messages.polling_thread(url_relai, http_timeout, self.get_etat)
+            except (AttributeError, IndexError):
+                print("Aucun url relais")
+                self.__url_relais = None  # Garanti un chargement via entretien
             except Exception as e:
                 print("Erreur polling")
                 sys.print_exception(e)
                 await ledblink.led_executer_sequence([2, 1], 2)
-            await asyncio.sleep(2)
+                    
+            await asyncio.sleep(10)
 
     async def __main(self):
         self._mode_operation = await detecter_mode_operation()

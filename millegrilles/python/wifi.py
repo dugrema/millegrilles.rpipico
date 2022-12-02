@@ -1,5 +1,9 @@
+import json
 import network
 import uasyncio as asyncio
+
+
+PATH_CONFIGURATION = const('conn.json')
 
 
 async def connect_wifi():
@@ -9,12 +13,17 @@ async def connect_wifi():
     status = wlan.ifconfig()
     # print( 'ip = ' + status[0] )
 
-    with open('wifi.txt', 'r') as fichier:
-        ssid = fichier.readline().strip()
-        password = fichier.readline().strip()
+    #with open('wifi.txt', 'r') as fichier:
+    #    ssid = fichier.readline().strip()
+    #    password = fichier.readline().strip()
+
+    with open(PATH_CONFIGURATION, 'rb') as fichier:
+        config = json.load(fichier)
 
     try:
-        wlan.connect(ssid, password)
+        wlan.connect(config['wifi_ssid'], config['wifi_password'])
+    except KeyError as e:
+        raise Exception('SSID/password manquant')
     except OSError as e:
         if e.errno == 1:
             toggle(wlan)
