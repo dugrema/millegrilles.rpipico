@@ -11,8 +11,8 @@ from handler_devices import DeviceHandler
 from wifi import is_wifi_ok
 
 CONST_MODE_INIT = const(1)
-CONST_MODE_CHARGER_URL_RELAIS = const(2)
-CONST_MODE_RECUPERER_CA = const(3)
+CONST_MODE_RECUPERER_CA = const(2)
+CONST_MODE_CHARGER_URL_RELAIS = const(3)
 CONST_MODE_SIGNER_CERTIFICAT = const(4)
 CONST_MODE_POLLING = const(99)
 
