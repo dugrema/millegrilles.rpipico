@@ -33,14 +33,15 @@ class Bus:
 
 class Driver:
     
-    def __init__(self, params, busses):
+    def __init__(self, params, busses, ui_lock):
         self._params = params
+        self._ui_lock = ui_lock
     
     @staticmethod
-    def parse(params, busses):
+    def parse(params, busses, ui_lock):
         driver_name = params['driver'].upper()
         driver_class = DRIVERS[driver_name]
-        return driver_class(params, busses)
+        return driver_class(params, busses, ui_lock)
 
     @property
     def device_id(self):
@@ -49,8 +50,8 @@ class Driver:
 
 class RPiPicoW(Driver):
     
-    def __init__(self, params, busses):
-        super().__init__(params, busses)
+    def __init__(self, params, busses, ui_lock):
+        super().__init__(params, busses, ui_lock)
         self.__instance = None
         self.__nb_lectures = 5
 
@@ -92,8 +93,8 @@ DRIVERS['RPIPICOW'] = RPiPicoW
 
 class DriverDHT(Driver):
     
-    def __init__(self, params, busses):
-        super().__init__(params, busses)
+    def __init__(self, params, busses, ui_lock):
+        super().__init__(params, busses, ui_lock)
         self.__instance = None
 
     async def load(self):
@@ -138,8 +139,8 @@ DRIVERS['DHT'] = DriverDHT
 
 class DriverOnewire(Driver):
     
-    def __init__(self, params, busses):
-        super().__init__(params, busses)
+    def __init__(self, params, busses, ui_lock):
+        super().__init__(params, busses, ui_lock)
         self.__bus = None
         self.__ds18s20_driver = None
 
@@ -191,8 +192,8 @@ DRIVERS['ONEWIRE'] = DriverOnewire
 
 class DriverBmp180(Driver):
     
-    def __init__(self, params, busses):
-        super().__init__(params, busses)
+    def __init__(self, params, busses, ui_lock):
+        super().__init__(params, busses, ui_lock)
         self.__instance = None
         self.__busses = busses
 
@@ -224,8 +225,8 @@ DRIVERS['BMP180'] = DriverBmp180
 
 class DummyOutput(Driver):
     
-    def __init__(self, params, busses):
-        super().__init__(params, busses)
+    def __init__(self, params, busses, ui_lock):
+        super().__init__(params, busses, ui_lock)
         self.__instance = None
         self.__busses = busses
     
@@ -254,8 +255,8 @@ DRIVERS['DUMMYOUTPUT'] = DummyOutput
 
 class OutputLignes(Driver):
     
-    def __init__(self, params, busses, nb_chars=16, nb_lignes=2, duree_afficher_datetime=10):
-        super().__init__(params, busses)
+    def __init__(self, params, busses, ui_lock: asyncio.Event, nb_chars=16, nb_lignes=2, duree_afficher_datetime=10):
+        super().__init__(params, busses, ui_lock)
         self._instance = None
         self.__busses = busses
         self._nb_lignes = nb_lignes
@@ -268,7 +269,7 @@ class OutputLignes(Driver):
     def _get_instance(self):
         raise Exception('Not implemented')
 
-    def preparer_ligne(self, data):
+    async def preparer_ligne(self, data):
         raise Exception('Not implemented')
 
     async def show(self, attente=5.0):
@@ -284,7 +285,7 @@ class OutputLignes(Driver):
             if lignes is not None:
                 for ligne in methode_feed():
                     compteur += 1
-                    self.preparer_ligne(ligne[:self._nb_chars])
+                    await self.preparer_ligne(ligne[:self._nb_chars])
                     if compteur == self._nb_lignes:
                         compteur = 0
                         await self.show()
@@ -292,23 +293,23 @@ class OutputLignes(Driver):
                 if compteur > 0:
                     # Afficher la derniere page (incomplete)
                     for _ in range(compteur, self._nb_lignes):
-                        self.preparer_ligne('')
+                        await self.preparer_ligne('')
                     await self.show()
     
     async def afficher_datetime(self):
         temps_limite = time.time() + self.__duree_afficher_datetime
         while temps_limite >= time.time():
             (year, month, day, hour, minutes, seconds, _, _) = time.localtime()
-            self.preparer_ligne('{:d}-{:0>2d}-{:0>2d}'.format(year, month, day))
-            self.preparer_ligne('{:0>2d}:{:0>2d}:{:0>2d}'.format(hour, minutes, seconds))
+            await self.preparer_ligne('{:d}-{:0>2d}-{:0>2d}'.format(year, month, day))
+            await self.preparer_ligne('{:0>2d}:{:0>2d}:{:0>2d}'.format(hour, minutes, seconds))
             nouv_sec = (time.ticks_ms() % 1000) / 1000
             await self.show(nouv_sec)
 
 
 class LCD1602(OutputLignes):
     
-    def __init__(self, params, busses):
-        super().__init__(params, busses, 16, 2)
+    def __init__(self, params, busses, ui_lock):
+        super().__init__(params, busses, ui_lock, 16, 2)
 
         # Configuration LCD1602
         self._addr = 0x27
@@ -323,8 +324,12 @@ class LCD1602(OutputLignes):
 
         return I2cLcd(i2c, self._addr, self._nb_lignes, self._nb_chars)
 
-    def preparer_ligne(self, data):
-        self._instance.putstr('{:<16}'.format(data))
+    async def preparer_ligne(self, data):
+        await self._ui_lock.acquire()
+        try:
+            self._instance.putstr('{:<16}'.format(data))
+        finally:
+            self._ui_lock.release()
 
     async def show(self, attente=5.0):
         await asyncio.sleep(attente)
@@ -335,8 +340,8 @@ DRIVERS['LCD1602'] = LCD1602
 
 class Ssd1306(OutputLignes):
     
-    def __init__(self, params, busses, width=128, height=32, char_size=8):
-        super().__init__(params, busses, 16, 4)
+    def __init__(self, params, busses, ui_lock, width=128, height=32, char_size=8):
+        super().__init__(params, busses, ui_lock, 16, 4)
         self.__ligne = 0
         self.__width = width
         self.__height = height
@@ -352,13 +357,17 @@ class Ssd1306(OutputLignes):
 
         return SSD1306_I2C(self.__width, self.__height, i2c)
 
-    def preparer_ligne(self, data):
+    async def preparer_ligne(self, data):
         self._instance.text(data, 0, self.__ligne * self.__char_size)
         self.__ligne += 1
 
     async def show(self, attente=5.0):
         self.__ligne = 0
-        self._instance.show()
+        await self._ui_lock.acquire()
+        try:
+            self._instance.show()
+        finally:
+            self._ui_lock.release()
         await asyncio.sleep(attente)
         self._instance.fill(0)
         
@@ -372,8 +381,10 @@ class DeviceHandler:
         self.__configuration = None
         self.__devices = dict()
         self.__busses = list()
+        self.__ui_lock = None
     
-    async def load(self):
+    async def load(self, ui_lock: asyncio.Event):
+        self.__ui_lock = ui_lock
         with open(CONST_FICHIER_DEVICES, 'rb') as fichier:
             self.__configuration = load(fichier)
         print("Configuration devices %s" % self.__configuration)
@@ -400,7 +411,7 @@ class DeviceHandler:
         for dev in devices_list:
             print("Device : %s" % dev)
             try:
-                device = Driver.parse(dev, self.__busses)
+                device = Driver.parse(dev, self.__busses, self.__ui_lock)
                 device_id = device.device_id
                 print("Loading device : ", device_id)
                 await device.load()
@@ -428,7 +439,7 @@ class DeviceHandler:
                 
         sink_method(lectures)
         
-    async def _output_devices(self, feeds):
+    async def _output_devices(self, feeds, ui_lock: asyncio.Event):
         for dev in self.__devices.values():
             try:
                 coro = dev.run_display(feeds)
@@ -437,9 +448,9 @@ class DeviceHandler:
             except AttributeError:
                 print("Dev %s sans output" % dev.device_id)
 
-    async def run(self, sink_method, feeds=None):
+    async def run(self, ui_lock: asyncio.Event, sink_method, feeds=None):
         if feeds is not None:
-            asyncio.create_task(self._output_devices(feeds))
+            asyncio.create_task(self._output_devices(feeds, ui_lock))
         
         while True:
             await self._lire_devices(sink_method)

@@ -11,12 +11,13 @@ print("Nom appareil : %s" % NOM_APPAREIL)
 CONST_PATH_INSCRIPTION = '/inscrire'
 
 
-async def generer_message_inscription():
+async def generer_message_inscription(user_id: str):
     from mgmessages import signer_message
     
     # Generer message d'inscription
     message_inscription = {
         "uuid_appareil": NOM_APPAREIL,
+        "user_id": user_id,
         "csr": generer_csr(),
     }
 
@@ -96,8 +97,8 @@ async def valider_reponse(status_code, reponse):
     elif reponse.get('ok') is False:
         print("Erreur inscription : %s" % reponse.get('err'))
         
-    return certificat_recu
-    
+    return False
+
 
 async def recevoir_certificat(certificat):
     from mgmessages import valider_certificats
@@ -127,23 +128,24 @@ async def recevoir_certificat(certificat):
             fichier.write(cert)
 
 
-async def run_challenge(challenge):
+async def run_challenge(challenge, ui_lock=None):
     print("Run challenge %s" % challenge)
-    await ledblink.led_executer_sequence(challenge, 2)
+    await ledblink.led_executer_sequence(challenge, 2, ui_lock=ui_lock)
 
 
-async def run_inscription(url_relai: str):
+async def run_inscription(url_relai: str, user_id: str, ui_lock):
     from sys import print_exception
 
     url_inscription = url_relai + CONST_PATH_INSCRIPTION
-    message_signe = await generer_message_inscription()
-    print("Message signe\n%s" % message_signe)
     certificat_recu = False
     while certificat_recu is False:
         try:
-            status_code, reponse_dict = await post_inscription(url_inscription, message_signe)
+            # Faire une demande d'inscription
+            status_code, reponse_dict = await post_inscription(
+                url_inscription, await generer_message_inscription(user_id))
+            
             if await valider_reponse(status_code, reponse_dict) is True:
-                # Extraire Certificat
+                # Extraire le certificat si fourni
                 try:
                     certificat = reponse_dict['certificat']
                 except KeyError:
@@ -152,13 +154,13 @@ async def run_inscription(url_relai: str):
                     await recevoir_certificat(certificat)
                     certificat_recu = True
                 
-                # Extraire challenge/confirmation
+                # Extraire challenge/confirmation et executer si present
                 try:
                     challenge = reponse_dict['challenge']
                 except KeyError:
                     pass
                 else:
-                    await run_challenge(challenge)
+                    await run_challenge(challenge, ui_lock)
                 
         except Exception as e:
             print("Erreur reception certificat")
@@ -168,6 +170,3 @@ async def run_inscription(url_relai: str):
 
     print("Certificat recu")
 
-
-if __name__ == '__main__':
-    asyncio.run(run_inscription())

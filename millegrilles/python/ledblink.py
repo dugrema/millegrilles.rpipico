@@ -18,16 +18,28 @@ async def __executer_valeur(led, valeur):
         led.on()
         await uasyncio.sleep_ms(125)
         
-async def led_executer_sequence(codes: list, executions=1, led=LED_ONBOARD):
+async def led_executer_sequence(codes: list, executions=1, ui_lock: asyncio.Lock = None, led=LED_ONBOARD):
     led.on()
     
     await uasyncio.sleep_ms(4_000)
 
     if executions is not None:
         for i in range(0, executions):
-            await __executer_sequence(led, codes)
+            if ui_lock is not None:
+                await ui_lock.acquire()
+            try:
+                await __executer_sequence(led, codes)
+            finally:
+                if ui_lock is not None:
+                    ui_lock.release()
     else:
         while True:
-            await __executer_sequence(led, codes)
+            if ui_lock is not None:
+                await ui_lock.acquire()
+            try:
+                await __executer_sequence(led, codes)
+            finally:
+                if ui_lock is not None:
+                    ui_lock.release()
         
     led.off()

@@ -5,6 +5,8 @@ import sys
 import time
 import uasyncio as asyncio
 
+from gc import collect
+
 from handler_devices import DeviceHandler
 from wifi import is_wifi_ok
 
@@ -46,6 +48,11 @@ async def initialiser_wifi():
 def get_idmg():
     with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
         return json.load(fichier)['idmg']
+
+
+def get_user_id():
+    with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
+        return json.load(fichier)['user_id']
 
 
 # Recuperer la fiche (CA, chiffrage, etc)
@@ -154,9 +161,11 @@ class Runner:
         self._device_handler = DeviceHandler()
         self._lectures_courantes = dict()
         self.__url_relais = None
+        self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
     
     async def configurer_devices(self):
-        await self._device_handler.load()
+        self.__ui_lock = asyncio.Lock()
+        await self._device_handler.load(self.__ui_lock)
     
     def recevoir_lectures(self, lectures):
         # print("recevoir_lectures: %s" % lectures)
@@ -174,7 +183,7 @@ class Runner:
         
         try:
             url_relai = self.__url_relais.pop()
-            await run_inscription(url_relai)
+            await run_inscription(url_relai, get_user_id(), self.__ui_lock)
         except (AttributeError, IndexError):
             print("Aucun url relais")
             self.__url_relais = None  # Garanti un chargement via entretien
@@ -205,6 +214,7 @@ class Runner:
         
         while True:
             print("Entretien mode %d, date %s" % (self._mode_operation, time.time()))
+            await self.__ui_lock.acquire()
             try:
                 if self._mode_operation >= 1:
                     # Verifier etat wifi
@@ -225,16 +235,14 @@ class Runner:
                         set_time()
                         ntp_ok = True
 
-                    if self._mode_operation >= CONST_MODE_CHARGER_URL_RELAIS:
-                        if self.__url_relais is None:
-                            await self.charger_urls()
-                
                     if self._mode_operation == CONST_MODE_POLLING:
                         # Faire entretien
                         pass
 
             except Exception as e:
                 print("Erreur entretien: %s" % e)
+            finally:
+                self.__ui_lock.release()
             
             await asyncio.sleep(20)
 
@@ -269,7 +277,7 @@ class Runner:
                 sys.print_exception(e)
                 await ledblink.led_executer_sequence([2, 1], 2)
                     
-            await asyncio.sleep(10)
+            await asyncio.sleep(2)
 
     async def __main(self):
         self._mode_operation = await detecter_mode_operation()
@@ -280,6 +288,16 @@ class Runner:
             try:
                 self._mode_operation = await detecter_mode_operation()
                 print("Mode operation: %s" % self._mode_operation)
+
+                if self._mode_operation >= CONST_MODE_CHARGER_URL_RELAIS:
+                    if self.__url_relais is None or len(self.__url_relais) == 0:
+                        # Recharger les relais
+                        await self.charger_urls()
+
+                # Cleanup memoire
+                await asyncio.sleep(0.5)
+                collect()
+                await asyncio.sleep(0.5)
 
                 if self._mode_operation == CONST_MODE_INIT:
                     await initialisation()
@@ -292,6 +310,7 @@ class Runner:
                 else:
                     print("Mode operation non supporte : %d" % self._mode_operation)
                     await ledblink.led_executer_sequence([1,1], executions=None)
+
             except Exception as e:
                 print("Erreur main")
                 sys.print_exception(e)
@@ -299,12 +318,15 @@ class Runner:
             await ledblink.led_executer_sequence([1, 3], 4)
     
     async def run(self):
-        # Demarrer thread entretien (wifi, date, configuration)
-        asyncio.create_task(self.entretien())
-        
         # Charger configuration
         await self.configurer_devices()
-        asyncio.create_task(self._device_handler.run(self.recevoir_lectures, self.get_feeds))
+
+        # Demarrer thread entretien (wifi, date, configuration)
+        asyncio.create_task(self.entretien())
+
+        # Task devices
+        asyncio.create_task(self._device_handler.run(
+            self.__ui_lock, self.recevoir_lectures, self.get_feeds))
 
         # Executer main loop
         await self.__main()
