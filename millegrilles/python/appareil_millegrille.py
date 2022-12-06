@@ -172,7 +172,10 @@ class Runner:
         self._lectures_courantes = lectures
     
     async def get_etat(self):
-        return {'lectures_senseurs': self._lectures_courantes}
+        return {
+            'lectures_senseurs': self._lectures_courantes,
+            'displays': self._device_handler.get_output_devices(),
+        }
 
     async def _signature_certificat(self):
         """

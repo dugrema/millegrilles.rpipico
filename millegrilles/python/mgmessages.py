@@ -177,6 +177,7 @@ async def generer_entete(hachage,
     if partition is not None:
         entete['partition'] = partition
     entete['uuid_transaction'] = str(uuid4())
+    entete['version'] = 1
 
     return entete
 

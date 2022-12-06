@@ -248,6 +248,14 @@ class DummyOutput(Driver):
             if data_lu is False:
                 # Aucun data
                 await asyncio.sleep(10)
+                
+    def get_display_params(self):
+        return {
+            'name': 'DummyOutput',
+            'format': 'text',
+            'width': 80,
+            'height': 20,
+        }
 
 
 DRIVERS['DUMMYOUTPUT'] = DummyOutput
@@ -304,6 +312,14 @@ class OutputLignes(Driver):
             await self.preparer_ligne('{:0>2d}:{:0>2d}:{:0>2d}'.format(hour, minutes, seconds))
             nouv_sec = (time.ticks_ms() % 1000) / 1000
             await self.show(nouv_sec)
+
+    def get_display_params(self):
+        return {
+            'name': self.__class__.__name__,
+            'format': 'text',
+            'width': self._nb_chars,
+            'height': self._nb_lignes,
+        }
 
 
 class LCD1602(OutputLignes):
@@ -447,6 +463,17 @@ class DeviceHandler:
                 asyncio.create_task(coro)
             except AttributeError:
                 print("Dev %s sans output" % dev.device_id)
+
+    def get_output_devices(self):
+        outputs = list()
+        for dev in self.__devices.values():
+            try:
+                outputs.append(dev.get_display_params())
+            except AttributeError:
+                pass
+        
+        if len(outputs) > 0:
+            return outputs
 
     async def run(self, ui_lock: asyncio.Event, sink_method, feeds=None):
         if feeds is not None:
