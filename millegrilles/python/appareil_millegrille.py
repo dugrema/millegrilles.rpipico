@@ -1,15 +1,18 @@
 # Programme appareil millegrille
-import json
-import ledblink
-import sys
-import time
 import uasyncio as asyncio
+import urequests2 as requests
 
+# Methodes de gestion de memoire (preload)
 from gc import collect
+from micropython import mem_info
 from machine import reset as machine_reset
+from sys import print_exception
+
+from ledblink import led_executer_sequence
 
 from handler_devices import DeviceHandler
 from wifi import is_wifi_ok
+from mgmessages import verifier_message
 
 CONST_MODE_INIT = const(1)
 CONST_MODE_RECUPERER_CA = const(2)
@@ -20,6 +23,7 @@ CONST_MODE_POLLING = const(99)
 CONST_HTTP_TIMEOUT_DEFAULT = const(60)
 
 CONST_PATH_FICHIER_CONN = const('conn.json')
+CONST_PATH_FICHIER_DISPLAY = const('displays.json')
 CONST_CHAMP_HTTP_INSTANCE = const('http_instance')
 
 # Erreurs
@@ -37,15 +41,16 @@ async def initialisation():
     """
     Mode initial si aucun parametres charges
     """
-    await ledblink.led_executer_sequence(CODE_CONFIG_INITIALISATION, executions=None)
+    await led_executer_sequence(CODE_CONFIG_INITIALISATION, executions=None)
 
 
 async def initialiser_wifi():
-    import wifi
+    from wifi import connect_wifi
+    
     wifi_ok = False
     for _ in range(0, 5):
         try:
-            status = await wifi.connect_wifi()
+            status = await connect_wifi()
             return status
         except (RuntimeError, OSError) as e:
             print("Wifi error %s" % e)
@@ -55,19 +60,19 @@ async def initialiser_wifi():
             
 
 def get_idmg():
+    from json import load
     with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
-        return json.load(fichier)['idmg']
+        return load(fichier)['idmg']
 
 
 def get_user_id():
+    from json import load
     with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
-        return json.load(fichier)['user_id']
+        return load(fichier)['user_id']
 
 
 # Recuperer la fiche (CA, chiffrage, etc)
 async def charger_fiche():
-    import urequests2 as requests
-    
     try:
         fiche_url = get_url_instance() + '/fiche.json'
     except OSError:
@@ -90,14 +95,16 @@ async def charger_fiche():
 
 
 def get_url_instance():
+    from json import load
     with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
-        return json.load(fichier)[CONST_CHAMP_HTTP_INSTANCE]
+        return load(fichier)[CONST_CHAMP_HTTP_INSTANCE]
 
 
 def get_http_timeout():
+    from json import load
     try:
         with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
-            return json.load(fichier)['http_timeout']
+            return load(fichier)['http_timeout']
     except Exception:
         pass
     
@@ -106,6 +113,7 @@ def get_http_timeout():
 
 async def recuperer_ca():
     from mgmessages import sauvegarder_ca
+    
     print("Init millegrille")
     idmg = get_idmg()
     fiche = await charger_fiche()
@@ -121,33 +129,32 @@ async def recuperer_ca():
 
 
 async def init_cle_privee(force=False):
-    import os
+    from os import stat
     from mgmessages import PATH_CLE_PRIVEE, generer_cle_secrete
-    
     try:
-        os.stat(PATH_CLE_PRIVEE)
+        stat(PATH_CLE_PRIVEE)
     except OSError:
         generer_cle_secrete()
         print("Cle privee initialisee")
 
 
 async def detecter_mode_operation():
+    from os import stat
     # Si wifi.txt/idmg.txt manquants, on est en mode initial.
-    import os
     try:
-        os.stat(CONST_PATH_FICHIER_CONN)
+        stat(CONST_PATH_FICHIER_CONN)
     except:
         print("Mode initialisation")
         return CONST_MODE_INIT
     
     try:
-        os.stat('certs/ca.der')
+        stat('certs/ca.der')
     except:
         print("Mode recuperer ca.der")
         return CONST_MODE_RECUPERER_CA
     
     try:
-        os.stat("certs/cert.pem")
+        stat("certs/cert.pem")
     except:
         print("Mode signer certificat")
         return CONST_MODE_SIGNER_CERTIFICAT
@@ -156,7 +163,9 @@ async def detecter_mode_operation():
 
 
 def set_time():
+    import time
     from ntptime import settime
+    
     print("NTP")
     settime()
     print("Time : ", time.gmtime())
@@ -174,6 +183,7 @@ class Runner:
         self.__erreurs_memoire = 0
     
     async def configurer_devices(self):
+        from json import load
         self.__ui_lock = asyncio.Lock()
         await self._device_handler.load(self.__ui_lock)
     
@@ -226,7 +236,7 @@ class Runner:
         ntp_ok = False
         
         while True:
-            print("Entretien mode %d, date %s" % (self._mode_operation, time.time()))
+            print("Entretien mode %d" % self._mode_operation)
             await self.__ui_lock.acquire()
             try:
                 if self._mode_operation >= 1:
@@ -260,7 +270,6 @@ class Runner:
             await asyncio.sleep(20)
 
     async def charger_urls(self):
-        from mgmessages import verifier_message
         fiche = await charger_fiche()
         info_cert = await verifier_message(fiche)
         print("Info cert fiche : %s" % info_cert)
@@ -269,12 +278,26 @@ class Runner:
             self.__url_relais = url_relais
             print("URL relais : %s" % self.__url_relais)
 
+    def get_configuration_display(self):
+        from json import load
+        try:
+            with open(CONST_PATH_FICHIER_DISPLAY, 'rb') as fichier:
+                return load(fichier)
+        except OSError:
+            pass  # Fichier absent
+        
+    def set_configuration_display(self, configuration: dict):
+        from json import dump
+        print('Maj configuration display')
+        with open(CONST_PATH_FICHIER_DISPLAY, 'wb') as fichier:
+            dump(configuration, fichier)
+
     async def _polling(self):
         """
         Main thread d'execution du polling/commandes
         """
-        import polling_messages
-        
+        from polling_messages import polling_thread
+
         while self._mode_operation == CONST_MODE_POLLING:
             # Rotation relais pour en trouver un qui fonctionne
             # Entretien va rafraichir la liste via la fiche
@@ -283,7 +306,7 @@ class Runner:
                 http_timeout = get_http_timeout()
                 print("http timeout : %d" % http_timeout)
                 
-                await polling_messages.polling_thread(url_relai, http_timeout, self.get_etat)
+                await polling_thread(self, url_relai, http_timeout, self.get_etat)
                 
                 # Reset erreurs memoire, cycle execute avec succes
                 self.__erreurs_memoire = 0
@@ -296,8 +319,8 @@ class Runner:
                 raise e  # Sortir de la boucle pour recharger un relai
             except Exception as e:
                 print("Erreur polling")
-                sys.print_exception(e)
-                await ledblink.led_executer_sequence(CODE_POLLING_ERREUR_GENERALE, executions=2, ui_lock=self.__ui_lock)
+                print_exception(e)
+                # await ledblink.led_executer_sequence(CODE_POLLING_ERREUR_GENERALE, executions=2, ui_lock=self.__ui_lock)
                     
             await asyncio.sleep_ms(100)
 
@@ -305,7 +328,7 @@ class Runner:
         self._mode_operation = await detecter_mode_operation()
         print("Mode operation initial %d" % mode_operation)
         
-        await ledblink.led_executer_sequence(CODE_MAIN_DEMARRAGE, executions=1, ui_lock=self.__ui_lock)
+        await led_executer_sequence(CODE_MAIN_DEMARRAGE, executions=1, ui_lock=self.__ui_lock)
         while True:
             try:
                 self._mode_operation = await detecter_mode_operation()
@@ -331,27 +354,28 @@ class Runner:
                     await self._polling()
                 else:
                     print("Mode operation non supporte : %d" % self._mode_operation)
-                    await ledblink.led_executer_sequence(CODE_MAIN_OPERATION_INCONNUE, executions=None)
+                    await led_executer_sequence(CODE_MAIN_OPERATION_INCONNUE, executions=None)
 
             except OSError as ose:
                 if ose.errno == 12:
                     self.__erreurs_memoire = self.__erreurs_memoire + 1
-                    print("Erreur memoire no %d" % self.__erreurs_memoire)
+                    print("Erreur memoire no %d\n%s" % (self.__erreurs_memoire, mem_info()))
+                    print_exception(ose)
                     collect()
-                    await ledblink.led_executer_sequence(CODE_ERREUR_MEMOIRE, executions=1, ui_lock=self.__ui_lock)
+                    await led_executer_sequence(CODE_ERREUR_MEMOIRE, executions=1, ui_lock=self.__ui_lock)
                     await asyncio.sleep(10)
                     if self.__erreurs_memoire >= 10:
                         print("Trop d'erreur, reset")
                         machine_reset()
                 else:
                     print("OSError main")
-                    sys.print_exception(e)
+                    print_exception(e)
 
             except Exception as e:
                 print("Erreur main")
-                sys.print_exception(e)
+                print_exception(e)
             
-            await ledblink.led_executer_sequence(CODE_MAIN_ERREUR_GENERALE, 4, self.__ui_lock)
+            await led_executer_sequence(CODE_MAIN_ERREUR_GENERALE, 4, self.__ui_lock)
     
     async def run(self):
         # Charger configuration
