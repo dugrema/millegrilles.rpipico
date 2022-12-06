@@ -1,4 +1,5 @@
 import uasyncio as asyncio
+from gc import collect
 
 PATHNAME_POLL = const('/poll')
 CONST_CHAMP_TIMEOUT = const('http_timeout')
@@ -53,6 +54,11 @@ async def polling_thread(url_relai: str, timeout_http=60, generer_etat=None):
     from handler_commandes import traiter_commande
     from sys import print_exception
     
+    # Cleanup memoire
+    await asyncio.sleep(4)
+    collect()
+    await asyncio.sleep(1)
+    
     errnumber = 0
     while True:
         try:
@@ -64,6 +70,10 @@ async def polling_thread(url_relai: str, timeout_http=60, generer_etat=None):
             else:
                 await traiter_commande(reponse)
                 errnumber = 0  # Reset erreurs
+        except OSError as e:
+            print("POLLING OSError")
+            print_exception(e)
+            raise e
         except HttpErrorException as e:
             raise e  # Retour pour recharger fiche/changer relai
         except Exception as e:

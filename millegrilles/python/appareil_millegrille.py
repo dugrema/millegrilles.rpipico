@@ -23,6 +23,7 @@ CONST_PATH_FICHIER_CONN = const('conn.json')
 CONST_CHAMP_HTTP_INSTANCE = const('http_instance')
 
 # Erreurs
+CODE_MAIN_DEMARRAGE = const((4,1))
 CODE_MAIN_OPERATION_INCONNUE = const((1,1))
 CODE_CONFIG_INITIALISATION = const((1,2))
 CODE_MAIN_ERREUR_GENERALE = const((1,3))
@@ -296,15 +297,15 @@ class Runner:
             except Exception as e:
                 print("Erreur polling")
                 sys.print_exception(e)
-                await ledblink.led_executer_sequence(CODE_POLLING_ERREUR_GENERALE, 2)
+                await ledblink.led_executer_sequence(CODE_POLLING_ERREUR_GENERALE, executions=2, ui_lock=self.__ui_lock)
                     
-            await asyncio.sleep(2)
+            await asyncio.sleep_ms(100)
 
     async def __main(self):
         self._mode_operation = await detecter_mode_operation()
         print("Mode operation initial %d" % mode_operation)
         
-        await ledblink.led_executer_sequence([4], executions=1)
+        await ledblink.led_executer_sequence(CODE_MAIN_DEMARRAGE, executions=1, ui_lock=self.__ui_lock)
         while True:
             try:
                 self._mode_operation = await detecter_mode_operation()
@@ -318,7 +319,7 @@ class Runner:
                 # Cleanup memoire
                 await asyncio.sleep(0.5)
                 collect()
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(2)
 
                 if self._mode_operation == CONST_MODE_INIT:
                     await initialisation()
@@ -337,11 +338,11 @@ class Runner:
                     self.__erreurs_memoire = self.__erreurs_memoire + 1
                     print("Erreur memoire no %d" % self.__erreurs_memoire)
                     collect()
-                    await ledblink.led_executer_sequence(CODE_ERREUR_MEMOIRE, executions=1)
+                    await ledblink.led_executer_sequence(CODE_ERREUR_MEMOIRE, executions=1, ui_lock=self.__ui_lock)
                     await asyncio.sleep(10)
                     if self.__erreurs_memoire >= 10:
                         print("Trop d'erreur, reset")
-                        reset_machine()
+                        machine_reset()
                 else:
                     print("OSError main")
                     sys.print_exception(e)
@@ -350,7 +351,7 @@ class Runner:
                 print("Erreur main")
                 sys.print_exception(e)
             
-            await ledblink.led_executer_sequence(CODE_MAIN_ERREUR_GENERALE, 4)
+            await ledblink.led_executer_sequence(CODE_MAIN_ERREUR_GENERALE, 4, self.__ui_lock)
     
     async def run(self):
         # Charger configuration
