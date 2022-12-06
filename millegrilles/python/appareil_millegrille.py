@@ -6,6 +6,7 @@ import time
 import uasyncio as asyncio
 
 from gc import collect
+from machine import reset as machine_reset
 
 from handler_devices import DeviceHandler
 from wifi import is_wifi_ok
@@ -21,6 +22,13 @@ CONST_HTTP_TIMEOUT_DEFAULT = const(60)
 CONST_PATH_FICHIER_CONN = const('conn.json')
 CONST_CHAMP_HTTP_INSTANCE = const('http_instance')
 
+# Erreurs
+CODE_MAIN_OPERATION_INCONNUE = const((1,1))
+CODE_CONFIG_INITIALISATION = const((1,2))
+CODE_MAIN_ERREUR_GENERALE = const((1,3))
+CODE_POLLING_ERREUR_GENERALE = const((2,1))
+CODE_ERREUR_MEMOIRE = const((4,2))
+
 mode_operation = 0
 
 
@@ -28,7 +36,7 @@ async def initialisation():
     """
     Mode initial si aucun parametres charges
     """
-    await ledblink.led_executer_sequence([1,2], executions=None)
+    await ledblink.led_executer_sequence(CODE_CONFIG_INITIALISATION, executions=None)
 
 
 async def initialiser_wifi():
@@ -162,6 +170,7 @@ class Runner:
         self._lectures_courantes = dict()
         self.__url_relais = None
         self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
+        self.__erreurs_memoire = 0
     
     async def configurer_devices(self):
         self.__ui_lock = asyncio.Lock()
@@ -264,6 +273,7 @@ class Runner:
         Main thread d'execution du polling/commandes
         """
         import polling_messages
+        
         while self._mode_operation == CONST_MODE_POLLING:
             # Rotation relais pour en trouver un qui fonctionne
             # Entretien va rafraichir la liste via la fiche
@@ -271,14 +281,22 @@ class Runner:
                 url_relai = self.__url_relais.pop(0)
                 http_timeout = get_http_timeout()
                 print("http timeout : %d" % http_timeout)
+                
                 await polling_messages.polling_thread(url_relai, http_timeout, self.get_etat)
-            except (AttributeError, IndexError):
+                
+                # Reset erreurs memoire, cycle execute avec succes
+                self.__erreurs_memoire = 0
+            except OSError as ose:
+                # Erreur OS (e.g. 12:memoire ou 6:WIFI), sortir de polling
+                raise ose
+            except (AttributeError, IndexError) as e:
                 print("Aucun url relais")
                 self.__url_relais = None  # Garanti un chargement via entretien
+                raise e  # Sortir de la boucle pour recharger un relai
             except Exception as e:
                 print("Erreur polling")
                 sys.print_exception(e)
-                await ledblink.led_executer_sequence([2, 1], 2)
+                await ledblink.led_executer_sequence(CODE_POLLING_ERREUR_GENERALE, 2)
                     
             await asyncio.sleep(2)
 
@@ -312,13 +330,27 @@ class Runner:
                     await self._polling()
                 else:
                     print("Mode operation non supporte : %d" % self._mode_operation)
-                    await ledblink.led_executer_sequence([1,1], executions=None)
+                    await ledblink.led_executer_sequence(CODE_MAIN_OPERATION_INCONNUE, executions=None)
+
+            except OSError as ose:
+                if ose.errno == 12:
+                    self.__erreurs_memoire = self.__erreurs_memoire + 1
+                    print("Erreur memoire no %d" % self.__erreurs_memoire)
+                    collect()
+                    await ledblink.led_executer_sequence(CODE_ERREUR_MEMOIRE, executions=1)
+                    await asyncio.sleep(10)
+                    if self.__erreurs_memoire >= 10:
+                        print("Trop d'erreur, reset")
+                        reset_machine()
+                else:
+                    print("OSError main")
+                    sys.print_exception(e)
 
             except Exception as e:
                 print("Erreur main")
                 sys.print_exception(e)
             
-            await ledblink.led_executer_sequence([1, 3], 4)
+            await ledblink.led_executer_sequence(CODE_MAIN_ERREUR_GENERALE, 4)
     
     async def run(self):
         # Charger configuration
