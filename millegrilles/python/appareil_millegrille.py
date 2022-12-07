@@ -191,6 +191,10 @@ class Runner:
         # print("recevoir_lectures: %s" % lectures)
         self._lectures_courantes = lectures
     
+    @property
+    def lectures_courantes(self):
+        return self._lectures_courantes
+    
     async def get_etat(self):
         return {
             'lectures_senseurs': self._lectures_courantes,
@@ -212,21 +216,22 @@ class Runner:
             self.__url_relais = None  # Garanti un chargement via entretien
 
     def feed_default(self):
-        try:
-            wifi_ip = self._lectures_courantes['rp2pico/wifi']['valeur_str']
-        except KeyError:
-            print("No wifi lectures")
-            #from wifi import get_etat_wifi
-            #wifi_ip = get_etat_wifi()['ip']
-            wifi_ip = 'N/A'
-        data_lignes = ['WIFI IP', wifi_ip]
-        while len(data_lignes) > 0:
-            yield data_lignes.pop(0)
-        # return []
-        #return None
+        from feed_display import FeedDisplayDefault
+        return FeedDisplayDefault(self)
+
+    def feed_custom(self, name, config):
+        from feed_display import FeedDisplayCustom
+        return FeedDisplayCustom(self, name, config)
 
     def get_feeds(self, name=None):
-        return self.feed_default
+        if name is None:
+            return self.feed_default()
+        try:
+            config_feed = self.get_configuration_display()[name]
+            return self.feed_custom(name, config_feed)
+        except (OSError, KeyError):
+            print("Feed %s inconnu, defaulting" % name)
+            return self.feed_default
     
     async def entretien(self):
         """

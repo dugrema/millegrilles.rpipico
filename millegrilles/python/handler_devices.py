@@ -234,11 +234,11 @@ class DummyOutput(Driver):
         pass
     
     async def run_display(self, feeds):
-        methode_feed = feeds()
+        data_generator = feeds(name=self.__class__.__name__)
         while True:
             data_lu = False
             
-            lignes = methode_feed()
+            lignes = data_generator.generate()
             if lignes is not None:
                 for ligne in lignes:
                     print("Dummy output ligne : %s" % ligne)
@@ -284,14 +284,18 @@ class OutputLignes(Driver):
         raise Exception('Not implemented')
 
     async def run_display(self, feeds):
-        methode_feed = feeds()
         while True:
+            data_generator = feeds(name=self.__class__.__name__)
+            
+            # Maj duree affichage date (config)
+            self.__duree_afficher_datetime = data_generator.duree_date
+            
             # Affichage heure
             await self.afficher_datetime()
             compteur = 0
-            lignes = methode_feed()
+            lignes = data_generator.generate()
             if lignes is not None:
-                for ligne in methode_feed():
+                for ligne in lignes:
                     compteur += 1
                     await self.preparer_ligne(ligne[:self._nb_chars])
                     if compteur == self._nb_lignes:
@@ -305,6 +309,9 @@ class OutputLignes(Driver):
                     await self.show()
     
     async def afficher_datetime(self):
+        if self.__duree_afficher_datetime is None:
+            return
+        
         temps_limite = time.time() + self.__duree_afficher_datetime
         while temps_limite >= time.time():
             (year, month, day, hour, minutes, seconds, _, _) = time.localtime()
