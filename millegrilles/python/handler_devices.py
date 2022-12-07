@@ -1,10 +1,8 @@
 # Module de gestions des drivers/devices
 import ubinascii as binascii
 import uasyncio as asyncio
-import sys
-import time
-from json import load
 
+from sys import print_exception
 
 CONST_FICHIER_DEVICES = const('devices.json')
 
@@ -309,6 +307,8 @@ class OutputLignes(Driver):
                     await self.show()
     
     async def afficher_datetime(self):
+        import time
+        
         if self.__duree_afficher_datetime is None:
             return
         
@@ -407,6 +407,8 @@ class DeviceHandler:
         self.__ui_lock = None
     
     async def load(self, ui_lock: asyncio.Event):
+        from json import load
+        
         self.__ui_lock = ui_lock
         with open(CONST_FICHIER_DEVICES, 'rb') as fichier:
             self.__configuration = load(fichier)
@@ -442,9 +444,11 @@ class DeviceHandler:
                 print("Loaded device : ", device_id)
             except Exception as e:
                 print("Erreur load device ", dev)
-                sys.print_exception(e)
+                print_exception(e)
     
     async def _lire_devices(self, sink_method):
+        import time
+        
         lectures = dict()
         ts_courant = time.time()
         for dev in self.__devices.values():
@@ -458,7 +462,7 @@ class DeviceHandler:
                 pass  # Pas d'attribut .lire
             except Exception as e:
                 print("Erreur lecture")
-                sys.print_exception(e)
+                print_exception(e)
                 
         sink_method(lectures)
         

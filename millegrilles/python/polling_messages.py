@@ -106,9 +106,9 @@ async def verifier_signature(reponse):
     return await verifier_message(reponse)
 
 
-async def _traiter_commande(reponse):
+async def _traiter_commande(appareil, reponse):
     from handler_commandes import traiter_commande
-    return await traiter_commande(reponse)
+    return await traiter_commande(appareil, reponse)
 
 
 async def polling_thread(appareil, url_relai: str, timeout_http=60, generer_etat=None):
@@ -133,7 +133,7 @@ async def polling_thread(appareil, url_relai: str, timeout_http=60, generer_etat
             if reponse.get('ok') is False:
                 print("Err %s" % reponse.get('err'))
             else:
-                await _traiter_commande(reponse)
+                await _traiter_commande(appareil, reponse)
                 errnumber = 0  # Reset erreurs
         except OSError as e:
             print("POLLING OSError")
