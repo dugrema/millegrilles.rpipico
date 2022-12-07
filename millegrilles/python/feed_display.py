@@ -1,10 +1,10 @@
 class FeedDisplay:
     
     def __init__(self, appareil):
-        self.__appareil = appareil
+        self._appareil = appareil
     
     def generate(self):
-        raise Exception('Not implemente')
+        raise Exception('Not implemented')
 
 
 class FeedDisplayDefault(FeedDisplay):
@@ -46,5 +46,39 @@ class FeedDisplayCustom(FeedDisplay):
             return
         
         for ligne in lignes:
-            yield ligne['masque']
+            yield self.formatter_ligne(ligne)
 
+    def formatter_ligne(self, ligne):
+        from sys import print_exception
+        
+        masque = ligne['masque']
+        
+        try:
+            appareil_nom = None
+            variable = ligne['variable']
+            variable = variable.split(':')
+            if len(variable) > 2:
+                raise Exception('Variable incorrecte')
+            elif len(variable) == 2:
+                appareil_nom, variable = variable
+            else:
+                variable = variable.pop()
+
+            print("Appareil %s, Variable %s" % (appareil_nom, variable))
+
+            senseur = self._appareil.lectures_courantes[variable]
+            print("Senseur %s" % senseur)
+            try:
+                valeur = senseur['valeur_str']
+            except KeyError:
+                valeur = senseur['valeur']
+            
+            masque = masque.format(valeur)
+
+        except (KeyError, ValueError, AttributeError) as e:
+            print("Erreur formattage - OK")
+        except Exception as e:
+            print("Erreur generique formattage")
+            print_exception(e)
+        
+        return masque
