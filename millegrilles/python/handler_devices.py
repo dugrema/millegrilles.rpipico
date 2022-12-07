@@ -238,8 +238,8 @@ class DummyOutput(Driver):
             
             lignes = data_generator.generate()
             if lignes is not None:
-                for ligne in lignes:
-                    print("Dummy output ligne : %s" % ligne)
+                for ligne, flag in lignes:
+                    print("Dummy output ligne : %s, flag: %s" % ligne)
                     data_lu = True
                     await asyncio.sleep(5)
             
@@ -275,7 +275,7 @@ class OutputLignes(Driver):
     def _get_instance(self):
         raise Exception('Not implemented')
 
-    async def preparer_ligne(self, data):
+    async def preparer_ligne(self, data, flag=None):
         raise Exception('Not implemented')
 
     async def show(self, attente=5.0):
@@ -293,9 +293,9 @@ class OutputLignes(Driver):
             compteur = 0
             lignes = data_generator.generate()
             if lignes is not None:
-                for ligne in lignes:
+                for ligne, flag in lignes:
                     compteur += 1
-                    await self.preparer_ligne(ligne[:self._nb_chars])
+                    await self.preparer_ligne(ligne[:self._nb_chars], flag)
                     if compteur == self._nb_lignes:
                         compteur = 0
                         await self.show()
@@ -347,10 +347,13 @@ class LCD1602(OutputLignes):
 
         return I2cLcd(i2c, self._addr, self._nb_lignes, self._nb_chars)
 
-    async def preparer_ligne(self, data):
+    async def preparer_ligne(self, data, flag=None):
         await self._ui_lock.acquire()
         try:
-            self._instance.putstr('{:<16}'.format(data))
+            if flag is not None:
+                self._instance.putstr('{:<15}'.format(data) + flag)
+            else:
+                self._instance.putstr('{:<16}'.format(data))
         finally:
             self._ui_lock.release()
 
@@ -380,7 +383,7 @@ class Ssd1306(OutputLignes):
 
         return SSD1306_I2C(self.__width, self.__height, i2c)
 
-    async def preparer_ligne(self, data):
+    async def preparer_ligne(self, data, flag=None):
         self._instance.text(data, 0, self.__ligne * self.__char_size)
         self.__ligne += 1
 

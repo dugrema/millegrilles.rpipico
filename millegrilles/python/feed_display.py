@@ -22,7 +22,7 @@ class FeedDisplayDefault(FeedDisplay):
             wifi_ip = 'N/A'
         data_lignes = ['WIFI IP', wifi_ip]
         while len(data_lignes) > 0:
-            yield data_lignes.pop(0)
+            yield data_lignes.pop(0), None
 
 
 class FeedDisplayCustom(FeedDisplay):
@@ -50,35 +50,64 @@ class FeedDisplayCustom(FeedDisplay):
 
     def formatter_ligne(self, ligne):
         from sys import print_exception
+        from time import time
         
         masque = ligne['masque']
+        flag = None
         
         try:
             appareil_nom = None
             variable = ligne['variable']
-            variable = variable.split(':')
-            if len(variable) > 2:
-                raise Exception('Variable incorrecte')
-            elif len(variable) == 2:
-                appareil_nom, variable = variable
-            else:
-                variable = variable.pop()
-
-            print("Appareil %s, Variable %s" % (appareil_nom, variable))
-
-            senseur = self._appareil.lectures_courantes[variable]
-            print("Senseur %s" % senseur)
+        except KeyError:
+            pass
+        else:
             try:
-                valeur = senseur['valeur_str']
-            except KeyError:
-                valeur = senseur['valeur']
-            
-            masque = masque.format(valeur)
+                valeur, timestamp_lecture = self.get_valeur(variable)
+                if timestamp_lecture is not None:
+                    temps_courant = time()
+                    if temps_courant - timestamp_lecture > 1800:
+                        flag = '!'
+                    elif temps_courant - timestamp_lecture > 300:
+                        flag = '?'
+                masque = masque.format(valeur)
+            except (KeyError, ValueError, AttributeError) as e:
+                # print("Erreur formattage")
+                # print_exception(e)
+                masque = masque.format(0)
+                # Valeur manquante
+                masque = masque.replace('.0', '').replace('0', 'N/D')
+            except Exception as e:
+                print("Erreur generique formattage")
+                print_exception(e)
 
-        except (KeyError, ValueError, AttributeError) as e:
-            print("Erreur formattage - OK")
-        except Exception as e:
-            print("Erreur generique formattage")
-            print_exception(e)
-        
-        return masque
+        return masque, flag
+
+    def get_valeur(self, senseur_nom: str):
+        senseur_nom = senseur_nom.split(':')
+
+        if len(senseur_nom) > 2:
+            raise Exception('Nom senseur incorrect : %s' % senseur_nom)
+        elif len(senseur_nom) == 2:
+            uuid_appareil, senseur_nom = senseur_nom
+        else:
+            uuid_appareil = None
+            senseur_nom = senseur_nom.pop()
+
+        if uuid_appareil is not None:
+            print("Appareil externe : %s, senseur %s" % (uuid_appareil, senseur_nom))
+            print("Lectures externes : %s" % self._appareil.lectures_externes)
+            senseur = self._appareil.lectures_externes[uuid_appareil][senseur_nom]
+            print("Senseur externe trouve : %s" % senseur)
+        else:
+            senseur = self._appareil.lectures_courantes[senseur_nom]
+
+        try:
+            timestamp_lecture = senseur['timestamp']
+        except KeyError:
+            timestamp_lecture = None
+
+        try:
+            return senseur['valeur_str'], timestamp_lecture
+        except KeyError:
+            return senseur['valeur'], timestamp_lecture
+    

@@ -80,14 +80,14 @@ async def charger_fiche():
         return
 
     # Downloader la fiche
-    print("Recuperer fiche a %s" % fiche_url)
+    # print("Recuperer fiche a %s" % fiche_url)
     reponse = await requests.get(fiche_url)
     try:
         await asyncio.sleep(0)  # Yield
         if reponse.status_code != 200:
             raise Exception("http %d" % reponse.status_code)
         fiche_json = await reponse.json()
-        print("Fiche recue")
+        # print("Fiche recue")
     finally:
         reponse.close()
         
@@ -166,10 +166,8 @@ def set_time():
     import time
     from ntptime import settime
     
-    print("NTP")
     settime()
-    print("Time : ", time.gmtime())
-    print("Time epoch %s" % time.time())
+    print("NTP Time : ", time.gmtime())
 
 
 class Runner:
@@ -178,6 +176,7 @@ class Runner:
         self._mode_operation = 0
         self._device_handler = DeviceHandler()
         self._lectures_courantes = dict()
+        self._lectures_externes = dict()
         self.__url_relais = None
         self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
         self.__erreurs_memoire = 0
@@ -188,17 +187,42 @@ class Runner:
         await self._device_handler.load(self.__ui_lock)
     
     def recevoir_lectures(self, lectures):
-        # print("recevoir_lectures: %s" % lectures)
         self._lectures_courantes = lectures
-    
+
+    def recevoir_lectures_externes(self, lectures):
+        # print("recevoir_lectures: %s" % lectures)
+        self._lectures_externes.update(lectures)
+        print("Lectures externes maj\n%s" % self._lectures_externes)
+
     @property
     def lectures_courantes(self):
         return self._lectures_courantes
     
+    @property
+    def lectures_externes(self):
+        return self._lectures_externes
+    
     async def get_etat(self):
+        try:
+            senseurs = set()
+            for display in self.get_configuration_display().values():
+                try:
+                    for ligne in display['lignes']:
+                        print("Config appareils ligne : %s" % ligne)
+                        try:
+                            if ligne['variable'] is not None and len(ligne['variable'].split(':')) > 1:
+                                senseurs.add(ligne['variable'])
+                        except KeyError:
+                            pass  # Pas de variable configuree
+                except KeyError:
+                    pass  # Pas de lignes configurees
+            senseurs = list(senseurs)
+        except (OSError):
+            senseurs = None
         return {
             'lectures_senseurs': self._lectures_courantes,
             'displays': self._device_handler.get_output_devices(),
+            'senseurs': senseurs,
         }
 
     async def _signature_certificat(self):
@@ -277,7 +301,7 @@ class Runner:
     async def charger_urls(self):
         fiche = await charger_fiche()
         info_cert = await verifier_message(fiche)
-        print("Info cert fiche : %s" % info_cert)
+        # print("Info cert fiche : %s" % info_cert)
         if 'core' in info_cert['roles']:
             url_relais = [app['url'] for app in fiche['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
             self.__url_relais = url_relais
@@ -293,7 +317,7 @@ class Runner:
         
     def set_configuration_display(self, configuration: dict):
         from json import dump
-        print('Maj configuration display')
+        # print('Maj configuration display')
         with open(CONST_PATH_FICHIER_DISPLAY, 'wb') as fichier:
             dump(configuration, fichier)
 
@@ -309,7 +333,7 @@ class Runner:
             try:
                 url_relai = self.__url_relais.pop(0)
                 http_timeout = get_http_timeout()
-                print("http timeout : %d" % http_timeout)
+                # print("http timeout : %d" % http_timeout)
                 
                 await polling_thread(self, url_relai, http_timeout, self.get_etat)
                 

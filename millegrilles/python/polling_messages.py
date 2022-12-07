@@ -78,7 +78,6 @@ async def requete_configuration_displays(url_relai: str, set_configuration):
     try:
         if reponse['ok'] == True:
             info_certificat = await verifier_message(reponse)
-            print('Reponse valide %s' % reponse)
             if CONST_DOMAINE_SENSEURSPASSIFS in info_certificat['domaines']:
                 try:
                     set_configuration(reponse['display_configuration']['configuration']['displays'])
@@ -113,16 +112,16 @@ async def _traiter_commande(appareil, reponse):
 
 async def polling_thread(appareil, url_relai: str, timeout_http=60, generer_etat=None):
     # Cleanup memoire
-    await asyncio.sleep(4)
-    collect()
-    await asyncio.sleep(1)
+    #await asyncio.sleep(4)
+    #collect()
+    #await asyncio.sleep(1)
     
     await requete_configuration_displays(url_relai, appareil.set_configuration_display)
 
     # Cleanup memoire
-    await asyncio.sleep(4)
-    collect()
-    await asyncio.sleep(1)
+    #await asyncio.sleep(4)
+    #collect()
+    #await asyncio.sleep(1)
 
     errnumber = 0
     while True:
@@ -134,11 +133,16 @@ async def polling_thread(appareil, url_relai: str, timeout_http=60, generer_etat
                 print("Err %s" % reponse.get('err'))
             else:
                 await _traiter_commande(appareil, reponse)
-                errnumber = 0  # Reset erreurs
+            errnumber = 0  # Reset erreurs
         except OSError as e:
-            print("POLLING OSError")
-            print_exception(e)
-            raise e
+            print("POLLING OSError %d" % e.errno)
+            if e.errno == 12 and errnumber == 0:
+                # Erreur memoire, on tente a nouveau
+                errnumber += 1
+                await asyncio.sleep(2)
+            else:
+                print_exception(e)
+                raise e
         except HttpErrorException as e:
             raise e  # Retour pour recharger fiche/changer relai
         except Exception as e:

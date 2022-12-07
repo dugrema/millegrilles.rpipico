@@ -8,6 +8,8 @@ async def traiter_commande(appareil, commande: dict):
             appareil.set_configuration_display(commande['displays'])
         except KeyError:
             print("Erreur reception maj displays")
+    elif action == 'lectures_senseurs':
+        appareil.recevoir_lectures_externes(commande['lectures_senseurs'])
     else:
         raise ValueError('Action inconnue : %s' % action)
 
