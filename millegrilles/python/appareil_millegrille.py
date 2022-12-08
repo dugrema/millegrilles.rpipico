@@ -81,13 +81,14 @@ async def charger_fiche():
 
     # Downloader la fiche
     # print("Recuperer fiche a %s" % fiche_url)
+    fiche_json = None
     reponse = await requests.get(fiche_url)
     try:
         await asyncio.sleep(0)  # Yield
         if reponse.status_code != 200:
-            raise Exception("http %d" % reponse.status_code)
+            raise Exception("fiche http status:%d" % reponse.status_code)
         fiche_json = await reponse.json()
-        # print("Fiche recue")
+        # print("Fiche recue\n%s" % fiche_json)
     finally:
         reponse.close()
         
@@ -195,6 +196,10 @@ class Runner:
         print("Lectures externes maj\n%s" % self._lectures_externes)
 
     @property
+    def mode_operation(self):
+        return self._mode_operation
+
+    @property
     def lectures_courantes(self):
         return self._lectures_courantes
     
@@ -208,7 +213,7 @@ class Runner:
             for display in self.get_configuration_display().values():
                 try:
                     for ligne in display['lignes']:
-                        print("Config appareils ligne : %s" % ligne)
+                        # print("Config appareils ligne : %s" % ligne)
                         try:
                             if ligne['variable'] is not None and len(ligne['variable'].split(':')) > 1:
                                 senseurs.add(ligne['variable'])
@@ -217,7 +222,7 @@ class Runner:
                 except KeyError:
                     pass  # Pas de lignes configurees
             senseurs = list(senseurs)
-        except (OSError):
+        except (OSError, AttributeError):
             senseurs = None
         return {
             'lectures_senseurs': self._lectures_courantes,
@@ -253,9 +258,9 @@ class Runner:
         try:
             config_feed = self.get_configuration_display()[name]
             return self.feed_custom(name, config_feed)
-        except (OSError, KeyError):
+        except (AttributeError, OSError, KeyError, TypeError):
             print("Feed %s inconnu, defaulting" % name)
-            return self.feed_default
+            return self.feed_default()
     
     async def entretien(self):
         """
@@ -296,12 +301,11 @@ class Runner:
             finally:
                 self.__ui_lock.release()
             
-            await asyncio.sleep(20)
+            await asyncio.sleep(120)
 
     async def charger_urls(self):
         fiche = await charger_fiche()
         info_cert = await verifier_message(fiche)
-        # print("Info cert fiche : %s" % info_cert)
         if 'core' in info_cert['roles']:
             url_relais = [app['url'] for app in fiche['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
             self.__url_relais = url_relais
@@ -369,9 +373,9 @@ class Runner:
                         await self.charger_urls()
 
                 # Cleanup memoire
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(5)
                 collect()
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
 
                 if self._mode_operation == CONST_MODE_INIT:
                     await initialisation()

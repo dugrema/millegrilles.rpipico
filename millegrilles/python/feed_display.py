@@ -14,13 +14,16 @@ class FeedDisplayDefault(FeedDisplay):
 
     def generate(self):
         try:
-            wifi_ip = self.__appareil.lectures_courantes['rp2pico/wifi']['valeur_str']
+            wifi_ip = self._appareil.lectures_courantes['rp2pico/wifi']['valeur_str']
         except KeyError:
             print("No wifi lectures")
             #from wifi import get_etat_wifi
             #wifi_ip = get_etat_wifi()['ip']
             wifi_ip = 'N/A'
-        data_lignes = ['WIFI IP', wifi_ip]
+        
+        ligne_mode = 'Mode: {:02d}'.format(self._appareil.mode_operation)
+        
+        data_lignes = ['WIFI IP', wifi_ip, ligne_mode]
         while len(data_lignes) > 0:
             yield data_lignes.pop(0), None
 
@@ -58,6 +61,8 @@ class FeedDisplayCustom(FeedDisplay):
         try:
             appareil_nom = None
             variable = ligne['variable']
+            if variable is None or variable == '':
+                return masque, flag
         except KeyError:
             pass
         else:
@@ -73,9 +78,12 @@ class FeedDisplayCustom(FeedDisplay):
             except (KeyError, ValueError, AttributeError) as e:
                 # print("Erreur formattage")
                 # print_exception(e)
-                masque = masque.format(0)
+                try:
+                    masque = masque.format(0)
+                    masque = masque.replace('.0', '').replace('0', 'N/D')
+                except:
+                    pass
                 # Valeur manquante
-                masque = masque.replace('.0', '').replace('0', 'N/D')
             except Exception as e:
                 print("Erreur generique formattage")
                 print_exception(e)
@@ -94,10 +102,10 @@ class FeedDisplayCustom(FeedDisplay):
             senseur_nom = senseur_nom.pop()
 
         if uuid_appareil is not None:
-            print("Appareil externe : %s, senseur %s" % (uuid_appareil, senseur_nom))
-            print("Lectures externes : %s" % self._appareil.lectures_externes)
+            # print("Appareil externe : %s, senseur %s" % (uuid_appareil, senseur_nom))
+            # print("Lectures externes : %s" % self._appareil.lectures_externes)
             senseur = self._appareil.lectures_externes[uuid_appareil][senseur_nom]
-            print("Senseur externe trouve : %s" % senseur)
+            # print("Senseur externe trouve : %s" % senseur)
         else:
             senseur = self._appareil.lectures_courantes[senseur_nom]
 

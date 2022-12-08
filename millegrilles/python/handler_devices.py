@@ -239,7 +239,7 @@ class DummyOutput(Driver):
             lignes = data_generator.generate()
             if lignes is not None:
                 for ligne, flag in lignes:
-                    print("Dummy output ligne : %s, flag: %s" % ligne)
+                    print("Dummy output ligne : %s, flag: %s" % (ligne, flag))
                     data_lu = True
                     await asyncio.sleep(5)
             
@@ -286,7 +286,10 @@ class OutputLignes(Driver):
             data_generator = feeds(name=self.__class__.__name__)
             
             # Maj duree affichage date (config)
-            self.__duree_afficher_datetime = data_generator.duree_date
+            try:
+                self.__duree_afficher_datetime = data_generator.duree_date
+            except AttributeError:
+                self.__duree_afficher_datetime = 10
             
             # Affichage heure
             await self.afficher_datetime()
