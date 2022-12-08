@@ -281,6 +281,9 @@ class OutputLignes(Driver):
     async def show(self, attente=5.0):
         raise Exception('Not implemented')
 
+    async def clear(self):
+        pass  # Optionnel
+
     async def run_display(self, feeds):
         while True:
             data_generator = feeds(name=self.__class__.__name__)
@@ -296,13 +299,15 @@ class OutputLignes(Driver):
             compteur = 0
             lignes = data_generator.generate()
             if lignes is not None:
+                await self.clear()
                 for ligne, flag in lignes:
                     compteur += 1
                     await self.preparer_ligne(ligne[:self._nb_chars], flag)
                     if compteur == self._nb_lignes:
                         compteur = 0
                         await self.show()
-                
+                        await self.clear()
+
                 if compteur > 0:
                     # Afficher la derniere page (incomplete)
                     for _ in range(compteur, self._nb_lignes):
@@ -314,7 +319,9 @@ class OutputLignes(Driver):
         
         if self.__duree_afficher_datetime is None:
             return
-        
+
+        await self.clear()
+
         temps_limite = time.time() + self.__duree_afficher_datetime
         while temps_limite >= time.time():
             (year, month, day, hour, minutes, seconds, _, _) = time.localtime()
@@ -339,6 +346,7 @@ class LCD1602(OutputLignes):
 
         # Configuration LCD1602
         self._addr = 0x27
+        self.__ligne = 0
 
     def _get_instance(self):
         from pico_i2c_lcd import I2cLcd
@@ -350,17 +358,23 @@ class LCD1602(OutputLignes):
 
         return I2cLcd(i2c, self._addr, self._nb_lignes, self._nb_chars)
 
+    async def clear(self):
+        self._instance.clear()
+
     async def preparer_ligne(self, data, flag=None):
         await self._ui_lock.acquire()
         try:
+            self._instance.move_to(0, self.__ligne)
             if flag is not None:
                 self._instance.putstr('{:<15}'.format(data) + flag)
             else:
-                self._instance.putstr('{:<16}'.format(data))
+                self._instance.putstr('{:<16}'.format(data).strip())
         finally:
+            self.__ligne += 1
             self._ui_lock.release()
 
     async def show(self, attente=5.0):
+        self.__ligne = 0
         await asyncio.sleep(attente)
 
 
