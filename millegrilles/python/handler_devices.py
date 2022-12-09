@@ -286,33 +286,40 @@ class OutputLignes(Driver):
 
     async def run_display(self, feeds):
         while True:
-            data_generator = feeds(name=self.__class__.__name__)
-            
-            # Maj duree affichage date (config)
             try:
-                self.__duree_afficher_datetime = data_generator.duree_date
-            except AttributeError:
-                self.__duree_afficher_datetime = 10
-            
-            # Affichage heure
-            await self.afficher_datetime()
-            compteur = 0
-            lignes = data_generator.generate(group=self._nb_lignes)
-            if lignes is not None:
-                await self.clear()
-                for ligne, flag, duree in lignes:
-                    compteur += 1
-                    await self.preparer_ligne(ligne[:self._nb_chars], flag)
-                    if compteur == self._nb_lignes:
-                        compteur = 0
-                        await self.show()
-                        await self.clear()
+                data_generator = feeds(name=self.__class__.__name__)
+                
+                # Maj duree affichage date (config)
+                try:
+                    self.__duree_afficher_datetime = data_generator.duree_date
+                except AttributeError:
+                    self.__duree_afficher_datetime = 10
+                
+                # Affichage heure
+                await self.afficher_datetime()
+                compteur = 0
+                lignes = data_generator.generate(group=self._nb_lignes)
+                if lignes is not None:
+                    await self.clear()
+                    for ligne, flag, duree in lignes:
+                        compteur += 1
+                        await self.preparer_ligne(ligne[:self._nb_chars], flag)
+                        if compteur == self._nb_lignes:
+                            compteur = 0
+                            await self.show()
+                            await self.clear()
 
-                if compteur > 0:
-                    # Afficher la derniere page (incomplete)
-                    for _ in range(compteur, self._nb_lignes):
-                        await self.preparer_ligne('')
-                    await self.show()
+                    if compteur > 0:
+                        # Afficher la derniere page (incomplete)
+                        for _ in range(compteur, self._nb_lignes):
+                            await self.preparer_ligne('')
+                        await self.show()
+            
+            except OSError as e:
+                print("Display OSError")
+                print_exception(e)
+                # Attendre 30 secs avant de reessayer
+                await asyncio.sleep(30)
     
     async def afficher_datetime(self):
         import time

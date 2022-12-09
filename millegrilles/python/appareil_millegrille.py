@@ -402,7 +402,8 @@ class Runner:
                         machine_reset()
                 else:
                     print("OSError main")
-                    print_exception(e)
+                    print_exception(ose)
+                    await asyncio.sleep(60)
 
             except Exception as e:
                 print("Erreur main")
