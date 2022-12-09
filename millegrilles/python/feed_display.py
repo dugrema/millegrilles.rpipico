@@ -51,20 +51,23 @@ class FeedDisplayCustom(FeedDisplay):
             return None, None, None
         
         if group is None:
+            # print('Display group None')
             for ligne in lignes:
                 yield self.formatter_ligne(ligne)
         else:
-            lignes_courantes = lignes[:group]
-            lignes = lignes[group:]
-            print('Lignes : %s' % lignes_courantes)
-            try:
-                reps = max([l.get('duree') for l in lignes_courantes if l.get('duree') is not None])
-                reps = ceil(reps / 5)
-            except ValueError:
-                reps = 1
-            for _ in range(0, reps):
-                for ligne in lignes_courantes:
-                    yield self.formatter_ligne(ligne)
+            # print('Display group %s' % group)
+            while len(lignes) > 0:
+                lignes_courantes = lignes[:group]
+                lignes = lignes[group:]
+                print('Display lignes : %s' % lignes_courantes)
+                try:
+                    reps = max([l.get('duree') for l in lignes_courantes if l.get('duree') is not None])
+                    reps = ceil(reps / 5)
+                except ValueError:
+                    reps = 1
+                for _ in range(0, reps):
+                    for ligne in lignes_courantes:
+                        yield self.formatter_ligne(ligne)
 
     def formatter_ligne(self, ligne):
         from sys import print_exception
