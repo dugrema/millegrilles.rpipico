@@ -1,9 +1,11 @@
+from math import ceil
+
 class FeedDisplay:
     
     def __init__(self, appareil):
         self._appareil = appareil
     
-    def generate(self):
+    def generate(self, group=None):
         raise Exception('Not implemented')
 
 
@@ -12,7 +14,7 @@ class FeedDisplayDefault(FeedDisplay):
     def __init__(self, appareil):
         super().__init__(appareil)
 
-    def generate(self):
+    def generate(self, group=None):
         try:
             wifi_ip = self._appareil.lectures_courantes['rp2pico/wifi']['valeur_str']
         except KeyError:
@@ -25,7 +27,7 @@ class FeedDisplayDefault(FeedDisplay):
         
         data_lignes = ['WIFI IP', wifi_ip, ligne_mode]
         while len(data_lignes) > 0:
-            yield data_lignes.pop(0), None
+            yield data_lignes.pop(0), None, None
 
 
 class FeedDisplayCustom(FeedDisplay):
@@ -42,27 +44,41 @@ class FeedDisplayCustom(FeedDisplay):
         except KeyError:
             return None
 
-    def generate(self):
+    def generate(self, group=None):
         try:
             lignes = self.__config['lignes']
         except KeyError:
-            return
+            return None, None, None
         
-        for ligne in lignes:
-            yield self.formatter_ligne(ligne)
+        if group is None:
+            for ligne in lignes:
+                yield self.formatter_ligne(ligne)
+        else:
+            lignes_courantes = lignes[:group]
+            lignes = lignes[group:]
+            print('Lignes : %s' % lignes_courantes)
+            try:
+                reps = max([l.get('duree') for l in lignes_courantes if l.get('duree') is not None])
+                reps = ceil(reps / 5)
+            except ValueError:
+                reps = 1
+            for _ in range(0, reps):
+                for ligne in lignes_courantes:
+                    yield self.formatter_ligne(ligne)
 
     def formatter_ligne(self, ligne):
         from sys import print_exception
         from time import time
         
         masque = ligne['masque']
+        duree = ligne.get('duree')
         flag = None
         
         try:
             appareil_nom = None
             variable = ligne['variable']
             if variable is None or variable == '':
-                return masque, flag
+                return masque, flag, None
         except KeyError:
             pass
         else:
@@ -88,7 +104,7 @@ class FeedDisplayCustom(FeedDisplay):
                 print("Erreur generique formattage")
                 print_exception(e)
 
-        return masque, flag
+        return masque, flag, duree
 
     def get_valeur(self, senseur_nom: str):
         senseur_nom = senseur_nom.split(':')

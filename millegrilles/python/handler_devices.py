@@ -297,10 +297,10 @@ class OutputLignes(Driver):
             # Affichage heure
             await self.afficher_datetime()
             compteur = 0
-            lignes = data_generator.generate()
+            lignes = data_generator.generate(group=self._nb_lignes)
             if lignes is not None:
                 await self.clear()
-                for ligne, flag in lignes:
+                for ligne, flag, duree in lignes:
                     compteur += 1
                     await self.preparer_ligne(ligne[:self._nb_chars], flag)
                     if compteur == self._nb_lignes:
@@ -384,10 +384,12 @@ DRIVERS['LCD1602'] = LCD1602
 class Ssd1306(OutputLignes):
     
     def __init__(self, params, busses, ui_lock, width=128, height=32, char_size=8):
-        super().__init__(params, busses, ui_lock, 16, 4)
+        nb_chars = params.get('chars') or 16
+        nb_lines = params.get('lines') or 4
+        super().__init__(params, busses, ui_lock, nb_chars, nb_lines)
         self.__ligne = 0
-        self.__width = width
-        self.__height = height
+        self.__width = params.get('width') or width
+        self.__height = params.get('height') or height
         self.__char_size = char_size
 
     def _get_instance(self):
