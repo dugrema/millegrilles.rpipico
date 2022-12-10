@@ -1,6 +1,7 @@
 # Programme appareil millegrille
 import uasyncio as asyncio
 import urequests2 as requests
+import time
 
 # Methodes de gestion de memoire (preload)
 from gc import collect
@@ -164,11 +165,31 @@ async def detecter_mode_operation():
 
 
 def set_time():
-    import time
     from ntptime import settime
     
     settime()
     print("NTP Time : ", time.gmtime())
+
+
+def reboot(e=None):
+    """
+    Redemarre. Conserve une trace dans les fichiers exception.log et reboot.log.
+    """
+    print("Rebooting")
+    date_line = 'Date %s (%s)' % (str(time.gmtime()), time.time())
+    
+    if e is not None:
+        with open('exception.log', 'w') as logfile:
+            logfile.write('%s\n\n---\nCaused by:\n' % date_line)
+            print_exception(e, logfile)
+            logfile.write('\n')
+    else:
+        e = 'N/A'
+    
+    with open('reboot.log', 'a') as logfile:
+        logfile.write('%s (Cause: %s)\n' % (date_line, str(e)))
+
+    machine_reset()
 
 
 class Runner:
@@ -363,6 +384,7 @@ class Runner:
         
         await led_executer_sequence(CODE_MAIN_DEMARRAGE, executions=1, ui_lock=self.__ui_lock)
         while True:
+            e = None  # Reset erreur
             try:
                 self._mode_operation = await detecter_mode_operation()
                 print("Mode operation: %s" % self._mode_operation)
@@ -389,26 +411,32 @@ class Runner:
                     print("Mode operation non supporte : %d" % self._mode_operation)
                     await led_executer_sequence(CODE_MAIN_OPERATION_INCONNUE, executions=None)
 
-            except OSError as ose:
+            except OSError as e:
                 if ose.errno == 12:
                     self.__erreurs_memoire = self.__erreurs_memoire + 1
                     print("Erreur memoire no %d\n%s" % (self.__erreurs_memoire, mem_info()))
-                    print_exception(ose)
+                    print_exception(e)
                     collect()
                     await led_executer_sequence(CODE_ERREUR_MEMOIRE, executions=1, ui_lock=self.__ui_lock)
                     await asyncio.sleep(10)
-                    if self.__erreurs_memoire >= 10:
-                        print("Trop d'erreur, reset")
-                        machine_reset()
                 else:
                     print("OSError main")
-                    print_exception(ose)
+                    print_exception(e)
                     await asyncio.sleep(60)
-
+            except MemoryError as e:
+                self.__erreurs_memoire = self.__erreurs_memoire + 1
+                print("MemoryError " % e)
+                print_exception(e)
+                collect()
+                await asyncio.sleep(10)
             except Exception as e:
                 print("Erreur main")
                 print_exception(e)
-            
+
+            if self.__erreurs_memoire >= 10:
+                print("Trop d'erreur memoire, reset")
+                reboot(e)
+
             await led_executer_sequence(CODE_MAIN_ERREUR_GENERALE, 4, self.__ui_lock)
     
     async def run(self):
