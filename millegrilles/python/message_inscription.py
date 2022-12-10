@@ -1,11 +1,9 @@
-import machine
-import uasyncio as asyncio
-import ledblink
-
+from machine import unique_id
 from binascii import hexlify
 
+
 # Generer le nom d'appareil avec le machine unique_id du RPi PICO
-NOM_APPAREIL = 'rpi-pico-' + hexlify(machine.unique_id()).decode('utf-8')
+NOM_APPAREIL = 'rpi-pico-' + hexlify(unique_id()).decode('utf-8')
 print("Nom appareil : %s" % NOM_APPAREIL)
 
 CONST_PATH_INSCRIPTION = '/inscrire'
@@ -101,19 +99,16 @@ async def valider_reponse(status_code, reponse):
 
 
 async def recevoir_certificat(certificat):
-    from mgmessages import valider_certificats
-    from time import time as currentime
+    from uasyncio import sleep
+    from time import time as get_time
+    from certificat import valider_certificats, PATH_CERT
 
     # Valider le certificat
-    ts = currentime()
+    ts = get_time()
     print("Recevoir cert avec date : %s" % ts)
     info_certificat = await valider_certificats(certificat.copy(), ts)
     print("Certificat recu valide, info : %s" % info_certificat)
-    await asyncio.sleep(0.01)  # Yield
-    
-    # Verifier CN
-    #if info_certificat['cn'] != NOM_APPAREIL:
-    #    raise Exception("Mauvais CN")
+    await sleep(0.01)  # Yield
     
     # Comparer avec notre cle publique
     cle_publique_recue = info_certificat['public_key']
@@ -123,17 +118,19 @@ async def recevoir_certificat(certificat):
         raise Exception("Mismatch cert/cle publique")
     
     # Sauvegarder le nouveau certificat
-    with open('certs/cert.pem', 'w') as fichier:
+    with open(PATH_CERT, 'w') as fichier:
         for cert in certificat:
             fichier.write(cert)
 
 
 async def run_challenge(challenge, ui_lock=None):
+    from ledblink import led_executer_sequence
     print("Run challenge %s" % challenge)
-    await ledblink.led_executer_sequence(challenge, 2, ui_lock=ui_lock)
+    await led_executer_sequence(challenge, 2, ui_lock=ui_lock)
 
 
 async def run_inscription(url_relai: str, user_id: str, ui_lock):
+    from uasyncio import sleep
     from sys import print_exception
 
     url_inscription = url_relai + CONST_PATH_INSCRIPTION
@@ -166,7 +163,7 @@ async def run_inscription(url_relai: str, user_id: str, ui_lock):
             print("Erreur reception certificat")
             print_exception(e)
 
-        await asyncio.sleep(10)
+        await sleep(10)
 
     print("Certificat recu")
 

@@ -1,88 +1,19 @@
 # Test PEM
-import oryx_crypto
 import json
 import os
 import math
 import time
-import ubinascii
-import uasyncio
-
-from struct import pack
-from random import getrandbits
 
 from multiformats import multibase, multihash
 from collections import OrderedDict
 
-MARQUEUR_END_CERTIFICATE = b'-----END CERTIFICATE-----'
-IDMG_VERSION_ACTIVE = 2
 VERSION_SIGNATURE = 2
-CONST_HACHAGE_FINGERPRINT = 'blake2s-256'
-
-OID_EXCHANGES = bytearray([0x2a, 0x03, 0x04, 0x00])
-OID_ROLES = bytearray([0x2a, 0x03, 0x04, 0x01])
-OID_DOMAINES = bytearray([0x2a, 0x03, 0x04, 0x02])
-
-PATH_CERTS = 'certs'
-PATH_CA_CERT = 'certs/ca.der'
-PATH_CLE_PRIVEE = 'certs/secret.key'
-PATH_CERT = 'certs/cert.pem'
-
-
-def calculer_fingerprint(contenu_der):
-    """ Calculer le fingerprint d'un certificat """
-    fingerprint = oryx_crypto.blake2s(contenu_der)
-    fingerprint = multihash.wrap(CONST_HACHAGE_FINGERPRINT, fingerprint)
-    fingerprint = multibase.encode('base58btc', bytes(fingerprint))
-    return fingerprint
-
-
-def load_pem_certificat(pem_path, format_str=False):
-    """ Charge un PEM de certificat et split la chaine. Retourne en format DER. """
-    with open(pem_path, 'b') as fichier:
-        pem = fichier.read()
-    return split_pem(pem, format_str)
-
-
-def split_pem(pem_contenu, format_str=False):
-    """ Split une str de certificats PEM, transforme en DER """
-    if isinstance(pem_contenu, str):
-        pem_contenu = pem_contenu.encode('utf-8')
-    certs = []
-    for pem in pem_contenu.split(MARQUEUR_END_CERTIFICATE):
-        if pem not in [b'', b'\n']:
-            pem = pem + MARQUEUR_END_CERTIFICATE
-            pem = pem.strip()
-            if format_str is False:
-                contenu = oryx_crypto.x509readpemcertificate(pem)
-            else:
-                contenu = pem.decode('utf-8')
-            certs.append(contenu)
-    return certs
-
-
-def calculer_idmg(ca_der):
-    import struct
-    
-    x509_info = oryx_crypto.x509certificatinfo(ca_der)
-    
-    fingerprint = oryx_crypto.blake2s(ca_der)
-    fingerprint = multihash.wrap(CONST_HACHAGE_FINGERPRINT, fingerprint)
-
-    date_expiration = oryx_crypto.x509EndDate(x509_info)
-    date_expiration = float(date_expiration) / 1000.0
-    date_expiration = math.ceil(date_expiration)
-    date_expiration = int(date_expiration)
-    
-    IDMG_VERSION_PACK = '<BI'
-    
-    valeur_combinee = struct.pack(IDMG_VERSION_PACK, IDMG_VERSION_ACTIVE, date_expiration)
-    valeur_combinee = valeur_combinee + fingerprint
-    
-    return multibase.encode('base58btc', bytes(valeur_combinee))
 
 
 async def signer_message(message, cle_privee=None, **kwargs):
     """ Genere l'en-tete et la signature d'un message """
+    from certificat import split_pem, get_certificat_local
+    
     entete, signature = await __signer_message(message, cle_privee, **kwargs)
     message['en-tete'] = entete
     message['_signature'] = signature
@@ -91,16 +22,10 @@ async def signer_message(message, cle_privee=None, **kwargs):
     return message    
 
 
-def get_certificat_local():
-    try:
-        with open(PATH_CERT, 'r') as fichier:
-            return fichier.read()
-        return load_pem_certificat(PATH_CERT)
-    except OSError:
-        return None
-
-
 async def __signer_message(message, cle_privee=None, **kwargs):
+    from uasyncio import sleep
+    from certificat import load_pem_certificat, calculer_fingerprint, PATH_CERT
+    
     message = prep_message_1(message)
     hachage = hacher_message(message).decode('utf-8')
 
@@ -117,7 +42,7 @@ async def __signer_message(message, cle_privee=None, **kwargs):
     message = prep_message_1(message)
     
     # Signer
-    uasyncio.sleep(0.01)
+    sleep(0.01)
     signature = __signer_message_2(message, cle_privee).decode('utf-8')
     # signature = __signer_message_2(message, cle_privee)
 
@@ -125,17 +50,21 @@ async def __signer_message(message, cle_privee=None, **kwargs):
 
 
 def __signer_message_2(message, cle_privee=None):
+    from oryx_crypto import ed25519generatepubkey, blake2b, ed25519sign
+    from multiformats.multibase import encode
+    from certificat import PATH_CLE_PRIVEE
+    
     if cle_privee is None:
         # Charger la cle locale
         with open(PATH_CLE_PRIVEE, 'rb') as fichier:
             cle_privee = fichier.read()
-    cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
+    cle_publique = ed25519generatepubkey(cle_privee)
 
     message_str = message_stringify(message)
-    hachage = oryx_crypto.blake2b(message_str)
+    hachage = blake2b(message_str)
     
-    signature = bytes([VERSION_SIGNATURE]) + oryx_crypto.ed25519sign(cle_privee, cle_publique, hachage)
-    signature = multibase.encode('base64', signature)
+    signature = bytes([VERSION_SIGNATURE]) + ed25519sign(cle_privee, cle_publique, hachage)
+    signature = encode('base64', signature)
     
     return signature
 
@@ -146,22 +75,28 @@ async def generer_entete(hachage,
                          action: str = None,
                          partition: str = None,
                          fingerprint: str = None):
+    from uasyncio import sleep
+    from certificat import calculer_idmg
+    from oryx_crypto import ed25519generatepubkey
+    from multiformats.multibase import encode
+    from certificat import PATH_CA_CERT, PATH_CLE_PRIVEE
+
     entete = OrderedDict([])
 
     with open(PATH_CA_CERT, 'rb') as fichier:
         ca_der = fichier.read()
-    uasyncio.sleep(0.01)
+    sleep(0.01)
     idmg = calculer_idmg(ca_der).decode('utf-8')
     
     cle_publique = None
     if fingerprint is None:
         with open(PATH_CLE_PRIVEE, 'rb') as fichier:
             cle_privee = fichier.read()
-        uasyncio.sleep(0.01)
-        cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
-        uasyncio.sleep(0.01)
+        sleep(0.01)
+        cle_publique = ed25519generatepubkey(cle_privee)
+        sleep(0.01)
         cle_privee = None
-        cle_publique = multibase.encode('base64', cle_publique)
+        cle_publique = encode('base64', cle_publique)
 
     if action is not None:
         entete['action'] = action
@@ -183,9 +118,14 @@ async def generer_entete(hachage,
 
 
 def hacher_message(message):
-    hachage = oryx_crypto.blake2s(message_stringify(message))
-    fingerprint = multihash.wrap(CONST_HACHAGE_FINGERPRINT, hachage)
-    return multibase.encode('base64', bytes(fingerprint))
+    from oryx_crypto import blake2s
+    from multiformats.multihash import wrap
+    from multiformats.multibase import encode
+    from certificat import CONST_HACHAGE_FINGERPRINT
+    
+    hachage = blake2s(message_stringify(message))
+    fingerprint = wrap(CONST_HACHAGE_FINGERPRINT, hachage)
+    return encode('base64', bytes(fingerprint))
 
 
 def prep_message_1(message, conserver_entete=True):
@@ -229,6 +169,9 @@ def message_stringify(message):
 
 
 async def verifier_message(message: dict):
+    from uasyncio import sleep
+    from certificat import valider_certificats
+    
     # Valider le certificat - raise Exception si erreur
     info_certificat = await valider_certificats(message['_certificat'])
     del message['_certificat']
@@ -240,130 +183,25 @@ async def verifier_message(message: dict):
     # Trier tous les champs
     message = prep_message_1(message)
 
-    uasyncio.sleep(0.01)
+    sleep(0.01)
     verifier_signature(message, signature, info_certificat['public_key'])
     
     return info_certificat
 
 
-async def valider_certificats(pem_certs: list, date_validation=None, is_der=False):
-    """ Valide la chaine de certificats, incluant le dernier avec le CA.
-        @return Information du certificat leaf
-        @raises Exception Si la chaine est invalide. """
-    
-    if date_validation is None:
-        date_validation = time.time()
-    elif date_validation is False:
-        date_validation = 0  # Invalide la date
-    print("valider_certificats avec time %s" % date_validation)
-
-    cert = pem_certs.pop(0)
-    if is_der is False:
-        cert = oryx_crypto.x509readpemcertificate(cert)
-    
-    # Conserver l'information du certificat leaf
-    x509_info = oryx_crypto.x509certificatinfo(cert)
-    fingerprint = calculer_fingerprint(cert)
-    uasyncio.sleep(0.01)  # Yield
-
-    # Parcourir la chaine. Valider le dernier certificat avec le CA
-    while len(pem_certs) > 0:
-        parent = pem_certs.pop(0)
-        if is_der is False:
-            parent = oryx_crypto.x509readpemcertificate(parent)
-        uasyncio.sleep(0.01)  # Yield
-        oryx_crypto.x509validercertificate(cert, parent, date_validation)
-        cert = parent  # Poursuivre la chaine
-    else:
-        with open(PATH_CA_CERT, 'rb') as fichier:
-            parent = fichier.read()
-        uasyncio.sleep(0.01)  # Yield
-        oryx_crypto.x509validercertificate(cert, parent, date_validation)
-        
-    exchanges = oryx_crypto.x509Extension(x509_info, OID_EXCHANGES)
-    if exchanges is not None:
-        exchanges = exchanges.split(',')
-    roles = oryx_crypto.x509Extension(x509_info, OID_ROLES)
-    if roles is not None:
-        roles = roles.split(',')
-    domaines = oryx_crypto.x509Extension(x509_info, OID_DOMAINES)
-    if domaines is not None:
-        domaines = domaines.split(',')
-        
-    enveloppe = {
-        'fingerprint': fingerprint,
-        'public_key': oryx_crypto.x509PublicKey(x509_info),
-        'expiration': oryx_crypto.x509EndDate(x509_info),
-        'exchanges': exchanges,
-        'roles': roles,
-        'domaines': domaines,
-    }
-    
-    return enveloppe
-
-
 def verifier_signature(message, signature, cle_publique):
+    from multiformats.multibase import decode
+    from oryx_crypto import blake2b, ed25519verify
+    
     """ Verifie la signature d'un message. Lance une exception en cas de signature invalide. """
-    signature = multibase.decode(signature)
+    signature = decode(signature)
 
     version_signature = signature[0]
     if version_signature != VERSION_SIGNATURE:
         raise Exception("Signature non supportee")
     
-    hachage = oryx_crypto.blake2b(message_stringify(message))
-    oryx_crypto.ed25519verify(cle_publique, signature[1:], hachage)
-
-
-def sauvegarder_ca(ca_pem, idmg=None):
-    
-    try:
-        os.mkdir(PATH_CERTS)
-    except OSError as e:
-        if e.errno == 17:
-            pass
-        else:
-            raise e
-    
-    if isinstance(ca_pem, str):
-        ca_pem = ca_pem.encode('utf-8')
-    elif not isinstance(ca_pem, bytes):
-        raise TypeError("ca_pem")
-    
-    # Convertir en DER
-    ca_der = oryx_crypto.x509readpemcertificate(ca_pem)
-    
-    if idmg is not None:
-        # Valider le idmg
-        if calculer_idmg(ca_der) != idmg.encode('utf-8'):
-            raise Exception("Mismatch IDMG")
-    
-    # Valider (self-signed) - raise Exception si invalide
-    oryx_crypto.x509validercertificate(ca_der, ca_der, time.time())
-    
-    with open(PATH_CA_CERT, 'wb') as fichier:
-        fichier.write(ca_der)
-
-
-def generer_cle_secrete():
-    cle_privee = rnd_bytes(32)
-    with open(PATH_CLE_PRIVEE, 'wb') as fichier:
-        fichier.write(cle_privee)
-
-    # Cleanup, retirer certs/cert.pem si present
-    try:
-        os.remove('certs/cert.pem')
-    except OSError:
-        pass
-
-def rnd_bytes(nb_bytes):
-    bytes_courant = nb_bytes
-    rnd_val = bytes()
-    while bytes_courant > 0:
-        bytes_courant -= 4
-        rnd_bits = getrandbits(32)  # 4 bytes
-        rnd_val += bytes(pack('L', rnd_bits))
-    
-    return rnd_val[:nb_bytes]
+    hachage = blake2b(message_stringify(message))
+    ed25519verify(cle_publique, signature[1:], hachage)
 
 
 # From : https://github.com/pfalcon/pycopy-lib
@@ -375,7 +213,8 @@ class UUID:
 
     @property
     def hex(self):
-        return ubinascii.hexlify(self._bytes).decode()
+        from ubinascii import hexlify
+        return hexlify(self._bytes).decode()
 
     def __str__(self):
         h = self.hex
@@ -387,6 +226,8 @@ class UUID:
 
 def uuid4():
     """Generates a random UUID compliant to RFC 4122 pg.14"""
+    from certificat import rnd_bytes
+    
     random = bytearray(rnd_bytes(16))
     random[6] = (random[6] & 0x0F) | 0x40
     random[8] = (random[8] & 0x3F) | 0x80
