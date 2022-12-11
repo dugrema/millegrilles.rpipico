@@ -128,6 +128,7 @@ async def polling_thread(appareil, url_relai: str, timeout_http=60, generer_etat
                 print("Polling complete, msg %s" % reponse.get('err'))
             else:
                 await _traiter_commande(appareil, reponse)
+            reponse = None
             errnumber = 0  # Reset erreurs
         except OSError as e:
             print("POLLING OSError %d" % e.errno)
