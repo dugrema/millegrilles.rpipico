@@ -1,4 +1,5 @@
 import json
+import time
 import uasyncio as asyncio
 
 import urequests2 as requests
@@ -16,6 +17,7 @@ CONST_CHAMP_TIMEOUT = const('http_timeout')
 CONST_DOMAINE_SENSEURSPASSIFS = const('SenseursPassifs')
 CONST_REQUETE_DISPLAY = const('getAppareilDisplayConfiguration')
 
+CONST_DUREE_THREAD_POLLING = const(3 * 60 * 60)
 
 class HttpErrorException(Exception):
     pass
@@ -118,8 +120,11 @@ async def polling_thread(appareil, url_relai: str, timeout_http=60, generer_etat
     #collect()
     #await asyncio.sleep(1)
 
+    # Faire expirer la thread pour reloader la fiche/url, entretien certificat
+    expiration_thread = time.time() + CONST_DUREE_THREAD_POLLING
+    
     errnumber = 0
-    while True:
+    while expiration_thread > time.time():
         try:
             reponse = await verifier_reponse(await poll(url_relai, timeout_http, generer_etat))
             info_certificat = await verifier_signature(reponse)

@@ -11,7 +11,7 @@ SRC_MULTIFORMATS = \
     multiformats/converters.mpy multiformats/multibase.mpy multiformats/multihash.mpy
 
 %.mpy: %.py
-	$(MPYCROSS) -O4 -o build/$@ $<
+	$(MPYCROSS) -O1 -o build/$@ $<
 
 build_folders:
 	mkdir -p build/multiformats

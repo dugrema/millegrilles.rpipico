@@ -77,13 +77,13 @@ async def recuperer_ca():
     sauvegarder_ca(fiche['ca'], idmg)
 
 
-async def init_cle_privee(force=False):
-    from certificat import PATH_CLE_PRIVEE, generer_cle_secrete
-    try:
-        stat(PATH_CLE_PRIVEE)
-    except OSError:
-        generer_cle_secrete()
-        print("Cle privee initialisee")
+#async def init_cle_privee(force=False):
+#    from certificat import PATH_CLE_PRIVEE, generer_cle_secrete
+#    try:
+#        stat(PATH_CLE_PRIVEE)
+#    except OSError:
+#        generer_cle_secrete()
+#        print("Cle privee initialisee")
 
 
 def get_url_instance():

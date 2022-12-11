@@ -156,7 +156,7 @@ class Runner:
         """
         Mode d'attente de signature de certificat
         """
-        await config.init_cle_privee()
+        # await config.init_cle_privee()
         
         try:
             url_relai = self.__url_relais.pop()
@@ -227,7 +227,11 @@ class Runner:
                 # Premiere run a l'initialisation
                 break
             
-            await asyncio.sleep(120)
+            if self.__ntp_ok is False:
+                # Tenter de charger la date
+                await asyncio.sleep(15)
+            else:
+                await asyncio.sleep(120)
 
     async def charger_urls(self):
         fiche = await config.charger_fiche()
@@ -257,7 +261,9 @@ class Runner:
             # Rotation relais pour en trouver un qui fonctionne
             # Entretien va rafraichir la liste via la fiche
             try:
-                self.__url_relai_courant = self.__url_relais.pop(0)
+                if self.__url_relai_courant is None:
+                    self.__url_relai_courant = self.__url_relais.pop(0)
+                
                 http_timeout = config.get_http_timeout()
                 # print("http timeout : %d" % http_timeout)
                 
