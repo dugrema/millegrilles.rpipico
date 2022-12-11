@@ -27,8 +27,6 @@ PATH_CERT = const('certs/cert.pem')
 
 IDMG_VERSION_ACTIVE = const(2)
 
-CONST_RENOUVELLEMENT_DELAI = const(3 * 24 * 60 * 60)  # jours pour renouvellement
-
 
 def rnd_bytes(nb_bytes):
     bytes_courant = nb_bytes
@@ -110,7 +108,7 @@ async def valider_certificats(pem_certs: list, date_validation=None, is_der=Fals
         date_validation = time.time()
     elif date_validation is False:
         date_validation = 0  # Invalide la date
-    print("valider_certificats avec time %s" % date_validation)
+    # print("valider_certificats avec time %s" % date_validation)
 
     cert = pem_certs.pop(0)
     if is_der is False:
@@ -201,6 +199,7 @@ def generer_cle_secrete():
     
 
 def charger_cle_publique(path_cle = PATH_CLE_PRIVEE):
+    # print('Charger cle privee %s pour conversion publique' % path_cle)
     with open(path_cle, 'rb') as fichier:
         cle_privee = fichier.read()
     return oryx_crypto.ed25519generatepubkey(cle_privee)

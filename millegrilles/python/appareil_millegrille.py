@@ -32,6 +32,8 @@ from config import \
      CONST_MODE_POLLING, \
      detecter_mode_operation
 
+CONST_INFO_SEP = const(' ---- INFO ----')
+CONST_NB_ERREURS_RESET = const(10)
 CONST_HTTP_TIMEOUT_DEFAULT = const(60)
 
 CONST_PATH_FICHIER_DISPLAY = const('displays.json')
@@ -158,7 +160,7 @@ class Runner:
         
         try:
             url_relai = self.__url_relais.pop()
-            await run_inscription(url_relai, config.get_user_id(), self.__ui_lock)
+            await run_inscription(url_relai, self.__ui_lock)
         except (AttributeError, IndexError):
             print("Aucun url relais")
             self.__url_relais = None  # Garanti un chargement via entretien
@@ -261,12 +263,12 @@ class Runner:
                 
                 # Verifier si on peut renouveler le certificat
                 await verifier_renouveler_certificat(self.__url_relai_courant)
+                # Reset erreurs memoire, requete SSL executee avec succes
+                self.__erreurs_memoire = 0
                 
                 # Polling
                 await polling_thread(self, self.__url_relai_courant, http_timeout, self.get_etat)
                 
-                # Reset erreurs memoire, cycle execute avec succes
-                self.__erreurs_memoire = 0
             except OSError as ose:
                 # Erreur OS (e.g. 12:memoire ou 6:WIFI), sortir de polling
                 raise ose
@@ -322,7 +324,7 @@ class Runner:
             except OSError as e:
                 if e.errno == 12:
                     self.__erreurs_memoire = self.__erreurs_memoire + 1
-                    if self.__erreurs_memoire >= 5:
+                    if self.__erreurs_memoire >= CONST_NB_ERREURS_RESET:
                         print("Trop d'erreur memoire, reset")
                         reboot(e)
                     
@@ -337,7 +339,7 @@ class Runner:
                     await asyncio.sleep(60)
             except MemoryError as e:
                 self.__erreurs_memoire = self.__erreurs_memoire + 1
-                if self.__erreurs_memoire >= 5:
+                if self.__erreurs_memoire >= CONST_NB_ERREURS_RESET:
                     print("Trop d'erreur memoire, reset")
                     reboot(e)
                 
@@ -354,6 +356,8 @@ class Runner:
             await led_executer_sequence(const_leds.CODE_MAIN_ERREUR_GENERALE, 4, self.__ui_lock)
     
     async def run(self):
+        self.afficher_info()
+        
         # Charger configuration
         await self.configurer_devices()
 
@@ -367,6 +371,13 @@ class Runner:
 
         # Executer main loop
         await self.__main()
+
+    def afficher_info(self):
+        print(CONST_INFO_SEP)
+        print("Heure %s" % str(time.gmtime()))
+        print("Memoire")
+        mem_info()
+        print(CONST_INFO_SEP + '\n')
 
 
 async def main():

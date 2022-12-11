@@ -238,7 +238,7 @@ class DummyOutput(Driver):
             
             lignes = data_generator.generate()
             if lignes is not None:
-                for ligne, flag in lignes:
+                for ligne, flag, duree in lignes:
                     print("Dummy output ligne : %s, flag: %s" % (ligne, flag))
                     data_lu = True
                     await asyncio.sleep(5)
