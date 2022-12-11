@@ -1,6 +1,8 @@
+import json
 import oryx_crypto
 import time
 import uasyncio as asyncio
+import urequests2 as requests
 
 from os import mkdir, remove
 from math import ceil
@@ -15,6 +17,8 @@ CONST_HACHAGE_FINGERPRINT = 'blake2s-256'
 OID_EXCHANGES = bytearray([0x2a, 0x03, 0x04, 0x00])
 OID_ROLES = bytearray([0x2a, 0x03, 0x04, 0x01])
 OID_DOMAINES = bytearray([0x2a, 0x03, 0x04, 0x02])
+
+PATHNAME_RENOUVELER = const('/renouveler')
 
 PATH_CERTS = const('certs')
 PATH_CA_CERT = const('certs/ca.der')
@@ -184,18 +188,20 @@ def sauvegarder_ca(ca_pem, idmg=None):
 
 def generer_cle_secrete():
     cle_privee = rnd_bytes(32)
-    with open(PATH_CLE_PRIVEE, 'wb') as fichier:
+    with open(PATH_CLE_PRIVEE + '.new', 'wb') as fichier:
         fichier.write(cle_privee)
 
-    # Cleanup, retirer certs/cert.pem si present
+    # Cleanup, retirer certs/cert.pem.new si present
     try:
-        remove('certs/cert.pem')
+        remove(PATH_CERT + '.new')
     except OSError:
         pass
     
+    return cle_privee
+    
 
-def charger_cle_publique():
-    with open(PATH_CLE_PRIVEE, 'rb') as fichier:
+def charger_cle_publique(path_cle = PATH_CLE_PRIVEE):
+    with open(path_cle, 'rb') as fichier:
         cle_privee = fichier.read()
     return oryx_crypto.ed25519generatepubkey(cle_privee)
 
@@ -249,8 +255,5 @@ async def entretien_certificat():
         print("Certificat expire - nettoyage")
         remove_certificate()
         return False
-
-    if time.time() > (date_expiration - CONST_RENOUVELLEMENT_DELAI):
-        print("Cert renouvellement atteint")
 
     return True

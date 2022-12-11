@@ -19,8 +19,9 @@ import wifi
 from polling_messages import polling_thread
 from ledblink import led_executer_sequence
 from handler_devices import DeviceHandler
-from certificat import entretien_certificat as __entretien_certificat
-from message_inscription import run_inscription
+from certificat import entretien_certificat as __entretien_certificat                       
+from message_inscription import run_inscription, \
+     verifier_renouveler_certificat as __verifier_renouveler_certificat
 
 
 from config import \
@@ -72,6 +73,14 @@ async def entretien_certificat():
     return False
 
 
+async def verifier_renouveler_certificat(url_relai: str):
+    try:
+        return await __verifier_renouveler_certificat(url_relai)
+    except Exception as e:
+        print("Erreur verif renouveler certificat")
+        sys.print_exception(e)
+
+
 #async def initialiser_wifi():
 #    from config import initialiser_wifi as __initialiser_wifi
 #    return await __initialiser_wifi()
@@ -85,6 +94,7 @@ class Runner:
         self._lectures_courantes = dict()
         self._lectures_externes = dict()
         self.__url_relais = None
+        self.__url_relai_courant = None
         self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
         self.__erreurs_memoire = 0
         
@@ -245,11 +255,15 @@ class Runner:
             # Rotation relais pour en trouver un qui fonctionne
             # Entretien va rafraichir la liste via la fiche
             try:
-                url_relai = self.__url_relais.pop(0)
+                self.__url_relai_courant = self.__url_relais.pop(0)
                 http_timeout = config.get_http_timeout()
                 # print("http timeout : %d" % http_timeout)
                 
-                await polling_thread(self, url_relai, http_timeout, self.get_etat)
+                # Verifier si on peut renouveler le certificat
+                await verifier_renouveler_certificat(self.__url_relai_courant)
+                
+                # Polling
+                await polling_thread(self, self.__url_relai_courant, http_timeout, self.get_etat)
                 
                 # Reset erreurs memoire, cycle execute avec succes
                 self.__erreurs_memoire = 0

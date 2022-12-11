@@ -51,8 +51,14 @@ async def __signer_message(message, cle_privee=None, **kwargs):
 def __signer_message_2(message, cle_privee=None):
     if cle_privee is None:
         # Charger la cle locale
-        with open(certificat.PATH_CLE_PRIVEE, 'rb') as fichier:
-            cle_privee = fichier.read()
+        try:
+            with open(certificat.PATH_CLE_PRIVEE, 'rb') as fichier:
+                cle_privee = fichier.read()
+        except OSError:
+            print("Cle prive absente, utiliser .new")
+            with open(certificat.PATH_CLE_PRIVEE + '.new', 'rb') as fichier:
+                cle_privee = fichier.read()
+                
     cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
 
     message_str = message_stringify(message)
@@ -79,8 +85,13 @@ async def generer_entete(hachage,
     
     cle_publique = None
     if fingerprint is None:
-        with open(certificat.PATH_CLE_PRIVEE, 'rb') as fichier:
-            cle_privee = fichier.read()
+        try:
+            with open(certificat.PATH_CLE_PRIVEE, 'rb') as fichier:
+                cle_privee = fichier.read()
+        except OSError:
+            with open(certificat.PATH_CLE_PRIVEE + '.new', 'rb') as fichier:
+                cle_privee = fichier.read()
+                
         asyncio.sleep_ms(10)
         cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
         asyncio.sleep_ms(10)
