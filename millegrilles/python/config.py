@@ -1,3 +1,12 @@
+from json import load
+from os import stat
+from wifi import connect_wifi
+from uasyncio import sleep
+
+import urequests2 as requests
+
+import wifi
+
 CONST_PATH_FICHIER_CONN = const('conn.json')
 
 CONST_MODE_INIT = const(1)
@@ -9,7 +18,6 @@ CONST_MODE_POLLING = const(99)
 CONST_CHAMP_HTTP_INSTANCE = const('http_instance')
 
 async def detecter_mode_operation():
-    from os import stat
     # Si wifi.txt/idmg.txt manquants, on est en mode initial.
     try:
         stat(CONST_PATH_FICHIER_CONN)
@@ -40,8 +48,6 @@ async def initialisation():
 
 
 async def initialiser_wifi():
-    from wifi import connect_wifi
-    
     wifi_ok = False
     for _ in range(0, 5):
         try:
@@ -49,7 +55,7 @@ async def initialiser_wifi():
             return status
         except (RuntimeError, OSError) as e:
             print("Wifi error %s" % e)
-            await asyncio.sleep(3)
+            await sleep(3)
     if wifi_ok is False:
         raise RuntimeError('wifi')
             
@@ -72,7 +78,6 @@ async def recuperer_ca():
 
 
 async def init_cle_privee(force=False):
-    from os import stat
     from certificat import PATH_CLE_PRIVEE, generer_cle_secrete
     try:
         stat(PATH_CLE_PRIVEE)
@@ -82,13 +87,11 @@ async def init_cle_privee(force=False):
 
 
 def get_url_instance():
-    from json import load
     with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
         return load(fichier)[CONST_CHAMP_HTTP_INSTANCE]
 
 
 def get_http_timeout():
-    from json import load
     try:
         with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
             return load(fichier)['http_timeout']
@@ -99,22 +102,17 @@ def get_http_timeout():
 
 
 def get_idmg():
-    from json import load
     with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
         return load(fichier)['idmg']
 
 
 def get_user_id():
-    from json import load
     with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
         return load(fichier)['user_id']
 
 
 # Recuperer la fiche (CA, chiffrage, etc)
 async def charger_fiche():
-    import urequests2 as requests
-    import uasyncio as asyncio
-    
     try:
         fiche_url = get_url_instance() + '/fiche.json'
     except OSError:
@@ -126,12 +124,13 @@ async def charger_fiche():
     fiche_json = None
     reponse = await requests.get(fiche_url)
     try:
-        await asyncio.sleep(0)  # Yield
+        await sleep(0)  # Yield
         if reponse.status_code != 200:
             raise Exception("fiche http status:%d" % reponse.status_code)
         fiche_json = await reponse.json()
         # print("Fiche recue\n%s" % fiche_json)
     finally:
+        print("charger_fiche fermer reponse")
         reponse.close()
         
     return fiche_json

@@ -1,6 +1,13 @@
+import json
 import uasyncio as asyncio
+
+import urequests2 as requests
+
 from gc import collect
 from sys import print_exception
+
+from mgmessages import signer_message, verifier_message
+from handler_commandes import traiter_commande
 
 PATHNAME_POLL = const('/poll')
 PATHNAME_REQUETE = const('/requete')
@@ -10,15 +17,11 @@ CONST_DOMAINE_SENSEURSPASSIFS = const('SenseursPassifs')
 CONST_REQUETE_DISPLAY = const('getAppareilDisplayConfiguration')
 
 
-
 class HttpErrorException(Exception):
     pass
 
 
 async def __preparer_message(timeout_http, generer_etat):
-    from mgmessages import signer_message
-    from json import dumps
-    
     # Genrer etat
     if generer_etat is not None:
         etat = await generer_etat()
@@ -30,14 +33,12 @@ async def __preparer_message(timeout_http, generer_etat):
 
     # Signer message
     etat = await signer_message(etat, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil')
-    etat = dumps(etat)
+    etat = json.dumps(etat)
 
     return etat
 
 
 async def poll(url_relai: str, timeout_http=60, generer_etat=None):
-    from urequests2 import post
-
     etat = await __preparer_message(timeout_http, generer_etat)
 
     # Cleanup memoire
@@ -46,17 +47,13 @@ async def poll(url_relai: str, timeout_http=60, generer_etat=None):
 
     # Poll
     url_poll = url_relai + PATHNAME_POLL
-    return await post(
+    return await requests.post(
         url_poll, data=etat, headers={'Content-Type': 'application/json'})
 
 
 async def requete_configuration_displays(url_relai: str, set_configuration):
-    from mgmessages import signer_message, verifier_message
-    from urequests2 import post
-    from json import dumps
-
     requete = await signer_message(dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY)
-    requete = dumps(requete)
+    requete = json.dumps(requete)
 
     # Cleanup memoire
     await asyncio.sleep_ms(100)
@@ -65,7 +62,7 @@ async def requete_configuration_displays(url_relai: str, set_configuration):
     url_requete = url_relai + PATHNAME_REQUETE
     print('Requete displays sur %s' % url_requete)
     try:
-        reponse = await verifier_reponse(await post(
+        reponse = await verifier_reponse(await requests.post(
             url_requete, data=requete, headers={'Content-Type': 'application/json'}))
         requete = None
     except OSError as e:
@@ -101,12 +98,10 @@ async def verifier_reponse(reponse):
 
 
 async def verifier_signature(reponse):
-    from mgmessages import verifier_message
     return await verifier_message(reponse)
 
 
 async def _traiter_commande(appareil, reponse):
-    from handler_commandes import traiter_commande
     return await traiter_commande(appareil, reponse)
 
 
@@ -130,7 +125,7 @@ async def polling_thread(appareil, url_relai: str, timeout_http=60, generer_etat
             info_certificat = await verifier_signature(reponse)
             
             if reponse.get('ok') is False:
-                print("Err %s" % reponse.get('err'))
+                print("Polling complete, msg %s" % reponse.get('err'))
             else:
                 await _traiter_commande(appareil, reponse)
             errnumber = 0  # Reset erreurs

@@ -7,11 +7,13 @@ class Response:
         self.raw = f
         self.encoding = "utf-8"
         self._cached = None
+        print("Response init")
 
     def close(self):
         if self.raw:
             self.raw.close()
             self.raw = None
+            print("Response.close() Raw 1")
         self._cached = None
 
     async def content(self):
@@ -24,6 +26,7 @@ class Response:
             finally:
                 self.raw.close()
                 self.raw = None
+                print("Response.close() Raw 2")
         return self._cached
 
     async def text(self):
@@ -86,6 +89,7 @@ async def request(
         resp_d = {}
 
     s = usocket.socket(ai[0], usocket.SOCK_STREAM, ai[2])
+    print("Socket init")
     s.setblocking(False)
 
     if timeout is not None:
@@ -95,16 +99,18 @@ async def request(
 
     try:
         try:
-            # Note : cause un probleme si execute dans un core separe (thread_executor)
             await uasyncio.sleep(0.01)  # Yield
             s.connect(ai[-1])
+            print("Socket connect")
             await uasyncio.sleep(0.01)  # Yield
         except OSError as er:
             if er.errno != EINPROGRESS:
                 raise er        
         
         if proto == "https:":
+            print("https init")
             s = ussl.wrap_socket(s, server_hostname=host)
+            print("https init done")
             await uasyncio.sleep(0.01)  # Yield
         
         s.write(b"%s /%s HTTP/1.0\r\n" % (method, path))
@@ -185,10 +191,12 @@ async def request(
                 parse_headers(l, resp_d)
     except OSError:
         s.close()
+        print("Closing socket")
         raise
 
     if redirect:
         s.close()
+        print("Closing socket")
         if status in [301, 302, 303]:
             return request("GET", redirect, None, None, headers, stream)
         else:

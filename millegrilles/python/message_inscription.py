@@ -1,5 +1,14 @@
-from machine import unique_id
+import time
+
 from binascii import hexlify
+from machine import unique_id
+from sys import print_exception
+from uasyncio import sleep
+
+import urequests2 as requests
+
+from certificat import valider_certificats, PATH_CERT, charger_cle_publique
+from mgmessages import signer_message, verifier_message
 
 
 # Generer le nom d'appareil avec le machine unique_id du RPi PICO
@@ -10,8 +19,6 @@ CONST_PATH_INSCRIPTION = '/inscrire'
 
 
 async def generer_message_inscription(user_id: str):
-    from mgmessages import signer_message
-    
     # Generer message d'inscription
     message_inscription = {
         "uuid_appareil": NOM_APPAREIL,
@@ -32,13 +39,6 @@ def generer_csr():
     return format_pem(b2a_base64(resultat, newline=False).decode('utf-8'))
 
 
-def charger_cle_publique():
-    from oryx_crypto import ed25519generatepubkey
-    with open('certs/secret.key', 'rb') as fichier:
-        cle_privee = fichier.read()
-    return ed25519generatepubkey(cle_privee)
-
-
 def format_pem(value):
     output = '-----BEGIN CERTIFICATE REQUEST-----'
     ligne = value[:64]
@@ -52,12 +52,11 @@ def format_pem(value):
 
 
 async def post_inscription(url, message):
-    from urequests2 import post
     print("post_inscription ", url)
     
     certificat_recu = False
     
-    reponse = await post(url, json=message)
+    reponse = await requests.post(url, json=message)
     try:
         status_code = reponse.status_code
         print("status code : %s" % status_code)
@@ -72,8 +71,6 @@ async def post_inscription(url, message):
 
 
 async def valider_reponse(status_code, reponse):
-    from mgmessages import verifier_message
-    
     info_certificat = await verifier_message(reponse)
     print("reponse valide, info certificat:\n%s" % info_certificat)
     roles = info_certificat.get('roles') or list()
@@ -99,12 +96,8 @@ async def valider_reponse(status_code, reponse):
 
 
 async def recevoir_certificat(certificat):
-    from uasyncio import sleep
-    from time import time as get_time
-    from certificat import valider_certificats, PATH_CERT
-
     # Valider le certificat
-    ts = get_time()
+    ts = time.time()
     print("Recevoir cert avec date : %s" % ts)
     info_certificat = await valider_certificats(certificat.copy(), ts)
     print("Certificat recu valide, info : %s" % info_certificat)
@@ -130,9 +123,6 @@ async def run_challenge(challenge, ui_lock=None):
 
 
 async def run_inscription(url_relai: str, user_id: str, ui_lock):
-    from uasyncio import sleep
-    from sys import print_exception
-
     url_inscription = url_relai + CONST_PATH_INSCRIPTION
     certificat_recu = False
     while certificat_recu is False:
@@ -158,7 +148,8 @@ async def run_inscription(url_relai: str, user_id: str, ui_lock):
                     pass
                 else:
                     await run_challenge(challenge, ui_lock)
-                
+        except OSError:
+            raise
         except Exception as e:
             print("Erreur reception certificat")
             print_exception(e)

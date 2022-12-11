@@ -3,6 +3,10 @@ import json
 import os
 import math
 import time
+import uasyncio as asyncio
+import oryx_crypto
+
+import certificat
 
 from multiformats import multibase, multihash
 from collections import OrderedDict
@@ -12,26 +16,21 @@ VERSION_SIGNATURE = 2
 
 async def signer_message(message, cle_privee=None, **kwargs):
     """ Genere l'en-tete et la signature d'un message """
-    from certificat import split_pem, get_certificat_local
-    
     entete, signature = await __signer_message(message, cle_privee, **kwargs)
     message['en-tete'] = entete
     message['_signature'] = signature
     if entete.get('fingerprint_certificat') is not None:
-        message['_certificat'] = split_pem(get_certificat_local(), format_str=True)
+        message['_certificat'] = certificat.split_pem(certificat.get_certificat_local(), format_str=True)
     return message    
 
 
 async def __signer_message(message, cle_privee=None, **kwargs):
-    from uasyncio import sleep
-    from certificat import load_pem_certificat, calculer_fingerprint, PATH_CERT
-    
     message = prep_message_1(message)
     hachage = hacher_message(message).decode('utf-8')
 
     try:
-        cert_local = load_pem_certificat(PATH_CERT)[0]
-        fingerprint = calculer_fingerprint(cert_local)
+        cert_local = certificat.load_pem_certificat(certificat.PATH_CERT)[0]
+        fingerprint = certificat.calculer_fingerprint(cert_local)
     except OSError:
         fingerprint = None
     
@@ -42,7 +41,7 @@ async def __signer_message(message, cle_privee=None, **kwargs):
     message = prep_message_1(message)
     
     # Signer
-    sleep(0.01)
+    asyncio.sleep_ms(10)
     signature = __signer_message_2(message, cle_privee).decode('utf-8')
     # signature = __signer_message_2(message, cle_privee)
 
@@ -50,21 +49,17 @@ async def __signer_message(message, cle_privee=None, **kwargs):
 
 
 def __signer_message_2(message, cle_privee=None):
-    from oryx_crypto import ed25519generatepubkey, blake2b, ed25519sign
-    from multiformats.multibase import encode
-    from certificat import PATH_CLE_PRIVEE
-    
     if cle_privee is None:
         # Charger la cle locale
-        with open(PATH_CLE_PRIVEE, 'rb') as fichier:
+        with open(certificat.PATH_CLE_PRIVEE, 'rb') as fichier:
             cle_privee = fichier.read()
-    cle_publique = ed25519generatepubkey(cle_privee)
+    cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
 
     message_str = message_stringify(message)
-    hachage = blake2b(message_str)
+    hachage = oryx_crypto.blake2b(message_str)
     
-    signature = bytes([VERSION_SIGNATURE]) + ed25519sign(cle_privee, cle_publique, hachage)
-    signature = encode('base64', signature)
+    signature = bytes([VERSION_SIGNATURE]) + oryx_crypto.ed25519sign(cle_privee, cle_publique, hachage)
+    signature = multibase.encode('base64', signature)
     
     return signature
 
@@ -75,28 +70,22 @@ async def generer_entete(hachage,
                          action: str = None,
                          partition: str = None,
                          fingerprint: str = None):
-    from uasyncio import sleep
-    from certificat import calculer_idmg
-    from oryx_crypto import ed25519generatepubkey
-    from multiformats.multibase import encode
-    from certificat import PATH_CA_CERT, PATH_CLE_PRIVEE
-
     entete = OrderedDict([])
 
-    with open(PATH_CA_CERT, 'rb') as fichier:
+    with open(certificat.PATH_CA_CERT, 'rb') as fichier:
         ca_der = fichier.read()
-    sleep(0.01)
-    idmg = calculer_idmg(ca_der).decode('utf-8')
+    asyncio.sleep_ms(10)
+    idmg = certificat.calculer_idmg(ca_der).decode('utf-8')
     
     cle_publique = None
     if fingerprint is None:
-        with open(PATH_CLE_PRIVEE, 'rb') as fichier:
+        with open(certificat.PATH_CLE_PRIVEE, 'rb') as fichier:
             cle_privee = fichier.read()
-        sleep(0.01)
-        cle_publique = ed25519generatepubkey(cle_privee)
-        sleep(0.01)
+        asyncio.sleep_ms(10)
+        cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
+        asyncio.sleep_ms(10)
         cle_privee = None
-        cle_publique = encode('base64', cle_publique)
+        cle_publique = multibase.encode('base64', cle_publique)
 
     if action is not None:
         entete['action'] = action
