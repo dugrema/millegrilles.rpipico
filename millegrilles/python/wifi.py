@@ -6,50 +6,48 @@ import uasyncio as asyncio
 PATH_CONFIGURATION = const('conn.json')
 
 
-async def connect_wifi():
+async def connect_wifi(liste_wifi: list):
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    # print("WLAN status : %d" % wlan.status())
     status = wlan.ifconfig()
-    # print( 'ip = ' + status[0] )
 
-    #with open('wifi.txt', 'r') as fichier:
-    #    ssid = fichier.readline().strip()
-    #    password = fichier.readline().strip()
+    for config in liste_wifi:
+        try:
+            ssid = config['wifi_ssid']
+            print("WiFI connect to %s" % ssid)
+            wlan.connect(ssid, config['wifi_password'])
+        except KeyError as e:
+            # raise Exception('SSID/password manquant')
+            print("Config SSID/password manquant, skip")
+            continue
+        except OSError as e:
+            if e.errno == 1:
+                wlan.active(True)
+                continue
+            else:
+                raise e
 
-    with open(PATH_CONFIGURATION, 'rb') as fichier:
-        config = json.load(fichier)
-
-    try:
-        wlan.connect(config['wifi_ssid'], config['wifi_password'])
-    except KeyError as e:
-        raise Exception('SSID/password manquant')
-    except OSError as e:
-        if e.errno == 1:
-            toggle(wlan)
+        # Wait for connect or fail
+        print("Attendre connexion WIFI a %s" % ssid)
+        max_wait = 20
+        while max_wait > 0:
+            print("Attendre - reste %d secs" % max_wait)
+            if wlan.status() < -1 or wlan.status() >= 3:
+                print("Break, status %d" % wlan.status())
+                break
+            max_wait -= 1
+            await asyncio.sleep(1)
+            
+        # Handle connection error
+        if wlan.status() != 3:
+            print("WLAN Status %s" % wlan.status())
+            # raise RuntimeError('network connection failed')
+            print("WLAN connection failed on %s" % ssid)
         else:
-            raise e
-
-    # Wait for connect or fail
-    max_wait = 20
-    while max_wait > 0:
-
-        if wlan.status() < -1 or wlan.status() >= 3:
-            break
-
-        max_wait -= 1
-        # print('waiting for connection...')
-        asyncio.sleep(1)
-        
-    # Handle connection error
-    if wlan.status() != 3:
-        # print("WLAN Status %s" % wlan.status())
-        raise RuntimeError('network connection failed')
-    else:
-        #print('connected')
-        status = wlan.ifconfig()
-        # print( 'ip = ' + status[0] )
-        return status
+            #print('connected')
+            status = wlan.ifconfig()
+            # print( 'ip = ' + status[0] )
+            return status
 
 
 def get_etat_wifi():

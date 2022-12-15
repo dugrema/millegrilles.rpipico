@@ -1,10 +1,13 @@
-from appareil_millegrille import main
 from uasyncio import run
 from time import sleep_ms
 from machine import Pin, reset
 from sys import print_exception
 
 LED_ONBOARD = Pin('WL_GPIO0', machine.Pin.OUT)
+
+# Initialiser bus
+print("main()")
+sleep_ms(100)
 
 
 def flash_led(cycles=6):
@@ -16,6 +19,7 @@ def flash_led(cycles=6):
 
 
 try:
+    from appareil_millegrille import main
     flash_led()
     run(main())
 except Exception as e:

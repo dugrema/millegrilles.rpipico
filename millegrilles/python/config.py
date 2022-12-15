@@ -2,6 +2,7 @@ from json import load
 from os import stat
 from wifi import connect_wifi
 from uasyncio import sleep
+from sys import print_exception
 
 import urequests2 as requests
 
@@ -49,13 +50,33 @@ async def initialisation():
 
 async def initialiser_wifi():
     wifi_ok = False
+    
+    try:
+        with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
+            wifis = load(fichier)['wifis']
+    except KeyError:
+        try:
+            with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
+                config_conn = load(fichier)
+                wifi_ssid = config_conn['wifi_ssid']
+                wifi_password = config_conn['wifi_password']
+                config_conn = None
+                wifis = [{'wifi_ssid': wifi_ssid, 'wifi_password': wifi_password}]
+        except KeyError:
+            # Aucune configuration wifi
+            raise RuntimeError('wifi')
+
     for _ in range(0, 5):
         try:
-            status = await connect_wifi()
+            status = await connect_wifi(wifis)
             return status
         except (RuntimeError, OSError) as e:
             print("Wifi error %s" % e)
             await sleep(3)
+        except Exception as e:
+            print("connect_wifi exception")
+            print_exception(e)
+    
     if wifi_ok is False:
         raise RuntimeError('wifi')
             
