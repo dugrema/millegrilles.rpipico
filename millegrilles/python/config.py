@@ -89,7 +89,7 @@ async def recuperer_ca():
     
     print("Init millegrille")
     idmg = get_idmg()
-    fiche = await charger_fiche()
+    fiche = await charger_fiche(no_validation=True)
     del fiche['_millegrille']
     
     if fiche['idmg'] != idmg:
@@ -160,17 +160,7 @@ def set_configuration_display(configuration: dict):
         dump(configuration, fichier)
 
 
-# Recuperer la fiche (CA, chiffrage, etc)
-async def charger_relais(ui_lock=None, refresh=False):
-    info_relais = None
-    try:
-        with open('relais.json') as fichier:
-            info_relais = load(fichier)
-            if refresh is False:
-                return info_relais['relais']
-    except (OSError, KeyError):
-        print("relais.json non disponible")
-    
+async def charger_fiche(ui_lock=None, no_validation=False):
     try:
         fiche_url = get_url_instance() + '/fiche.json'
         print("Charger fiche via %s" % fiche_url)
@@ -188,6 +178,8 @@ async def charger_relais(ui_lock=None, refresh=False):
             raise Exception("fiche http status:%d" % reponse.status_code)
         fiche_json = await reponse.json()
         print("Fiche recue\n%s" % fiche_json)
+        if no_validation is True:
+            return fiche_json
     except Exception as e:
         print('Erreur chargement fiche')
         print_exception(e)
@@ -196,9 +188,27 @@ async def charger_relais(ui_lock=None, refresh=False):
         print("charger_fiche fermer reponse")
         reponse.close()
         reponse = None
-        
+
     info_cert = await verifier_message(fiche_json)
     if 'core' in info_cert['roles']:
+        return fiche_json
+    
+    return None
+
+
+# Recuperer la fiche (CA, chiffrage, etc)
+async def charger_relais(ui_lock=None, refresh=False):
+    info_relais = None
+    try:
+        with open('relais.json') as fichier:
+            info_relais = load(fichier)
+            if refresh is False:
+                return info_relais['relais']
+    except (OSError, KeyError):
+        print("relais.json non disponible")
+    
+    fiche_json = await charger_fiche(ui_lock)
+    if fiche_json is not None:
         url_relais = [app['url'] for app in fiche_json['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
         
         if info_relais is None or info_relais['relais'] != url_relais:

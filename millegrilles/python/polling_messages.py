@@ -120,6 +120,7 @@ class PollingThread:
 
         self.__load_initial = True
         self.__prochain_refresh_config = 0
+        self.__refresh_step = 0
         self.__url_relai = None
         self.__errnumber = 0
 
@@ -128,25 +129,45 @@ class PollingThread:
 
     def _refresh_config(self):
         # Forcer un refresh de la liste de relais (via fiche MilleGrille)
-        relais = await charger_relais(ui_lock=self.__appareil.ui_lock, refresh=not self.__load_initial)
-        if relais is not None:
-            self.__appareil.set_relais(relais)
-        relais = None
+        print("Refresh config %d" % self.__refresh_step)
+        if self.__refresh_step <= 1:
+            relais = await charger_relais(
+                ui_lock=self.__appareil.ui_lock, refresh=not self.__load_initial)
+            
+            if relais is not None:
+                self.__appareil.set_relais(relais)
+            relais = None
 
-        if self.__url_relai is None:
-            self.__url_relai = self.__appareil.pop_relais()
+            if self.__url_relai is None:
+                self.__url_relai = self.__appareil.pop_relais()
 
-        self.__appareil.set_timezone_offset(
-            await charger_timeinfo(self.__url_relai, refresh=not self.__load_initial))
+            self.__refresh_step = 2
+            return
 
-        # Recharger la configuration des displays
-        await requete_configuration_displays(self.__url_relai)
+        if self.__refresh_step <= 2:
+            # Recharger la configuration des displays
+            await requete_configuration_displays(self.__url_relai)
+            self.__refresh_step = 3
+            return
+
+        if self.__refresh_step <= 3:
+            self.__appareil.set_timezone_offset(
+                await charger_timeinfo(self.__url_relai, refresh=not self.__load_initial))
+            self.__refresh_step = 4
+            return
         
-        if self.__load_initial is False:
-            # Verifier si le certificat doit etre renouvelle
-            await verifier_renouveler_certificat(self.__url_relai)
+        if self.__refresh_step <= 4:
+            if self.__load_initial is False:
+                # Verifier si le certificat doit etre renouvelle
+                await verifier_renouveler_certificat(self.__url_relai)
+            self.__refresh_step = 5
+            return
         
+        # Succes - ajuster prochain refresh
         self.__load_initial = False  # Complete load initial
+        self.__prochain_refresh_config = CONST_EXPIRATION_CONFIG + time.time()
+        self.__refresh_step = 0
+        print("Refresh config complete")
 
     async def run(self):
         # Faire expirer la thread pour reloader la fiche/url, entretien certificat
@@ -155,8 +176,9 @@ class PollingThread:
         while expiration_thread > time.time():
             if time.time() > self.__prochain_refresh_config:
                 await self._refresh_config()
-                # Succes - ajuster prochain refresh
-                self.__prochain_refresh_config = CONST_EXPIRATION_CONFIG + time.time()
+                await asyncio.sleep_ms(200)
+                collect()
+                await asyncio.sleep_ms(500)
 
             if self.__url_relai is not None:
                 await self._poll()
