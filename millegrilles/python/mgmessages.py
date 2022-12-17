@@ -10,6 +10,7 @@ import certificat
 
 from multiformats import multibase, multihash
 from collections import OrderedDict
+from certificat import valider_certificats
 
 VERSION_SIGNATURE = 2
 
@@ -169,9 +170,6 @@ def message_stringify(message):
 
 
 async def verifier_message(message: dict):
-    from uasyncio import sleep
-    from certificat import valider_certificats
-    
     # Valider le certificat - raise Exception si erreur
     info_certificat = await valider_certificats(message['_certificat'])
     del message['_certificat']
@@ -183,7 +181,7 @@ async def verifier_message(message: dict):
     # Trier tous les champs
     message = prep_message_1(message)
 
-    sleep(0.01)
+    asyncio.sleep_ms(1)
     verifier_signature(message, signature, info_certificat['public_key'])
     
     return info_certificat

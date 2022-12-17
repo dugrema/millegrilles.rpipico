@@ -29,7 +29,7 @@ async def connect_wifi(liste_wifi: list):
 
         # Wait for connect or fail
         print("Attendre connexion WIFI a %s" % ssid)
-        max_wait = 20
+        max_wait = 30
         while max_wait > 0:
             print("Attendre - reste %d secs" % max_wait)
             if wlan.status() < -1 or wlan.status() >= 3:

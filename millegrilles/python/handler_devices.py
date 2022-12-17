@@ -31,15 +31,16 @@ class Bus:
 
 class Driver:
     
-    def __init__(self, params, busses, ui_lock):
+    def __init__(self, appareil, params, busses, ui_lock):
+        self._appareil = appareil
         self._params = params
         self._ui_lock = ui_lock
     
     @staticmethod
-    def parse(params, busses, ui_lock):
+    def parse(appareil, params, busses, ui_lock):
         driver_name = params['driver'].upper()
         driver_class = DRIVERS[driver_name]
-        return driver_class(params, busses, ui_lock)
+        return driver_class(appareil, params, busses, ui_lock)
 
     @property
     def device_id(self):
@@ -48,8 +49,8 @@ class Driver:
 
 class RPiPicoW(Driver):
     
-    def __init__(self, params, busses, ui_lock):
-        super().__init__(params, busses, ui_lock)
+    def __init__(self, appareil, params, busses, ui_lock):
+        super().__init__(appareil, params, busses, ui_lock)
         self.__instance = None
         self.__nb_lectures = 5
 
@@ -91,8 +92,8 @@ DRIVERS['RPIPICOW'] = RPiPicoW
 
 class DriverDHT(Driver):
     
-    def __init__(self, params, busses, ui_lock):
-        super().__init__(params, busses, ui_lock)
+    def __init__(self, appareil, params, busses, ui_lock):
+        super().__init__(appareil, params, busses, ui_lock)
         self.__instance = None
 
     async def load(self):
@@ -137,8 +138,8 @@ DRIVERS['DHT'] = DriverDHT
 
 class DriverOnewire(Driver):
     
-    def __init__(self, params, busses, ui_lock):
-        super().__init__(params, busses, ui_lock)
+    def __init__(self, appareil, params, busses, ui_lock):
+        super().__init__(appareil, params, busses, ui_lock)
         self.__bus = None
         self.__ds18s20_driver = None
 
@@ -190,8 +191,8 @@ DRIVERS['ONEWIRE'] = DriverOnewire
 
 class DriverBmp180(Driver):
     
-    def __init__(self, params, busses, ui_lock):
-        super().__init__(params, busses, ui_lock)
+    def __init__(self, appareil, params, busses, ui_lock):
+        super().__init__(appareil, params, busses, ui_lock)
         self.__instance = None
         self.__busses = busses
 
@@ -223,8 +224,8 @@ DRIVERS['BMP180'] = DriverBmp180
 
 class DummyOutput(Driver):
     
-    def __init__(self, params, busses, ui_lock):
-        super().__init__(params, busses, ui_lock)
+    def __init__(self, appareil, params, busses, ui_lock):
+        super().__init__(appareil, params, busses, ui_lock)
         self.__instance = None
         self.__busses = busses
     
@@ -261,8 +262,8 @@ DRIVERS['DUMMYOUTPUT'] = DummyOutput
 
 class OutputLignes(Driver):
     
-    def __init__(self, params, busses, ui_lock: asyncio.Event, nb_chars=16, nb_lignes=2, duree_afficher_datetime=10):
-        super().__init__(params, busses, ui_lock)
+    def __init__(self, appareil, params, busses, ui_lock: asyncio.Event, nb_chars=16, nb_lignes=2, duree_afficher_datetime=10):
+        super().__init__(appareil, params, busses, ui_lock)
         self._instance = None
         self.__busses = busses
         self._nb_lignes = nb_lignes
@@ -331,7 +332,10 @@ class OutputLignes(Driver):
 
         temps_limite = time.time() + self.__duree_afficher_datetime
         while temps_limite >= time.time():
-            (year, month, day, hour, minutes, seconds, _, _) = time.localtime()
+            now = time.time()
+            if self._appareil.timezone is not None:
+                now += self._appareil.timezone
+            (year, month, day, hour, minutes, seconds, _, _) = time.localtime(now)
             await self.preparer_ligne('{:d}-{:0>2d}-{:0>2d}'.format(year, month, day))
             await self.preparer_ligne('{:0>2d}:{:0>2d}:{:0>2d}'.format(hour, minutes, seconds))
             nouv_sec = (time.ticks_ms() % 1000) / 1000
@@ -348,8 +352,8 @@ class OutputLignes(Driver):
 
 class LCD1602(OutputLignes):
     
-    def __init__(self, params, busses, ui_lock):
-        super().__init__(params, busses, ui_lock, 16, 2)
+    def __init__(self, appareil, params, busses, ui_lock):
+        super().__init__(appareil, params, busses, ui_lock, 16, 2)
 
         # Configuration LCD1602
         self._addr = 0x27
@@ -390,10 +394,10 @@ DRIVERS['LCD1602'] = LCD1602
 
 class Ssd1306(OutputLignes):
     
-    def __init__(self, params, busses, ui_lock, width=128, height=32, char_size=8):
+    def __init__(self, appareil, params, busses, ui_lock, width=128, height=32, char_size=8):
         nb_chars = params.get('chars') or 16
         nb_lines = params.get('lines') or 4
-        super().__init__(params, busses, ui_lock, nb_chars, nb_lines)
+        super().__init__(appareil, params, busses, ui_lock, nb_chars, nb_lines)
         self.__ligne = 0
         self.__width = params.get('width') or width
         self.__height = params.get('height') or height
@@ -429,7 +433,8 @@ DRIVERS['SSD1306'] = Ssd1306
 
 class DeviceHandler:
     
-    def __init__(self):
+    def __init__(self, appareil):
+        self.__appareil = appareil
         self.__configuration = None
         self.__devices = dict()
         self.__busses = list()
@@ -465,7 +470,7 @@ class DeviceHandler:
         for dev in devices_list:
             print("Device : %s" % dev)
             try:
-                device = Driver.parse(dev, self.__busses, self.__ui_lock)
+                device = Driver.parse(self.__appareil, dev, self.__busses, self.__ui_lock)
                 device_id = device.device_id
                 print("Loading device : ", device_id)
                 await device.load()

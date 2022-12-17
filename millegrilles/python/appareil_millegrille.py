@@ -16,12 +16,15 @@ import feed_display
 import mgmessages
 import wifi
 
-from polling_messages import polling_thread
+from polling_messages import PollingThread
 from ledblink import led_executer_sequence
 from handler_devices import DeviceHandler
 from certificat import entretien_certificat as __entretien_certificat                       
 from message_inscription import run_inscription, \
      verifier_renouveler_certificat as __verifier_renouveler_certificat
+#, \
+#     charger_timeinfo as __charger_timeinfo
+from const_leds import CODE_POLLING_ERREUR_GENERALE
 
 
 from config import \
@@ -75,6 +78,13 @@ async def entretien_certificat():
     return False
 
 
+#async def charger_timeinfo(url_relai: str):
+#    print("charger_timeinfo")
+#    offset = await __charger_timeinfo(url_relai)
+#    print("Offset recu : %s" % offset)
+#    return offset
+
+
 async def verifier_renouveler_certificat(url_relai: str):
     try:
         return await __verifier_renouveler_certificat(url_relai)
@@ -92,18 +102,19 @@ class Runner:
     
     def __init__(self):
         self._mode_operation = 0
-        self._device_handler = DeviceHandler()
+        self._device_handler = DeviceHandler(self)
         self._lectures_courantes = dict()
         self._lectures_externes = dict()
         self.__url_relais = None
-        self.__url_relai_courant = None
         self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
-        self.__erreurs_memoire = 0
         
+        self.__polling_thread = PollingThread(self)
         self.__wifi_ok = False
         self.__ntp_ok = False
         self.__prochain_entretien_certificat = 0
-
+        self.__timezone_offset = None
+        self.__erreurs_memory = 0  # Nombre de MemoryErrors depuis succes
+        self.__erreurs_enomem = 0  # Nombre de Errno12 ENOMEM (ussl.wrap_socket) depuis succes
     
     async def configurer_devices(self):
         self.__ui_lock = asyncio.Lock()
@@ -116,7 +127,7 @@ class Runner:
         # print("recevoir_lectures: %s" % lectures)
         self._lectures_externes.update(lectures)
         print("Lectures externes maj\n%s" % self._lectures_externes)
-
+        
     @property
     def mode_operation(self):
         return self._mode_operation
@@ -128,6 +139,20 @@ class Runner:
     @property
     def lectures_externes(self):
         return self._lectures_externes
+    
+    @property
+    def timezone(self):
+        if isinstance(self.__timezone_offset, int):
+            return self.__timezone_offset
+        return None
+    
+    @property
+    def ui_lock(self):
+        return self.__ui_lock
+    
+    def reset_erreurs(self):
+        self.__erreurs_memory = 0
+        self.__erreurs_enomem = 0
     
     async def get_etat(self):
         try:
@@ -234,12 +259,8 @@ class Runner:
                 await asyncio.sleep(120)
 
     async def charger_urls(self):
-        fiche = await config.charger_fiche()
-        info_cert = await mgmessages.verifier_message(fiche)
-        if 'core' in info_cert['roles']:
-            url_relais = [app['url'] for app in fiche['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
-            self.__url_relais = url_relais
-            print("URL relais : %s" % self.__url_relais)
+        relais = await config.charger_relais(self.__ui_lock)
+        self.set_relais(relais)
 
     def get_configuration_display(self):
         try:
@@ -247,11 +268,17 @@ class Runner:
                 return json.load(fichier)
         except OSError:
             pass  # Fichier absent
+
+    def set_relais(self, relais: list):
+        if relais is not None:
+            self.__url_relais = relais
+        print("URL relais : %s" % self.__url_relais)
         
-    def set_configuration_display(self, configuration: dict):
-        # print('Maj configuration display')
-        with open(CONST_PATH_FICHIER_DISPLAY, 'wb') as fichier:
-            json.dump(configuration, fichier)
+    def pop_relais(self):
+        return self.__url_relais.pop()
+    
+    def set_timezone_offset(self, offset):
+        self.__timezone_offset = offset
 
     async def _polling(self):
         """
@@ -261,31 +288,19 @@ class Runner:
             # Rotation relais pour en trouver un qui fonctionne
             # Entretien va rafraichir la liste via la fiche
             try:
-                if self.__url_relai_courant is None:
-                    self.__url_relai_courant = self.__url_relais.pop(0)
-                
-                http_timeout = config.get_http_timeout()
-                # print("http timeout : %d" % http_timeout)
-                
-                # Verifier si on peut renouveler le certificat
-                await verifier_renouveler_certificat(self.__url_relai_courant)
-                # Reset erreurs memoire, requete SSL executee avec succes
-                self.__erreurs_memoire = 0
-                
+                # # Reset erreurs memoire, requete SSL executee avec succes
+                # self.__erreurs_memoire = 0
+
                 # Polling
-                await polling_thread(self, self.__url_relai_courant, http_timeout, self.get_etat)
+                await self.__polling_thread.run()
                 
             except OSError as ose:
                 # Erreur OS (e.g. 12:memoire ou 6:WIFI), sortir de polling
                 raise ose
-            except (AttributeError, IndexError) as e:
-                print("Aucun url relais")
-                self.__url_relais = None  # Garanti un chargement via entretien
-                raise e  # Sortir de la boucle pour recharger un relai
             except Exception as e:
                 print("Erreur polling")
                 sys.print_exception(e)
-                # await ledblink.led_executer_sequence(CODE_POLLING_ERREUR_GENERALE, executions=2, ui_lock=self.__ui_lock)
+                await led_executer_sequence(CODE_POLLING_ERREUR_GENERALE, executions=2, ui_lock=self.__ui_lock)
                     
             await asyncio.sleep_ms(100)
 
@@ -298,6 +313,8 @@ class Runner:
     async def __main(self):
         self._mode_operation = await detecter_mode_operation()
         print("Mode operation initial %d" % self._mode_operation)
+        
+        await self.__polling_thread.preparer()
         
         await led_executer_sequence(const_leds.CODE_MAIN_DEMARRAGE, executions=1, ui_lock=self.__ui_lock)
         while True:
@@ -329,32 +346,33 @@ class Runner:
 
             except OSError as e:
                 if e.errno == 12:
-                    self.__erreurs_memoire = self.__erreurs_memoire + 1
-                    if self.__erreurs_memoire >= CONST_NB_ERREURS_RESET:
-                        print("Trop d'erreur memoire, reset")
+                    self.__erreurs_enomem += 1
+                    if self.__erreurs_enomem >= CONST_NB_ERREURS_RESET:
+                        print("ENOMEM count:%d, reset" % self.__erreurs_enomem)
                         reboot(e)
                     
-                    print("Erreur memoire no %d\n%s" % (self.__erreurs_memoire, mem_info()))
+                    print("Erreur memoire no %d\n%s" % (self.__erreurs_enomem, mem_info()))
                     sys.print_exception(e)
                     collect()
-                    await led_executer_sequence(const_leds.CODE_ERREUR_MEMOIRE, executions=1, ui_lock=self.__ui_lock)
-                    await asyncio.sleep(10)
+                    await led_executer_sequence(
+                        const_leds.CODE_ERREUR_MEMOIRE, executions=1, ui_lock=self.__ui_lock)
+                    # await asyncio.sleep_ms(50)
                 else:
                     print("OSError main")
                     sys.print_exception(e)
                     await asyncio.sleep(60)
             except MemoryError as e:
-                self.__erreurs_memoire = self.__erreurs_memoire + 1
-                if self.__erreurs_memoire >= CONST_NB_ERREURS_RESET:
-                    print("Trop d'erreur memoire, reset")
+                self.__erreurs_memory += 1
+                if self.__erreurs_memory >= CONST_NB_ERREURS_RESET:
+                    print("MemoryError count:%d, reset" % self.__erreurs_memory)
                     reboot(e)
                 
                 print("MemoryError %s" % e)
                 sys.print_exception(e)
-                print("Erreur memoire no %d\n%s" % (self.__erreurs_memoire, mem_info()))
+                print("Erreur memoire no %d\n%s" % (self.__erreurs_memory, mem_info()))
                 collect()
                 print("Memoire post collect\n%s" % mem_info())
-                await asyncio.sleep(10)
+                await asyncio.sleep_ms(50)
             except Exception as e:
                 print("Erreur main")
                 sys.print_exception(e)

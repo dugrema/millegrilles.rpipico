@@ -1,6 +1,7 @@
 import usocket
-import uasyncio
+from uasyncio import sleep_ms
 from uerrno import EINPROGRESS
+from gc import collect
 
 class Response:
     def __init__(self, f):
@@ -19,10 +20,11 @@ class Response:
     async def content(self):
         if self._cached is None:
             try:
+                await sleep_ms(10)  # Attendre download
                 self._cached = self.raw.read()
-                if self._cached is None:
-                    uasyncio.sleep(1)  # Attendre download, tenter a nouveau
-                    self._cached = self.raw.read()
+                #if self._cached is None:
+                #    await sleep_ms(250)  # Attendre download, tenter a nouveau
+                #    self._cached = self.raw.read()
             finally:
                 self.raw.close()
                 self.raw = None
@@ -46,7 +48,7 @@ async def request(
     auth=None,
     timeout=None,
     parse_headers=True,
-    thread_executor=None,
+    lock=None,
 ):
     redirect = None  # redirection url, None means no redirection
     chunked_data = data and getattr(data, "__iter__", None) and not getattr(data, "__len__", None)
@@ -77,9 +79,8 @@ async def request(
         host, port = host.split(":", 1)
         port = int(port)
 
-    #if thread_executor is None:
     ai = usocket.getaddrinfo(host, port, 0, usocket.SOCK_STREAM)
-    await uasyncio.sleep(0.01)  # Yield
+    await sleep_ms(1)  # Yield
     #else:
     #    ai = await thread_executor(usocket.getaddrinfo, host, port, 0, usocket.SOCK_STREAM)
     ai = ai[0]
@@ -99,19 +100,27 @@ async def request(
 
     try:
         try:
-            await uasyncio.sleep(0.01)  # Yield
+            await sleep_ms(1)  # Yield
             s.connect(ai[-1])
             print("Socket connect")
-            await uasyncio.sleep(0.01)  # Yield
+            await sleep_ms(1)  # Yield
         except OSError as er:
             if er.errno != EINPROGRESS:
                 raise er        
         
         if proto == "https:":
             print("https init")
-            s = ussl.wrap_socket(s, server_hostname=host)
+            try:
+                if lock is not None:
+                    await lock.acquire()
+                    print("https lock acquired")
+                s = ussl.wrap_socket(s, server_hostname=host)
+            finally:
+                if lock is not None:
+                    print("https release lock")
+                    lock.release()
             print("https init done")
-            await uasyncio.sleep(0.01)  # Yield
+            await sleep_ms(1)  # Yield
         
         s.write(b"%s /%s HTTP/1.0\r\n" % (method, path))
         
@@ -135,26 +144,26 @@ async def request(
             else:
                 s.write(b"Content-Length: %d\r\n" % len(data))
         s.write(b"Connection: close\r\n\r\n")
-        await uasyncio.sleep(0.01)  # Yield
+        await sleep_ms(1)  # Yield
         if data:
             if chunked_data:
                 for chunk in data:
                     s.write(b"%x\r\n" % len(chunk))
                     s.write(chunk)
                     s.write(b"\r\n")
-                    await uasyncio.sleep(0.01)  # Yield
+                    await sleep_ms(1)  # Yield
                 s.write("0\r\n\r\n")
             else:
                 s.write(data)
-                await uasyncio.sleep(0.01)  # Yield
+                await sleep_ms(1)  # Yield
 
         # Simuler non-blocking
-        await uasyncio.sleep(0.01)
+        await sleep_ms(1)
         while True:
             l = s.readline()
             if l is not None:
                 break
-            await uasyncio.sleep(0.5)
+            await sleep_ms(500)
         
         l = l.split(None, 2)
         if len(l) < 2:
@@ -168,7 +177,7 @@ async def request(
             l = s.readline()
             if not l:
                 # Donner une chance, on est en non blocking io
-                await uasyncio.sleep(0.25)
+                await sleep_ms(250)
                 l = s.readline()
             if not l or l == b"\r\n":
                 break

@@ -1,14 +1,17 @@
-from json import load
+from json import load, dump, dumps
 from os import stat
 from wifi import connect_wifi
-from uasyncio import sleep
+from uasyncio import sleep, sleep_ms
 from sys import print_exception
 
 import urequests2 as requests
 
 import wifi
+from mgmessages import verifier_message, signer_message
 
 CONST_PATH_FICHIER_CONN = const('conn.json')
+CONST_PATH_FICHIER_DISPLAY = const('displays.json')
+CONST_PATH_TIMEINFO = const('timeinfo')
 
 CONST_MODE_INIT = const(1)
 CONST_MODE_RECUPERER_CA = const(2)
@@ -132,10 +135,45 @@ def get_user_id():
         return load(fichier)['user_id']
 
 
+def get_timezone():
+    try:
+        with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
+            return load(fichier)['timezone']
+    except KeyError:
+        return None
+
+
+async def get_timezone_offset(self):
+    try:
+        if self.__timezone_offset is None:
+            self.__timezone_offset = await charger_timeinfo(self.__url_relai_courant)
+            if self.__timezone_offset is None:
+                self.__timezone_offset = False  # Desactiver chargement
+    except Exception as e:
+        print("Erreur chargement timezone")
+        sys.print_exception(e)
+        e = None
+
+def set_configuration_display(configuration: dict):
+    # print('Maj configuration display')
+    with open(CONST_PATH_FICHIER_DISPLAY, 'wb') as fichier:
+        dump(configuration, fichier)
+
+
 # Recuperer la fiche (CA, chiffrage, etc)
-async def charger_fiche():
+async def charger_relais(ui_lock=None, refresh=False):
+    info_relais = None
+    try:
+        with open('relais.json') as fichier:
+            info_relais = load(fichier)
+            if refresh is False:
+                return info_relais['relais']
+    except (OSError, KeyError):
+        print("relais.json non disponible")
+    
     try:
         fiche_url = get_url_instance() + '/fiche.json'
+        print("Charger fiche via %s" % fiche_url)
     except OSError:
         print("Fichier connexion absent")
         return
@@ -143,15 +181,86 @@ async def charger_fiche():
     # Downloader la fiche
     # print("Recuperer fiche a %s" % fiche_url)
     fiche_json = None
-    reponse = await requests.get(fiche_url)
+    reponse = await requests.get(fiche_url, lock=ui_lock)
     try:
-        await sleep(0)  # Yield
+        await sleep_ms(1)  # Yield
         if reponse.status_code != 200:
             raise Exception("fiche http status:%d" % reponse.status_code)
         fiche_json = await reponse.json()
-        # print("Fiche recue\n%s" % fiche_json)
+        print("Fiche recue\n%s" % fiche_json)
+    except Exception as e:
+        print('Erreur chargement fiche')
+        print_exception(e)
+        return None
     finally:
         print("charger_fiche fermer reponse")
         reponse.close()
+        reponse = None
         
-    return fiche_json
+    info_cert = await verifier_message(fiche_json)
+    if 'core' in info_cert['roles']:
+        url_relais = [app['url'] for app in fiche_json['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
+        
+        if info_relais is None or info_relais['relais'] != url_relais:
+            print('Sauvegarder relais.json maj')
+            try:
+                with open('relais.json', 'wb') as fichier:
+                    dump({'relais': url_relais}, fichier)
+            except Exception as e:
+                print('Erreur sauvegarde relais.json')
+                print_exception(e)
+        
+        return url_relais
+        
+    return None
+
+
+async def generer_message_timeinfo(timezone_str: str):
+    # Generer message d'inscription
+    message_inscription = {
+        "timezone": timezone_str,
+    }
+    return await signer_message(message_inscription, action='getTimezoneInfo')
+
+
+async def charger_timeinfo(url_relai: str, refresh: False):
+    
+    offset_info = None
+    try:
+        with open('tzoffset.json', 'rb') as fichier:
+            offset_info = load(fichier)
+            if refresh is False:
+                return offset_info['offset']
+    except OSError:
+        print('tzoffset.json absent')
+    except KeyError:
+        print('tzoffset.json erreur contenu')
+    
+    print("Charger information timezone %s" % url_relai)
+    timezone_str = get_timezone()
+    if timezone_str is not None:
+        reponse = await requests.post(
+            url_relai + '/' + CONST_PATH_TIMEINFO,
+            data=dumps(
+                await generer_message_timeinfo(timezone_str)
+            ),
+            headers={'Content-Type': 'application/json'}
+        )
+
+        try:
+            data = await reponse.json()
+            reponse = None
+            offset = data['timezone_offset']
+            print("Offset : %s" % offset)
+            
+            if offset_info is None or offset_info['offset'] != offset:
+                with open('tzoffset.json', 'wb') as fichier:
+                    dump({'offset': offset}, fichier)
+            
+            return offset
+        except KeyError:
+            return None
+        finally:
+            if reponse is not None:
+                reponse.close()
+    
