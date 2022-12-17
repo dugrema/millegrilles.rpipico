@@ -17,15 +17,19 @@ def flash_led(cycles=6):
         LED_ONBOARD.off()
         sleep_ms(250)
 
+def root():
+    from appareil_millegrille import main
+    run(main())
 
 try:
-    from appareil_millegrille import main
     flash_led()
-    run(main())
+    root()
 except Exception as e:
     print("Erreur main")
     print_exception(e)
     e = None
     flash_led(120)
     reset()
+
+
 

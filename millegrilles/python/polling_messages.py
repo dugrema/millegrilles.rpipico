@@ -204,7 +204,7 @@ class PollingThread:
             if reponse.get('ok') is False:
                 print("Polling complete, msg %s" % reponse.get('err'))
             else:
-                await _traiter_commande(appareil, reponse)
+                await _traiter_commande(self.__appareil, reponse)
 
             # Cleanup
             reponse = None
