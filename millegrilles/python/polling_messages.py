@@ -181,7 +181,17 @@ class PollingThread:
                 await asyncio.sleep_ms(500)
 
             if self.__url_relai is not None:
-                await self._poll()
+                try:
+                    await self._poll()
+                except OSError as e:
+                    if e.errno == 12:
+                        e = None
+                        print("ENOMEM poll - reessai 1")
+                        await asyncio.sleep_ms(500)
+                        collect()
+                        await self._poll()
+                    else:
+                        raise e
             else:
                 print("Aucun relai, skip polling")
                 await asyncio.sleep(10)

@@ -7,7 +7,7 @@ LED_ONBOARD = Pin('WL_GPIO0', machine.Pin.OUT)
 
 # Initialiser bus
 print("main()")
-sleep_ms(100)
+sleep_ms(500)
 
 
 def flash_led(cycles=6):
