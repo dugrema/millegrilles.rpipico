@@ -2,7 +2,10 @@
 import ubinascii as binascii
 import uasyncio as asyncio
 
+from json import load
 from sys import print_exception
+
+from wifi import get_etat_wifi
 
 CONST_FICHIER_DEVICES = const('devices.json')
 
@@ -59,14 +62,12 @@ class RPiPicoW(Driver):
         self.__instance = machine.ADC(4)
 
     async def lire(self):
-        from wifi import get_etat_wifi
-        
         temperature = 0.0
         conversion_factor = 3.3 / (65535)
         for _ in range(0, self.__nb_lectures):
             reading = self.__instance.read_u16() * conversion_factor
             temperature += 27 - (reading - 0.706)/0.001721
-            await asyncio.sleep(0.05)
+            await asyncio.sleep_ms(50)
 
         temperature = round(temperature / self.__nb_lectures, 1)
         
@@ -113,7 +114,7 @@ class DriverDHT(Driver):
 
     async def lire(self):
         self.__instance.measure()
-        await asyncio.sleep(0.001)  # Yield
+        await asyncio.sleep_ms(1)  # Yield
         device_id = self.device_id
         return {
             '%s/temperature' % device_id: {
@@ -167,11 +168,11 @@ class DriverOnewire(Driver):
 
     async def lire_temperatures(self):
         roms = self.__bus.scan()
-        asyncio.sleep(0.001)  # Yield
+        asyncio.sleep_ms(1)  # Yield
 
         self.__ds18s20_driver.convert_temp()
         # Donner le temps de faire la preparation de temperature (non-blocking)
-        asyncio.sleep(0.750)
+        asyncio.sleep_ms(750)
         
         lectures = dict()
         for rom in roms:
@@ -181,7 +182,7 @@ class DriverOnewire(Driver):
                 'valeur': temp,
                 'type': 'temperature'
             }
-            asyncio.sleep(0.001)  # Yield
+            asyncio.sleep_ms(1)  # Yield
 
         return lectures
 
@@ -441,8 +442,6 @@ class DeviceHandler:
         self.__ui_lock = None
     
     async def load(self, ui_lock: asyncio.Event):
-        from json import load
-        
         self.__ui_lock = ui_lock
         with open(CONST_FICHIER_DEVICES, 'rb') as fichier:
             self.__configuration = load(fichier)
@@ -491,7 +490,7 @@ class DeviceHandler:
                 for l in lectures_dev.values():
                     l['timestamp'] = ts_courant
                 lectures.update(lectures_dev)  # Transferer lectures
-                await asyncio.sleep(0.01)  # Liberer
+                await asyncio.sleep_ms(10)  # Liberer
             except AttributeError:
                 pass  # Pas d'attribut .lire
             except Exception as e:

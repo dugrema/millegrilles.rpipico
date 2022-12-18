@@ -41,7 +41,7 @@ class BMP180:
       # Read temperature
       self.__i2c_bus.writeto_mem(self.__addr, REG_MEAS, CRV_TEMP)
       
-      await asyncio.sleep(0.005)
+      await asyncio.sleep_ms(5)
       # (msb, lsb) = bus.read_i2c_block_data(addr, REG_MSB, 2)
       val = self.__i2c_bus.readfrom_mem(self.__addr, REG_MSB, 2)
       (msb, lsb) = val
@@ -51,7 +51,7 @@ class BMP180:
       # Read pressure
       # bus.write_byte_data(addr, REG_MEAS, CRV_PRES + (OVERSAMPLE << 6))
       self.__i2c_bus.writeto_mem(self.__addr, REG_MEAS, bytearray([CRV_PRES + (OVERSAMPLE << 6)]))
-      await asyncio.sleep(0.04)
+      await asyncio.sleep_ms(40)
       # (msb, lsb, xsb) = bus.read_i2c_block_data(addr, REG_MSB, 3)
       (msb, lsb, xsb) = self.__i2c_bus.readfrom_mem(self.__addr, REG_MSB, 3)
       UP = ((msb << 16) + (lsb << 8) + xsb) >> (8 - OVERSAMPLE)

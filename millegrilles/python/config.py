@@ -3,6 +3,7 @@ from os import stat
 from wifi import connect_wifi
 from uasyncio import sleep, sleep_ms
 from sys import print_exception
+from gc import collect
 
 import urequests2 as requests
 
@@ -230,7 +231,14 @@ async def generer_message_timeinfo(timezone_str: str):
     message_inscription = {
         "timezone": timezone_str,
     }
-    return await signer_message(message_inscription, action='getTimezoneInfo')
+    message_inscription = await signer_message(message_inscription, action='getTimezoneInfo')
+    
+    # Garbage collect
+    await sleep_ms(200)
+    collect()
+    await sleep_ms(1)
+
+    return message_inscription
 
 
 async def charger_timeinfo(url_relai: str, refresh: False):
@@ -251,9 +259,7 @@ async def charger_timeinfo(url_relai: str, refresh: False):
     if timezone_str is not None:
         reponse = await requests.post(
             url_relai + '/' + CONST_PATH_TIMEINFO,
-            data=dumps(
-                await generer_message_timeinfo(timezone_str)
-            ),
+            data=dumps(await generer_message_timeinfo(timezone_str)),
             headers={'Content-Type': 'application/json'}
         )
 
@@ -273,4 +279,8 @@ async def charger_timeinfo(url_relai: str, refresh: False):
         finally:
             if reponse is not None:
                 reponse.close()
-    
+    else:
+        if offset_info is None:
+            with open('tzoffset.json', 'wb') as fichier:
+                dump({'offset': 0}, fichier)
+        

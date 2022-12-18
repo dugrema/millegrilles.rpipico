@@ -285,18 +285,14 @@ class Runner:
         Main thread d'execution du polling/commandes
         """
         while self._mode_operation == CONST_MODE_POLLING:
-            # Rotation relais pour en trouver un qui fonctionne
-            # Entretien va rafraichir la liste via la fiche
             try:
-                # # Reset erreurs memoire, requete SSL executee avec succes
-                # self.__erreurs_memoire = 0
-
                 # Polling
                 await self.__polling_thread.run()
-                
+ 
             except OSError as ose:
                 # Erreur OS (e.g. 12:memoire ou 6:WIFI), sortir de polling
                 raise ose
+            
             except Exception as e:
                 print("Erreur polling")
                 sys.print_exception(e)
@@ -328,9 +324,9 @@ class Runner:
                         await self.charger_urls()
 
                 # Cleanup memoire
-                await asyncio.sleep(5)
+                await asyncio.sleep_ms(1000)
                 collect()
-                await asyncio.sleep(1)
+                await asyncio.sleep_ms(200)
 
                 if self._mode_operation == CONST_MODE_INIT:
                     await self.__initialisation()
@@ -356,11 +352,12 @@ class Runner:
                     collect()
                     await led_executer_sequence(
                         const_leds.CODE_ERREUR_MEMOIRE, executions=1, ui_lock=self.__ui_lock)
-                    # await asyncio.sleep_ms(50)
+
                 else:
                     print("OSError main")
                     sys.print_exception(e)
                     await asyncio.sleep(60)
+
             except MemoryError as e:
                 self.__erreurs_memory += 1
                 if self.__erreurs_memory >= CONST_NB_ERREURS_RESET:

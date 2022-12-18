@@ -6,6 +6,7 @@ from machine import unique_id
 from os import rename, remove
 from sys import print_exception
 from uasyncio import sleep, sleep_ms
+from gc import collect
 
 import urequests2 as requests
 
@@ -35,7 +36,14 @@ async def generer_message_inscription(action='inscrire', domaine=None):
         "csr": generer_csr(),
     }
 
-    return await signer_message(message_inscription, action=action, domaine=domaine)
+    message_inscription = await signer_message(message_inscription, action=action, domaine=domaine)
+    
+    # Garbage collect
+    await sleep_ms(200)
+    collect()
+    await sleep_ms(1)
+    
+    return message_inscription
 
 
 def generer_csr():

@@ -189,6 +189,7 @@ class PollingThread:
                         print("ENOMEM poll - reessai 1")
                         await asyncio.sleep_ms(500)
                         collect()
+                        await asyncio.sleep_ms(1)  # Yield
                         await self._poll()
                     else:
                         raise e
