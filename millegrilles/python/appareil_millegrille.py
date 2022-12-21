@@ -259,8 +259,9 @@ class Runner:
                 await asyncio.sleep(120)
 
     async def charger_urls(self):
-        relais = await config.charger_relais(self.__ui_lock)
-        self.set_relais(relais)
+        if self.__wifi_ok is True:
+            relais = await config.charger_relais(self.__ui_lock)
+            self.set_relais(relais)
 
     def get_configuration_display(self):
         try:
@@ -330,6 +331,10 @@ class Runner:
 
                 if self._mode_operation == CONST_MODE_INIT:
                     await self.__initialisation()
+                elif self.__wifi_ok is False:
+                    await led_executer_sequence(const_leds.CODE_WIFI_NON_CONNECTE, 1, self.__ui_lock)
+                    await asyncio.sleep(30)
+                    continue
                 elif self._mode_operation == CONST_MODE_RECUPERER_CA:
                     await self.__recuperer_ca()
                 elif self._mode_operation == CONST_MODE_SIGNER_CERTIFICAT:

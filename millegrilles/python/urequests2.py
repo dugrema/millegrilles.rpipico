@@ -89,6 +89,7 @@ async def request(
     if parse_headers is not False:
         resp_d = {}
 
+    print("open socket")
     s = usocket.socket(ai[0], usocket.SOCK_STREAM, ai[2])
     print("Socket init")
     s.setblocking(False)
