@@ -11,6 +11,7 @@ import certificat
 from multiformats import multibase, multihash
 from collections import OrderedDict
 from certificat import valider_certificats
+from io import BytesIO
 
 VERSION_SIGNATURE = 2
 
@@ -230,4 +231,35 @@ def uuid4():
     random[6] = (random[6] & 0x0F) | 0x40
     random[8] = (random[8] & 0x3F) | 0x80
     return UUID(bytes=random)
+
+
+# Buffer pour recevoir l'etat
+class BufferMessage:
+
+    def __init__(self, bufsize = 8*1024):
+        self.__buffer = bytearray(bufsize)
+        self.__len_courant = 0
+
+    def get_data(self):
+        return memoryview(self.__buffer)[:self.__len_courant]
+
+    def set_text(self, data):
+        self.set_bytes(data.encode('utf-8'))
+
+    def set_bytes(self, data):
+        if len(data) > len(self.__buffer):
+            raise ValueError('overflow')
+        self.__len_courant = len(data)
+        self.__buffer[:self.__len_courant] = data
+
+    def clear(self):
+        self.__len_courant = 0
+        self.__buffer.clear()
+
+    def __iter__(self):
+        for i in range(0, self.__len_courant):
+            yield self.__buffer[i]
+
+    def __len__(self):
+        return self.__len_courant
 

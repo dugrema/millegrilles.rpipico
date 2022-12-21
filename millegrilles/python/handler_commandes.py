@@ -1,3 +1,5 @@
+from config import set_configuration_display
+
 async def traiter_commande(appareil, commande: dict):
     print("Traiter : %s" % commande)
     action = commande['en-tete']['action']
@@ -5,7 +7,7 @@ async def traiter_commande(appareil, commande: dict):
         await challenge_led_blink(commande)
     elif action == 'evenementMajDisplays':
         try:
-            appareil.set_configuration_display(commande['displays'])
+            set_configuration_display(commande['displays'])
         except KeyError:
             print("Erreur reception maj displays")
     elif action == 'lectures_senseurs':

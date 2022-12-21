@@ -4,7 +4,7 @@
     ],
     "devices": [
         {"driver": "RPiPicoW"},
-        {"driver": "dht", "model": "DHT11", "pin": 28},
+        {"driver": "dht", "model": "DHT22", "pin": 28},
         {"driver": "onewire", "models": ["DS18X20"], "pin": 22},
         {"driver": "bmp180", "bus": 0},
         {"driver": "dummyoutput"},

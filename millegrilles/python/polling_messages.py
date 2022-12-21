@@ -1,13 +1,13 @@
-import json
 import time
 import uasyncio as asyncio
 
 import urequests2 as requests
 
+from json import dumps
 from gc import collect
 from sys import print_exception
 
-from mgmessages import signer_message, verifier_message
+from mgmessages import signer_message, verifier_message, BufferMessage
 from handler_commandes import traiter_commande
 from config import get_http_timeout, charger_relais, set_configuration_display, \
      charger_timeinfo
@@ -23,6 +23,11 @@ CONST_REQUETE_DISPLAY = const('getAppareilDisplayConfiguration')
 
 CONST_DUREE_THREAD_POLLING = const(3 * 60 * 60)
 CONST_EXPIRATION_CONFIG = const(15 * 60)
+
+
+# Initialiser classe de buffer
+BUFFER_MESSAGE = BufferMessage()
+
 
 class HttpErrorException(Exception):
     pass
@@ -40,27 +45,29 @@ async def __preparer_message(timeout_http, generer_etat):
 
     # Signer message
     etat = await signer_message(etat, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil')
-    etat = json.dumps(etat)
+    BUFFER_MESSAGE.set_text(dumps(etat))
 
-    return etat
+    return BUFFER_MESSAGE
 
 
 async def poll(url_relai: str, timeout_http=60, generer_etat=None, ui_lock=None):
-    etat = await __preparer_message(timeout_http, generer_etat)
+    buffer = await __preparer_message(timeout_http, generer_etat)
 
     # Cleanup memoire
     await asyncio.sleep_ms(100)
     collect()
+    print("Taille etat: %d" % len(buffer))
 
     # Poll
     url_poll = url_relai + PATHNAME_POLL
     return await requests.post(
-        url_poll, data=etat, headers={'Content-Type': 'application/json'}, lock=ui_lock)
+        url_poll, data=buffer.get_data(), headers={'Content-Type': 'application/json'}, lock=ui_lock)
 
 
 async def requete_configuration_displays(url_relai: str):
     requete = await signer_message(dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY)
-    requete = json.dumps(requete)
+    BUFFER_MESSAGE.set_text(dumps(requete))
+    requete = None
 
     # Cleanup memoire
     await asyncio.sleep_ms(100)
@@ -70,7 +77,7 @@ async def requete_configuration_displays(url_relai: str):
     print('Requete displays sur %s' % url_requete)
     try:
         reponse = await verifier_reponse(await requests.post(
-            url_requete, data=requete, headers={'Content-Type': 'application/json'}))
+            url_requete, data=BUFFER_MESSAGE.get_data(), headers={'Content-Type': 'application/json'}))
         requete = None
     except OSError as e:
         raise e  # Faire remonter erreur

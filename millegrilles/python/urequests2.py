@@ -2,6 +2,7 @@ import usocket
 from uasyncio import sleep_ms
 from uerrno import EINPROGRESS
 from gc import collect
+from json import loads
 
 class Response:
     def __init__(self, f):
@@ -35,8 +36,7 @@ class Response:
         return str(await self.content(), self.encoding)
 
     async def json(self):
-        import ujson
-        return ujson.loads(await self.content())
+        return loads(await self.content())
 
 async def request(
     method,
