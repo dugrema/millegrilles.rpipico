@@ -219,8 +219,7 @@ async def verifier_renouveler_certificat(url_relai: str, buffer):
     print("Verifier renouveler cert url %s" % url_relai)
     
     date_expiration, _ = get_expiration_certificat_local()
-    #if time.time() > (date_expiration - CONST_RENOUVELLEMENT_DELAI):
-    if True:
+    if time.time() > (date_expiration - CONST_RENOUVELLEMENT_DELAI):
        print("Cert renouvellement atteint")
     else:
         print("Cert valide jusqu'a %s" % date_expiration)
@@ -253,7 +252,7 @@ async def verifier_renouveler_certificat(url_relai: str, buffer):
     sleep_ms(1)  # Yield
 
     # reponse_dict = await reponse.json()
-    reponse_dict = loads(buffer.get_data())
+    reponse_dict = json.loads(buffer.get_data())
 
     # Extraire contenu de la reponse, cleanup
     if await valider_reponse(status_code, reponse_dict) is True:
