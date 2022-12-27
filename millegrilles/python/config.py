@@ -279,7 +279,7 @@ async def charger_timeinfo(url_relai: str, buffer, refresh: False):
         )
 
         try:
-            await buffer.read_text_into(buffer)
+            await reponse.read_text_into(buffer)
             reponse = None
 
             await sleep_ms(1)  # Yield
