@@ -72,13 +72,16 @@ async def requete_configuration_displays(url_relai: str, buffer):
     # Cleanup memoire
     await asyncio.sleep_ms(1)
     collect()
+    await asyncio.sleep_ms(1)
     
     url_requete = url_relai + PATHNAME_REQUETE
     print('Requete displays sur %s' % url_requete)
     try:
         buffer = await verifier_reponse(await requests.post(
-            url_requete, data=buffer.get_data(), headers={'Content-Type': 'application/json'}))
-        requete = None
+            url_requete,
+            data=buffer.get_data(),
+            headers={'Content-Type': 'application/json'}
+        ))
     except OSError as e:
         raise e  # Faire remonter erreur
     except Exception as e:

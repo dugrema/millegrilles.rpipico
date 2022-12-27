@@ -287,6 +287,7 @@ class Runner:
         """
         while self._mode_operation == CONST_MODE_POLLING:
             try:
+                collect()
                 # Polling
                 await self.__polling_thread.run()
  
@@ -325,9 +326,9 @@ class Runner:
                         await self.charger_urls()
 
                 # Cleanup memoire
-                await asyncio.sleep_ms(1000)
+                await asyncio.sleep_ms(1)  # Yield
                 collect()
-                await asyncio.sleep_ms(200)
+                await asyncio.sleep_ms(1)  # Yield
 
                 if self._mode_operation == CONST_MODE_INIT:
                     await self.__initialisation()

@@ -215,43 +215,52 @@ async def run_inscription(url_relai: str, ui_lock, buffer):
     print("Certificat recu")
 
 
-async def verifier_renouveler_certificat(url_relai: str):
+async def verifier_renouveler_certificat(url_relai: str, buffer):
     print("Verifier renouveler cert url %s" % url_relai)
     
     date_expiration, _ = get_expiration_certificat_local()
-    if time.time() > (date_expiration - CONST_RENOUVELLEMENT_DELAI):
+    #if time.time() > (date_expiration - CONST_RENOUVELLEMENT_DELAI):
+    if True:
        print("Cert renouvellement atteint")
     else:
         print("Cert valide jusqu'a %s" % date_expiration)
         return False
     
+    await generer_message_inscription(buffer, action='signerAppareil', domaine='SenseursPassifs')
+
+    # Garbage collect
+    sleep_ms(1)  # Yield
+    collect()
+    sleep_ms(1)  # Yield
+
     reponse = await requests.post(
         url_relai + PATHNAME_RENOUVELER,
-        data=json.dumps(
-            await generer_message_inscription(action='signerAppareil', domaine='SenseursPassifs')
-        ),
+        data=buffer.get_data(),
         headers={'Content-Type': 'application/json'}
     )
     
     try:
         status_code = reponse.status_code
         print("Reponse renouveler certificat %s" % status_code)
-        
-        # Cleanup
-        reponse_dict = await reponse.json()
+        await reponse.read_text_into(buffer)
+    finally:
         reponse.close()
         reponse = None
+        
+    # Garbage collect
+    sleep_ms(1)  # Yield
+    collect()
+    sleep_ms(1)  # Yield
 
-        # Extraire contenu de la reponse, cleanup
-        if await valider_reponse(status_code, reponse_dict) is True:
-            # Extraire le certificat si fourni
-            try:
-                certificat = reponse_dict['certificat']
-            except KeyError:
-                pass  # On n'a pas recu le certificat
-            else:
-                await recevoir_certificat(certificat)
-            
-    finally:
-        if reponse is not None:
-            reponse.close()
+    # reponse_dict = await reponse.json()
+    reponse_dict = loads(buffer.get_data())
+
+    # Extraire contenu de la reponse, cleanup
+    if await valider_reponse(status_code, reponse_dict) is True:
+        # Extraire le certificat si fourni
+        try:
+            certificat = reponse_dict['certificat']
+        except KeyError:
+            pass  # On n'a pas recu le certificat
+        else:
+            await recevoir_certificat(certificat)
