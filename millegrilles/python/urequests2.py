@@ -37,6 +37,10 @@ class Response:
 
     async def json(self):
         return loads(await self.content())
+    
+    async def read_text_into(self, buffer):
+        content = await self.content()
+        buffer.set_text(await self.text())
 
 async def request(
     method,

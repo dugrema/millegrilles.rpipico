@@ -28,7 +28,7 @@ CONST_CSR_BEGIN = const('-----BEGIN CERTIFICATE REQUEST-----')
 CONST_CSR_END = const('-----END CERTIFICATE REQUEST-----')
 
 
-async def generer_message_inscription(action='inscrire', domaine=None):
+async def generer_message_inscription(buffer, action='inscrire', domaine=None):
     # Generer message d'inscription
     message_inscription = {
         "uuid_appareil": NOM_APPAREIL,
@@ -38,12 +38,10 @@ async def generer_message_inscription(action='inscrire', domaine=None):
 
     message_inscription = await signer_message(message_inscription, action=action, domaine=domaine)
     
-    # Garbage collect
-    await sleep_ms(200)
-    collect()
-    await sleep_ms(1)
+    buffer.set_text(json.dumps(message_inscription))
+    # message_inscription = None
     
-    return message_inscription
+    # return message_inscription
 
 
 def generer_csr():
@@ -71,12 +69,16 @@ def format_pem_csr(value):
     return CONST_CSR_BEGIN + output + '\n' + CONST_CSR_END
 
 
-async def post_inscription(url, message):
+async def post_inscription(url, buffer):
     print("post_inscription ", url)
     
     certificat_recu = False
     
-    reponse = await requests.post(url, json=message)
+    reponse = await requests.post(
+        url,
+        data=buffer.get_data(),
+        headers={'Content-Type': 'application/json'}
+    )
     try:
         status_code = reponse.status_code
         print("status code : %s" % status_code)
@@ -85,7 +87,8 @@ async def post_inscription(url, message):
             raise Exception('err http:%d' % status_code)
         
         # Valider la reponse
-        return status_code, await reponse.json()
+        await reponse.read_text_into(buffer)
+        return status_code, buffer
     finally:
         reponse.close()
 
@@ -162,14 +165,27 @@ async def run_challenge(challenge, ui_lock=None):
     await led_executer_sequence(challenge, 2, ui_lock=ui_lock)
 
 
-async def run_inscription(url_relai: str, ui_lock):
+async def run_inscription(url_relai: str, ui_lock, buffer):
     url_inscription = url_relai + CONST_PATH_INSCRIPTION
     certificat_recu = False
     while certificat_recu is False:
         try:
             # Faire une demande d'inscription
-            status_code, reponse_dict = await post_inscription(
-                url_inscription, await generer_message_inscription())
+            await generer_message_inscription(buffer)
+            
+            # Garbage collect
+            await sleep_ms(1)
+            collect()
+            await sleep_ms(1)
+            
+            status_code, buffer_reponse = await post_inscription(url_inscription, buffer)
+            
+            # Garbage collect
+            await sleep_ms(1)  # Yield
+            collect()
+            await sleep_ms(1)  # Yield
+            
+            reponse_dict = json.loads(buffer_reponse.get_data())
             
             if await valider_reponse(status_code, reponse_dict) is True:
                 # Extraire le certificat si fourni

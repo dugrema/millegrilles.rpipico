@@ -3,7 +3,7 @@ import uasyncio as asyncio
 
 import urequests2 as requests
 
-from json import dumps
+from json import dumps, loads
 from gc import collect
 from sys import print_exception
 
@@ -54,7 +54,7 @@ async def poll(url_relai: str, timeout_http=60, generer_etat=None, ui_lock=None)
     buffer = await __preparer_message(timeout_http, generer_etat)
 
     # Cleanup memoire
-    await asyncio.sleep_ms(100)
+    await asyncio.sleep_ms(1)
     collect()
     print("Taille etat: %d" % len(buffer))
 
@@ -64,20 +64,20 @@ async def poll(url_relai: str, timeout_http=60, generer_etat=None, ui_lock=None)
         url_poll, data=buffer.get_data(), headers={'Content-Type': 'application/json'}, lock=ui_lock)
 
 
-async def requete_configuration_displays(url_relai: str):
+async def requete_configuration_displays(url_relai: str, buffer):
     requete = await signer_message(dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY)
-    BUFFER_MESSAGE.set_text(dumps(requete))
+    buffer.set_text(dumps(requete))
     requete = None
 
     # Cleanup memoire
-    await asyncio.sleep_ms(100)
+    await asyncio.sleep_ms(1)
     collect()
     
     url_requete = url_relai + PATHNAME_REQUETE
     print('Requete displays sur %s' % url_requete)
     try:
-        reponse = await verifier_reponse(await requests.post(
-            url_requete, data=BUFFER_MESSAGE.get_data(), headers={'Content-Type': 'application/json'}))
+        buffer = await verifier_reponse(await requests.post(
+            url_requete, data=buffer.get_data(), headers={'Content-Type': 'application/json'}))
         requete = None
     except OSError as e:
         raise e  # Faire remonter erreur
@@ -87,6 +87,7 @@ async def requete_configuration_displays(url_relai: str):
         return
 
     try:
+        reponse = loads(buffer.get_data())
         if reponse['ok'] == True:
             info_certificat = await verifier_message(reponse)
             if CONST_DOMAINE_SENSEURSPASSIFS in info_certificat['domaines']:
@@ -106,7 +107,10 @@ async def verifier_reponse(reponse):
         if status != 200:
             raise HttpErrorException('poll err http:%d' % status)
 
-        return await reponse.json()  # Note : close la reponse automatiquement
+        # return await reponse.json()  # Note : close la reponse automatiquement
+        await reponse.read_text_into(BUFFER_MESSAGE)
+        
+        return BUFFER_MESSAGE
     finally:
         reponse.close()
 
@@ -139,7 +143,7 @@ class PollingThread:
         print("Refresh config %d" % self.__refresh_step)
         if self.__refresh_step <= 1:
             relais = await charger_relais(
-                ui_lock=self.__appareil.ui_lock, refresh=not self.__load_initial)
+                ui_lock=self.__appareil.ui_lock, refresh=not self.__load_initial, buffer=BUFFER_MESSAGE)
             
             if relais is not None:
                 self.__appareil.set_relais(relais)
@@ -153,20 +157,20 @@ class PollingThread:
 
         if self.__refresh_step <= 2:
             # Recharger la configuration des displays
-            await requete_configuration_displays(self.__url_relai)
+            await requete_configuration_displays(self.__url_relai, buffer=BUFFER_MESSAGE)
             self.__refresh_step = 3
             return
 
         if self.__refresh_step <= 3:
             self.__appareil.set_timezone_offset(
-                await charger_timeinfo(self.__url_relai, refresh=not self.__load_initial))
+                await charger_timeinfo(self.__url_relai, buffer=BUFFER_MESSAGE, refresh=not self.__load_initial))
             self.__refresh_step = 4
             return
         
         if self.__refresh_step <= 4:
             if self.__load_initial is False:
                 # Verifier si le certificat doit etre renouvelle
-                await verifier_renouveler_certificat(self.__url_relai)
+                await verifier_renouveler_certificat(self.__url_relai, buffer=BUFFER_MESSAGE)
             self.__refresh_step = 5
             return
         
@@ -206,14 +210,23 @@ class PollingThread:
                 
     async def _poll(self):
         try:
-            reponse = await verifier_reponse(
-                await poll(
-                    self.__url_relai,
-                    self.__timeout_http,
-                    self.__appareil.get_etat,
-                    self.__appareil.ui_lock
-                )
+            reponse = await poll(
+                self.__url_relai,
+                self.__timeout_http,
+                self.__appareil.get_etat,
+                self.__appareil.ui_lock
             )
+
+            # Load dict de la reponse, verifier
+            buffer = await verifier_reponse(reponse)
+            reponse = None
+
+            # Cleanup memoire - tout est copie dans le buffer
+            await asyncio.sleep_ms(1)  # Yield
+            collect()
+            await asyncio.sleep_ms(1)  # Yield
+            
+            reponse = loads(buffer.get_data())
             info_certificat = await verifier_signature(reponse)
 
             # Cleanup

@@ -1,4 +1,4 @@
-from json import load, dump, dumps
+from json import load, loads, dump, dumps
 from os import stat
 from wifi import connect_wifi
 from uasyncio import sleep, sleep_ms
@@ -85,12 +85,12 @@ async def initialiser_wifi():
         raise RuntimeError('wifi')
             
 
-async def recuperer_ca():
+async def recuperer_ca(buffer=None):
     from certificat import sauvegarder_ca
     
     print("Init millegrille")
     idmg = get_idmg()
-    fiche = await charger_fiche(no_validation=True)
+    fiche = await charger_fiche(no_validation=True, buffer=buffer)
     del fiche['_millegrille']
     
     if fiche['idmg'] != idmg:
@@ -161,7 +161,7 @@ def set_configuration_display(configuration: dict):
         dump(configuration, fichier)
 
 
-async def charger_fiche(ui_lock=None, no_validation=False):
+async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
     try:
         fiche_url = get_url_instance() + '/fiche.json'
         print("Charger fiche via %s" % fiche_url)
@@ -177,10 +177,9 @@ async def charger_fiche(ui_lock=None, no_validation=False):
         await sleep_ms(1)  # Yield
         if reponse.status_code != 200:
             raise Exception("fiche http status:%d" % reponse.status_code)
-        fiche_json = await reponse.json()
-        print("Fiche recue\n%s" % fiche_json)
-        if no_validation is True:
-            return fiche_json
+        
+        await reponse.read_text_into(buffer)
+        
     except Exception as e:
         print('Erreur chargement fiche')
         print_exception(e)
@@ -190,6 +189,16 @@ async def charger_fiche(ui_lock=None, no_validation=False):
         reponse.close()
         reponse = None
 
+        # Cleanup memoire
+        collect()
+        await sleep_ms(1)  # Yield
+
+    fiche_json = loads(buffer.get_data())
+    
+    print("Fiche recue\n%s" % fiche_json)
+    if no_validation is True:
+        return fiche_json
+
     info_cert = await verifier_message(fiche_json)
     if 'core' in info_cert['roles']:
         return fiche_json
@@ -198,7 +207,7 @@ async def charger_fiche(ui_lock=None, no_validation=False):
 
 
 # Recuperer la fiche (CA, chiffrage, etc)
-async def charger_relais(ui_lock=None, refresh=False):
+async def charger_relais(ui_lock=None, refresh=False, buffer=None):
     info_relais = None
     try:
         with open('relais.json') as fichier:
@@ -208,7 +217,7 @@ async def charger_relais(ui_lock=None, refresh=False):
     except (OSError, KeyError):
         print("relais.json non disponible")
     
-    fiche_json = await charger_fiche(ui_lock)
+    fiche_json = await charger_fiche(ui_lock, buffer=buffer)
     if fiche_json is not None:
         url_relais = [app['url'] for app in fiche_json['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
         
@@ -241,7 +250,7 @@ async def generer_message_timeinfo(timezone_str: str):
     return message_inscription
 
 
-async def charger_timeinfo(url_relai: str, refresh: False):
+async def charger_timeinfo(url_relai: str, buffer, refresh: False):
     
     offset_info = None
     try:
@@ -257,15 +266,28 @@ async def charger_timeinfo(url_relai: str, refresh: False):
     print("Charger information timezone %s" % url_relai)
     timezone_str = get_timezone()
     if timezone_str is not None:
+        buffer.set_text(dumps(await generer_message_timeinfo(timezone_str)))
+        
+        await sleep_ms(1)  # Yield
+        collect()
+        await sleep_ms(1)  # Yield
+        
         reponse = await requests.post(
             url_relai + '/' + CONST_PATH_TIMEINFO,
-            data=dumps(await generer_message_timeinfo(timezone_str)),
+            data=buffer.get_data(),
             headers={'Content-Type': 'application/json'}
         )
 
         try:
-            data = await reponse.json()
+            await buffer.read_text_into(buffer)
             reponse = None
+
+            await sleep_ms(1)  # Yield
+            collect()
+            await sleep_ms(1)  # Yield
+
+            # data = await reponse.json()
+            data = loads(buffer.get_data())
             offset = data['timezone_offset']
             print("Offset : %s" % offset)
             

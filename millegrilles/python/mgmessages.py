@@ -43,7 +43,7 @@ async def __signer_message(message, cle_privee=None, **kwargs):
     message = prep_message_1(message)
     
     # Signer
-    asyncio.sleep_ms(10)
+    await asyncio.sleep_ms(10)
     signature = __signer_message_2(message, cle_privee).decode('utf-8')
     # signature = __signer_message_2(message, cle_privee)
 
@@ -82,7 +82,7 @@ async def generer_entete(hachage,
 
     with open(certificat.PATH_CA_CERT, 'rb') as fichier:
         ca_der = fichier.read()
-    asyncio.sleep_ms(10)
+    await asyncio.sleep_ms(10)
     idmg = certificat.calculer_idmg(ca_der).decode('utf-8')
     
     cle_publique = None
@@ -94,9 +94,9 @@ async def generer_entete(hachage,
             with open(certificat.PATH_CLE_PRIVEE + '.new', 'rb') as fichier:
                 cle_privee = fichier.read()
                 
-        asyncio.sleep_ms(10)
+        await asyncio.sleep_ms(10)
         cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
-        asyncio.sleep_ms(10)
+        await asyncio.sleep_ms(10)
         cle_privee = None
         cle_publique = multibase.encode('base64', cle_publique)
 
@@ -182,7 +182,7 @@ async def verifier_message(message: dict):
     # Trier tous les champs
     message = prep_message_1(message)
 
-    asyncio.sleep_ms(1)
+    await asyncio.sleep_ms(1)
     verifier_signature(message, signature, info_certificat['public_key'])
     
     return info_certificat

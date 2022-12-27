@@ -16,7 +16,7 @@ import feed_display
 import mgmessages
 import wifi
 
-from polling_messages import PollingThread
+from polling_messages import PollingThread, BUFFER_MESSAGE
 from ledblink import led_executer_sequence
 from handler_devices import DeviceHandler
 from certificat import entretien_certificat as __entretien_certificat                       
@@ -185,7 +185,7 @@ class Runner:
         
         try:
             url_relai = self.__url_relais.pop()
-            await run_inscription(url_relai, self.__ui_lock)
+            await run_inscription(url_relai, self.__ui_lock, buffer=BUFFER_MESSAGE)
         except (AttributeError, IndexError):
             print("Aucun url relais")
             self.__url_relais = None  # Garanti un chargement via entretien
@@ -260,7 +260,7 @@ class Runner:
 
     async def charger_urls(self):
         if self.__wifi_ok is True:
-            relais = await config.charger_relais(self.__ui_lock)
+            relais = await config.charger_relais(self.__ui_lock, buffer=BUFFER_MESSAGE)
             self.set_relais(relais)
 
     def get_configuration_display(self):
@@ -305,7 +305,7 @@ class Runner:
         await config.initialisation()
         
     async def __recuperer_ca(self):
-        await config.recuperer_ca()
+        await config.recuperer_ca(buffer=BUFFER_MESSAGE)
 
     async def __main(self):
         self._mode_operation = await detecter_mode_operation()
