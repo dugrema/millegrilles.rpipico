@@ -2,7 +2,7 @@ import json
 import oryx_crypto
 import time
 import uasyncio as asyncio
-import urequests2 as requests
+from . import urequests2 as requests
 
 from os import mkdir, remove
 from math import ceil

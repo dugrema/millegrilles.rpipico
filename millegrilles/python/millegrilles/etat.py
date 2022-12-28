@@ -1,3 +1,4 @@
+from .mgmessages import signer_message
 
 CONST_NB_LECTURES_TEMP = 10
 
@@ -5,7 +6,6 @@ CONST_NB_LECTURES_TEMP = 10
 async def generer_etat(timeout_http=60):
     import wifi
     import time
-    from mgmessages import signer_message
     timestamp = time.time()
     etat = {
         'lectures_senseurs': {

@@ -1,13 +1,12 @@
 import time
 import uasyncio as asyncio
 
-import urequests2 as requests
-
 from json import dumps, loads
 from gc import collect
 from sys import print_exception
 
-from mgmessages import signer_message, verifier_message, BufferMessage
+from millegrilles import urequests2 as requests
+from millegrilles.mgmessages import signer_message, verifier_message, BufferMessage
 from handler_commandes import traiter_commande
 from config import get_http_timeout, charger_relais, set_configuration_display, \
      charger_timeinfo

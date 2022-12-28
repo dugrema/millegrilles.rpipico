@@ -10,22 +10,19 @@ from ntptime import settime
 from gc import collect
 from micropython import mem_info
 
-import const_leds
-import config
-import feed_display
-import mgmessages
-import wifi
+from millegrilles import const_leds
+from millegrilles.const_leds import CODE_POLLING_ERREUR_GENERALE
+from millegrilles import feed_display
+from millegrilles import mgmessages
+from millegrilles import wifi
+from millegrilles.ledblink import led_executer_sequence
 
+import config
 from polling_messages import PollingThread, BUFFER_MESSAGE
-from ledblink import led_executer_sequence
 from handler_devices import DeviceHandler
-from certificat import entretien_certificat as __entretien_certificat                       
+from millegrilles.certificat import entretien_certificat as __entretien_certificat                       
 from message_inscription import run_inscription, \
      verifier_renouveler_certificat as __verifier_renouveler_certificat
-#, \
-#     charger_timeinfo as __charger_timeinfo
-from const_leds import CODE_POLLING_ERREUR_GENERALE
-
 
 from config import \
      CONST_MODE_INIT, \

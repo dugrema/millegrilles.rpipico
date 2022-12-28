@@ -6,12 +6,14 @@ import time
 import uasyncio as asyncio
 import oryx_crypto
 
-import certificat
+from io import BytesIO
+
+from . import certificat
+from .certificat import valider_certificats
 
 from multiformats import multibase, multihash
 from collections import OrderedDict
-from certificat import valider_certificats
-from io import BytesIO
+
 
 VERSION_SIGNATURE = 2
 
@@ -123,7 +125,7 @@ def hacher_message(message):
     from oryx_crypto import blake2s
     from multiformats.multihash import wrap
     from multiformats.multibase import encode
-    from certificat import CONST_HACHAGE_FINGERPRINT
+    from millegrilles.certificat import CONST_HACHAGE_FINGERPRINT
     
     hachage = blake2s(message_stringify(message))
     fingerprint = wrap(CONST_HACHAGE_FINGERPRINT, hachage)
@@ -225,7 +227,7 @@ class UUID:
 
 def uuid4():
     """Generates a random UUID compliant to RFC 4122 pg.14"""
-    from certificat import rnd_bytes
+    from millegrilles.certificat import rnd_bytes
     
     random = bytearray(rnd_bytes(16))
     random[6] = (random[6] & 0x0F) | 0x40

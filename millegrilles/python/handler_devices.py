@@ -5,7 +5,7 @@ import uasyncio as asyncio
 from json import load
 from sys import print_exception
 
-from wifi import get_etat_wifi
+from millegrilles.wifi import get_etat_wifi
 
 CONST_FICHIER_DEVICES = const('devices.json')
 

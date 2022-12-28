@@ -8,12 +8,12 @@ from sys import print_exception
 from uasyncio import sleep, sleep_ms
 from gc import collect
 
-import urequests2 as requests
-
-from certificat import valider_certificats, charger_cle_publique, \
+from millegrilles import urequests2 as requests
+from millegrilles.certificat import valider_certificats, charger_cle_publique, \
      get_expiration_certificat_local, generer_cle_secrete, \
      PATH_CERT, PATH_CLE_PRIVEE, PATHNAME_RENOUVELER
-from mgmessages import signer_message, verifier_message
+from millegrilles.mgmessages import signer_message, verifier_message
+
 from config import get_user_id
 
 
@@ -160,7 +160,7 @@ async def recevoir_certificat(certificat):
 
 
 async def run_challenge(challenge, ui_lock=None):
-    from ledblink import led_executer_sequence
+    from millegrilles.ledblink import led_executer_sequence
     print("Run challenge %s" % challenge)
     await led_executer_sequence(challenge, 2, ui_lock=ui_lock)
 

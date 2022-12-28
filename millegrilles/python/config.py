@@ -1,14 +1,13 @@
 from json import load, loads, dump, dumps
 from os import stat
-from wifi import connect_wifi
 from uasyncio import sleep, sleep_ms
 from sys import print_exception
 from gc import collect
 
-import urequests2 as requests
-
-import wifi
-from mgmessages import verifier_message, signer_message
+from millegrilles import urequests2 as requests
+from millegrilles import wifi
+from millegrilles.wifi import connect_wifi
+from millegrilles.mgmessages import verifier_message, signer_message
 
 CONST_PATH_FICHIER_CONN = const('conn.json')
 CONST_PATH_FICHIER_DISPLAY = const('displays.json')
@@ -86,7 +85,7 @@ async def initialiser_wifi():
             
 
 async def recuperer_ca(buffer=None):
-    from certificat import sauvegarder_ca
+    from millegrilles.certificat import sauvegarder_ca
     
     print("Init millegrille")
     idmg = get_idmg()

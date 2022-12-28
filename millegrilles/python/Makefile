@@ -1,26 +1,31 @@
 MPYCROSS = ../../micropython/mpy-cross/build/mpy-cross
 
 SRC_PYTHON = \
-    appareil_millegrille.mpy baseconv.mpy handler_commandes.mpy ledblink.mpy message_inscription.mpy \
-    mgmessages.mpy polling_messages.mpy wifi.mpy handler_devices.mpy feed_display.mpy \
-    morphys.mpy urequests2.mpy certificat.mpy config.mpy const_leds.mpy \
-    bmp180_rpi.mpy lcd_api.mpy pico_i2c_lcd.mpy ssd1306.mpy \
-    logging.mpy
+    appareil_millegrille.mpy \
+    config.mpy \
+    handler_commandes.mpy \
+    handler_devices.mpy \
+    message_inscription.mpy \
+    polling_messages.mpy
 
 
-SRC_MULTIFORMATS = \
-    multiformats/converters.mpy multiformats/multibase.mpy multiformats/multihash.mpy
-
-SRC_UWEBSOCKETS = \
-    uwebsockets/client.mpy uwebsockets/protocol.mpy
+SRC_MILLEGRILLES = \
+    millegrilles/certificat.mpy \
+    millegrilles/const_leds.mpy \
+    millegrilles/etat.mpy \
+    millegrilles/feed_display.mpy \
+    millegrilles/ledblink.mpy \
+    millegrilles/mgmessages.mpy \
+    millegrilles/urequests2.mpy \
+    millegrilles/wifi.mpy
 
 %.mpy: %.py
 	$(MPYCROSS) -O1 -o build/$@ $<
 
 build_folders:
-	mkdir -p build/multiformats build/uwebsockets
+	mkdir -p build/millegrilles
 
-python: $(SRC_PYTHON) ${SRC_MULTIFORMATS} ${SRC_UWEBSOCKETS}
+python: $(SRC_PYTHON) ${SRC_MILLEGRILLES}
 
 build: build_folders python
 

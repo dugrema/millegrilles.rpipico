@@ -10,7 +10,7 @@ SRC_UWEBSOCKETS = \
     uwebsockets/client.mpy uwebsockets/protocol.mpy
 
 %.mpy: %.py
-	$(MPYCROSS) -O1 -o build/$@ $<
+	$(MPYCROSS) -O3 -o build/$@ $<
 
 build_folders:
 	mkdir -p build/multiformats build/uwebsockets
