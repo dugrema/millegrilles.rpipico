@@ -79,8 +79,9 @@ async def poll(websocket, buffer, timeout_http=60, generer_etat=None, ui_lock=No
         await asyncio.sleep_ms(300)
 
 
-async def requete_configuration_displays(url_relai: str, buffer):
-    requete = await signer_message(dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY)
+async def requete_configuration_displays(websocket, buffer):
+    requete = await signer_message(
+        dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY)
     buffer.set_text(dumps(requete))
     requete = None
 
@@ -88,6 +89,8 @@ async def requete_configuration_displays(url_relai: str, buffer):
     await asyncio.sleep_ms(1)
     collect()
     await asyncio.sleep_ms(1)
+    
+    websocket.send(buffer.get_data())
     
     #url_requete = url_relai + PATHNAME_REQUETE
     #print('Requete displays sur %s' % url_requete)
@@ -204,14 +207,14 @@ class PollingThread:
         
         if self.__refresh_step <= 1:
             # Recharger la configuration des displays
-            #await requete_configuration_displays(self.__url_relai, buffer=self.__buffer)
+            await requete_configuration_displays(self.__websocket, buffer=self.__buffer)
             self.__refresh_step = 2
 
         if self.__refresh_step <= 2:
             offset = await charger_timeinfo(
                 self.__websocket,
                 buffer=self.__buffer,
-                refresh=True)  # not self.__load_initial)
+                refresh=not self.__load_initial)
             print("Set offset %s" % offset)
             self.__appareil.set_timezone_offset(offset)
             self.__refresh_step = 3
@@ -234,21 +237,24 @@ class PollingThread:
         
         await self.connecter()
         
-        while expiration_thread > time.time():
-            if time.time() > self.__prochain_refresh_config:
-                await self._refresh_config()
-                await asyncio.sleep_ms(1)
-                collect()
-                await asyncio.sleep_ms(1)
+        try:
+            while expiration_thread > time.time():
+                if time.time() > self.__prochain_refresh_config:
+                    await self._refresh_config()
+                    await asyncio.sleep_ms(1)
+                    collect()
+                    await asyncio.sleep_ms(1)
 
-            try:
-                await self._poll()
-            except OSError as e:
-                if e.errno == -104:
-                    print("Connexion websocket fermee (serveur)")
-                    return
-                else:
-                    raise e
+                try:
+                    await self._poll()
+                except OSError as e:
+                    if e.errno == -104:
+                        print("Connexion websocket fermee (serveur)")
+                        return
+                    else:
+                        raise e
+        finally:
+            self.__websocket.close()
                 
     async def _poll(self):
         try:

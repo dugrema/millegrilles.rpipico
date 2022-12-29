@@ -1,8 +1,13 @@
-from config import set_configuration_display, set_timezone_offset
+from config import set_configuration_display, set_timezone_offset, \
+    set_configuration_display
 
 async def traiter_commande(appareil, commande: dict):
     print("Traiter : %s" % commande)
-    action = commande['en-tete']['action']
+    try:
+        action = commande['en-tete']['action']
+    except KeyError:
+        action = commande['_action']  # Correlation a la reponse d'action de requete
+        
     if action == 'challengeAppareil':
         await challenge_led_blink(commande)
     elif action == 'evenementMajDisplays':
@@ -14,6 +19,9 @@ async def traiter_commande(appareil, commande: dict):
         appareil.recevoir_lectures_externes(commande['lectures_senseurs'])
     elif action == 'timezoneInfo':
         await recevoir_timezone_offset(appareil, commande)
+    elif action == 'getAppareilDisplayConfiguration':
+        # Reponse display
+        await recevoir_configuration_display(commande)
     else:
         raise ValueError('Action inconnue : %s' % action)
 
@@ -32,3 +40,11 @@ async def recevoir_timezone_offset(appareil, commande):
         await set_timezone_offset(offset)
     except KeyError:
         print("offset absent du message")
+
+
+async def recevoir_configuration_display(reponse):
+    try:
+        displays = reponse['display_configuration']['configuration']['displays']
+        set_configuration_display(displays)
+    except KeyError:
+        print("Erreur reception displays %s" % reponse)
