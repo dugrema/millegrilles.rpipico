@@ -21,7 +21,7 @@ CONST_CHAMP_TIMEOUT = const('http_timeout')
 CONST_DOMAINE_SENSEURSPASSIFS = const('SenseursPassifs')
 CONST_REQUETE_DISPLAY = const('getAppareilDisplayConfiguration')
 
-CONST_DUREE_THREAD_POLLING = const(2 * 60)
+CONST_DUREE_THREAD_POLLING = const(3 * 60 * 60)
 CONST_EXPIRATION_CONFIG = const(20 * 60)
 
 
