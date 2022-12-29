@@ -47,9 +47,6 @@ async def __preparer_message(timeout_http, generer_etat, buffer):
 
 
 async def poll(websocket, buffer, timeout_http=60, generer_etat=None, ui_lock=None):
-    # Calculer limite de la periode de polling
-    expiration_polling = time.time() + timeout_http
-    
     buffer = await __preparer_message(timeout_http, generer_etat, buffer)
 
     # Cleanup memoire
@@ -61,6 +58,11 @@ async def poll(websocket, buffer, timeout_http=60, generer_etat=None, ui_lock=No
     # Emettre etat
     websocket.send(buffer.get_data())
     await asyncio.sleep_ms(1)  # Yield
+
+    # Calculer limite de la periode de polling
+    if timeout_http is None or timeout_http < 1:
+        timeout_http = 1  # Min pour executer entretien websocket
+    expiration_polling = time.time() + timeout_http
 
     # Poll socket
     while time.time() < expiration_polling:
@@ -76,7 +78,7 @@ async def poll(websocket, buffer, timeout_http=60, generer_etat=None, ui_lock=No
                 raise e
         
         # Intervalle polling socket
-        await asyncio.sleep_ms(300)
+        await asyncio.sleep_ms(100)
 
 
 async def requete_configuration_displays(websocket, buffer):
