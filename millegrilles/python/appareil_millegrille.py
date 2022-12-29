@@ -18,7 +18,7 @@ from millegrilles import wifi
 from millegrilles.ledblink import led_executer_sequence
 
 import config
-from polling_messages import PollingThread, BUFFER_MESSAGE
+from polling_messages import PollingThread
 from handler_devices import DeviceHandler
 from millegrilles.certificat import entretien_certificat as __entretien_certificat                       
 from message_inscription import run_inscription, \
@@ -37,6 +37,10 @@ CONST_NB_ERREURS_RESET = const(10)
 CONST_HTTP_TIMEOUT_DEFAULT = const(60)
 
 CONST_PATH_FICHIER_DISPLAY = const('displays.json')
+
+
+# Initialiser classe de buffer
+BUFFER_MESSAGE = mgmessages.BufferMessage()
 
 
 def set_time():
@@ -105,7 +109,7 @@ class Runner:
         self.__url_relais = None
         self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
         
-        self.__polling_thread = PollingThread(self)
+        self.__polling_thread = PollingThread(self, BUFFER_MESSAGE)
         self.__wifi_ok = False
         self.__ntp_ok = False
         self.__prochain_entretien_certificat = 0
@@ -295,7 +299,8 @@ class Runner:
             except Exception as e:
                 print("Erreur polling")
                 sys.print_exception(e)
-                await led_executer_sequence(CODE_POLLING_ERREUR_GENERALE, executions=2, ui_lock=self.__ui_lock)
+                await led_executer_sequence(
+                    CODE_POLLING_ERREUR_GENERALE, executions=2, ui_lock=self.__ui_lock)
                     
             await asyncio.sleep_ms(100)
 

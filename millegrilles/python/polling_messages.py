@@ -6,7 +6,7 @@ from gc import collect
 from sys import print_exception
 
 from millegrilles import urequests2 as requests
-from millegrilles.mgmessages import signer_message, verifier_message, BufferMessage
+from millegrilles.mgmessages import signer_message, verifier_message
 from handler_commandes import traiter_commande
 from config import get_http_timeout, charger_relais, set_configuration_display, \
      charger_timeinfo
@@ -24,15 +24,11 @@ CONST_DUREE_THREAD_POLLING = const(3 * 60 * 60)
 CONST_EXPIRATION_CONFIG = const(20 * 60)
 
 
-# Initialiser classe de buffer
-BUFFER_MESSAGE = BufferMessage()
-
-
 class HttpErrorException(Exception):
     pass
 
 
-async def __preparer_message(timeout_http, generer_etat):
+async def __preparer_message(timeout_http, generer_etat, buffer):
     # Genrer etat
     if generer_etat is not None:
         etat = await generer_etat()
@@ -44,13 +40,13 @@ async def __preparer_message(timeout_http, generer_etat):
 
     # Signer message
     etat = await signer_message(etat, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil')
-    BUFFER_MESSAGE.set_text(dumps(etat))
+    buffer.set_text(dumps(etat))
 
-    return BUFFER_MESSAGE
+    return buffer
 
 
-async def poll(url_relai: str, timeout_http=60, generer_etat=None, ui_lock=None):
-    buffer = await __preparer_message(timeout_http, generer_etat)
+async def poll(url_relai: str, buffer, timeout_http=60, generer_etat=None, ui_lock=None):
+    buffer = await __preparer_message(timeout_http, generer_etat, buffer)
 
     # Cleanup memoire
     await asyncio.sleep_ms(1)
@@ -80,7 +76,7 @@ async def requete_configuration_displays(url_relai: str, buffer):
             url_requete,
             data=buffer.get_data(),
             headers={'Content-Type': 'application/json'}
-        ))
+        ), buffer)
     except OSError as e:
         raise e  # Faire remonter erreur
     except Exception as e:
@@ -102,7 +98,7 @@ async def requete_configuration_displays(url_relai: str, buffer):
         print_exception(e)
 
 
-async def verifier_reponse(reponse):
+async def verifier_reponse(reponse, buffer):
     try:
         status = reponse.status_code
 
@@ -110,9 +106,9 @@ async def verifier_reponse(reponse):
             raise HttpErrorException('poll err http:%d' % status)
 
         # return await reponse.json()  # Note : close la reponse automatiquement
-        await reponse.read_text_into(BUFFER_MESSAGE)
+        await reponse.read_text_into(buffer)
         
-        return BUFFER_MESSAGE
+        return buffer
     finally:
         reponse.close()
 
@@ -127,7 +123,7 @@ async def _traiter_commande(appareil, reponse):
 
 class PollingThread:
 
-    def __init__(self, appareil):
+    def __init__(self, appareil, buffer):
         self.__appareil = appareil
         self.__timeout_http = 60
 
@@ -136,44 +132,42 @@ class PollingThread:
         self.__refresh_step = 0
         self.__url_relai = None
         self.__errnumber = 0
+        
+        self.__buffer = buffer
 
     async def preparer(self):
         self.__timeout_http = get_http_timeout()
+        
+    def entretien_url_relai(self):
+        if self.__url_relai is None:
+            self.__url_relai = self.__appareil.pop_relais()
+            if self.__url_relai is None:
+                raise Exception('URL relai None')
 
     def _refresh_config(self):
         # Forcer un refresh de la liste de relais (via fiche MilleGrille)
         print("Refresh config %d" % self.__refresh_step)
+        
+        # TODO - entretien / rotation URL relais
+        self.entretien_url_relai()
+        
         if self.__refresh_step <= 1:
-            relais = await charger_relais(
-                ui_lock=self.__appareil.ui_lock, refresh=not self.__load_initial, buffer=BUFFER_MESSAGE)
-            
-            if relais is not None:
-                self.__appareil.set_relais(relais)
-            relais = None
-
-            if self.__url_relai is None:
-                self.__url_relai = self.__appareil.pop_relais()
-
+            # Recharger la configuration des displays
+            await requete_configuration_displays(self.__url_relai, buffer=self.__buffer)
             self.__refresh_step = 2
             return
 
         if self.__refresh_step <= 2:
-            # Recharger la configuration des displays
-            await requete_configuration_displays(self.__url_relai, buffer=BUFFER_MESSAGE)
+            self.__appareil.set_timezone_offset(
+                await charger_timeinfo(self.__url_relai, buffer=self.__buffer, refresh=not self.__load_initial))
             self.__refresh_step = 3
             return
-
-        if self.__refresh_step <= 3:
-            self.__appareil.set_timezone_offset(
-                await charger_timeinfo(self.__url_relai, buffer=BUFFER_MESSAGE, refresh=not self.__load_initial))
-            self.__refresh_step = 4
-            return
         
-        if self.__refresh_step <= 4:
+        if self.__refresh_step <= 3:
             if self.__load_initial is False:
                 # Verifier si le certificat doit etre renouvelle
-                await verifier_renouveler_certificat(self.__url_relai, buffer=BUFFER_MESSAGE)
-            self.__refresh_step = 5
+                await verifier_renouveler_certificat(self.__url_relai, buffer=self.__buffer)
+            self.__refresh_step = 4
             return
         
         # Succes - ajuster prochain refresh
@@ -214,6 +208,7 @@ class PollingThread:
         try:
             reponse = await poll(
                 self.__url_relai,
+                self.__buffer,
                 self.__timeout_http,
                 self.__appareil.get_etat,
                 self.__appareil.ui_lock
