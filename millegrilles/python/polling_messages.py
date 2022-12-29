@@ -215,7 +215,7 @@ class PollingThread:
             )
 
             # Load dict de la reponse, verifier
-            buffer = await verifier_reponse(reponse)
+            buffer = await verifier_reponse(reponse, self.__buffer)
             reponse = None
 
             # Cleanup memoire - tout est copie dans le buffer
