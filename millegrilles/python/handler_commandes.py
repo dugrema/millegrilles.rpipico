@@ -1,5 +1,6 @@
 from config import set_configuration_display, set_timezone_offset, \
     set_configuration_display
+from message_inscription import recevoir_certificat
 
 async def traiter_commande(appareil, commande: dict):
     print("Traiter : %s" % commande)
@@ -22,6 +23,12 @@ async def traiter_commande(appareil, commande: dict):
     elif action == 'getAppareilDisplayConfiguration':
         # Reponse display
         await recevoir_configuration_display(commande)
+    elif action == 'signerAppareil':
+        try:
+            certificat = commande['certificat']
+            await recevoir_certificat(certificat)
+        except KeyError as e:
+            print("Erreur reception certificat KeyError %s" % str(e))
     else:
         raise ValueError('Action inconnue : %s' % action)
 

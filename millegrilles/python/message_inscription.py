@@ -263,3 +263,32 @@ async def verifier_renouveler_certificat(url_relai: str, buffer):
             pass  # On n'a pas recu le certificat
         else:
             await recevoir_certificat(certificat)
+
+
+async def verifier_renouveler_certificat_ws(websocket, buffer):
+    get_expiration_certificat_local()
+    if time.time() > (date_expiration - CONST_RENOUVELLEMENT_DELAI):
+       print("Cert renouvellement atteint")
+    else:
+        print("Cert valide jusqu'a %s" % date_expiration)
+        return False
+    
+    await generer_message_inscription(buffer, action='signerAppareil', domaine='SenseursPassifs')
+
+    # Garbage collect
+    sleep_ms(1)  # Yield
+    collect()
+    sleep_ms(1)  # Yield
+
+    websocket.send(buffer.get_data())
+
+    # # Extraire contenu de la reponse, cleanup
+    # if await valider_reponse(status_code, reponse_dict) is True:
+    #    # Extraire le certificat si fourni
+    #     try:
+    #         certificat = reponse_dict['certificat']
+    #     except KeyError:
+    #        pass  # On n'a pas recu le certificat
+    #     else:
+    #         await recevoir_certificat(certificat)
+

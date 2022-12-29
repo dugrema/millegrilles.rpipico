@@ -12,7 +12,7 @@ from handler_commandes import traiter_commande
 from config import get_http_timeout, charger_relais, set_configuration_display, \
      get_timezone, generer_message_timeinfo
 
-from message_inscription import verifier_renouveler_certificat
+from message_inscription import verifier_renouveler_certificat_ws
 
 PATHNAME_POLL = const('/poll')
 PATHNAME_REQUETE = const('/requete')
@@ -187,6 +187,7 @@ class PollingThread:
             # Recharger la configuration des displays
             await requete_configuration_displays(self.__websocket, buffer=self.__buffer)
             self.__refresh_step = 2
+            return
 
         if self.__refresh_step <= 2:
             offset = await charger_timeinfo(
@@ -196,12 +197,14 @@ class PollingThread:
             print("Set offset %s" % offset)
             self.__appareil.set_timezone_offset(offset)
             self.__refresh_step = 3
+            return
         
         if self.__refresh_step <= 3:
-            #if self.__load_initial is False:
-            #    # Verifier si le certificat doit etre renouvelle
-            #    await verifier_renouveler_certificat(self.__url_relai, buffer=self.__buffer)
+            if self.__load_initial is False:
+                # Verifier si le certificat doit etre renouvelle
+                await verifier_renouveler_certificat_ws(self.__websocket, buffer=self.__buffer)
             self.__refresh_step = 4
+            return
         
         # Succes - ajuster prochain refresh
         self.__load_initial = False  # Complete load initial
