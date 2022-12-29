@@ -246,10 +246,13 @@ class Websocket:
 
         buf = struct.pack('!H', code) + reason.encode('utf-8')
 
-        self.write_frame(OP_CLOSE, buf)
-        self._close()
+        try:
+            self.write_frame(OP_CLOSE, buf)
+        finally:
+            self._close()
 
     def _close(self):
         if __debug__: LOGGER.debug("Connection closed")
         self.open = False
         self.sock.close()
+        self.sock = None

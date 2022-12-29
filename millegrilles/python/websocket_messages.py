@@ -4,9 +4,9 @@ import uasyncio as asyncio
 from json import dumps, loads, load, dump
 from gc import collect
 from sys import print_exception
+from micropython import mem_info
 
 from uwebsockets.client import connect
-from millegrilles import urequests2 as requests
 from millegrilles.mgmessages import signer_message, verifier_message
 from handler_commandes import traiter_commande
 from config import get_http_timeout, charger_relais, set_configuration_display, \
@@ -21,7 +21,7 @@ CONST_CHAMP_TIMEOUT = const('http_timeout')
 CONST_DOMAINE_SENSEURSPASSIFS = const('SenseursPassifs')
 CONST_REQUETE_DISPLAY = const('getAppareilDisplayConfiguration')
 
-CONST_DUREE_THREAD_POLLING = const(3 * 60 * 60)
+CONST_DUREE_THREAD_POLLING = const(2 * 60)
 CONST_EXPIRATION_CONFIG = const(20 * 60)
 
 
@@ -93,34 +93,6 @@ async def requete_configuration_displays(websocket, buffer):
     await asyncio.sleep_ms(1)
     
     websocket.send(buffer.get_data())
-    
-    #url_requete = url_relai + PATHNAME_REQUETE
-    #print('Requete displays sur %s' % url_requete)
-    #try:
-    #    buffer = await verifier_reponse(await requests.post(
-    #        url_requete,
-    #        data=buffer.get_data(),
-    #        headers={'Content-Type': 'application/json'}
-    #    ), buffer)
-    #except OSError as e:
-    #    raise e  # Faire remonter erreur
-    #except Exception as e:
-    #    print('Erreur requete configuration')
-    #    print_exception(e)
-    #    return
-
-    #try:
-    #    reponse = loads(buffer.get_data())
-    #    if reponse['ok'] == True:
-    #        info_certificat = await verifier_message(reponse)
-    #        if CONST_DOMAINE_SENSEURSPASSIFS in info_certificat['domaines']:
-    #            try:
-    #                set_configuration_display(reponse['display_configuration']['configuration']['displays'])
-    #            except KeyError:
-    #                print('Configuration displays sans information - pass')
-    #except Exception as e:
-    #    print("Erreur validation reponse displays")
-    #    print_exception(e)
 
 
 async def charger_timeinfo(websocket, buffer, refresh: False):
@@ -187,12 +159,16 @@ class PollingThread:
         # Assigner un URL
         self.entretien_url_relai()
         
+        print("PRE CONNECT")
+        mem_info()
+
         url_connexion = self.__url_relai + '/ws'
         url_connexion = url_connexion.replace('https://', 'wss://')
         print("URL connexion websocket %s" % url_connexion)
         self.__websocket = connect(url_connexion)
         self.__websocket.setblocking(False)
         print("websocket connecte")
+        mem_info()
         
     def entretien_url_relai(self):
         if self.__url_relai is None:
@@ -204,7 +180,7 @@ class PollingThread:
         # Forcer un refresh de la liste de relais (via fiche MilleGrille)
         print("Refresh config %d" % self.__refresh_step)
         
-        # TODO - entretien / rotation URL relais
+        # Entretien / rotation URL relais
         self.entretien_url_relai()
         
         if self.__refresh_step <= 1:
@@ -237,9 +213,8 @@ class PollingThread:
         # Faire expirer la thread pour reloader la fiche/url, entretien certificat
         expiration_thread = time.time() + CONST_DUREE_THREAD_POLLING
         
-        await self.connecter()
-        
         try:
+            await self.connecter()
             while expiration_thread > time.time():
                 if time.time() > self.__prochain_refresh_config:
                     await self._refresh_config()
@@ -256,8 +231,14 @@ class PollingThread:
                     else:
                         raise e
         finally:
+            print("Close websocket")
+            mem_info()
             self.__websocket.close()
-                
+            self.__websocket = None
+            collect()
+            print("Socket closed")
+            mem_info()
+            
     async def _poll(self):
         try:
             reponse = await poll(
