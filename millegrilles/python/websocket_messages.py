@@ -1,7 +1,7 @@
 import time
 import uasyncio as asyncio
 
-from json import dumps, loads
+from json import dumps, loads, load, dump
 from gc import collect
 from sys import print_exception
 
@@ -10,7 +10,7 @@ from millegrilles import urequests2 as requests
 from millegrilles.mgmessages import signer_message, verifier_message
 from handler_commandes import traiter_commande
 from config import get_http_timeout, charger_relais, set_configuration_display, \
-     charger_timeinfo
+     get_timezone, generer_message_timeinfo
 
 from message_inscription import verifier_renouveler_certificat
 
@@ -118,6 +118,40 @@ async def requete_configuration_displays(url_relai: str, buffer):
     #    print_exception(e)
 
 
+async def charger_timeinfo(websocket, buffer, refresh: False):
+    
+    offset_info = None
+    try:
+        with open('tzoffset.json', 'rb') as fichier:
+            offset_info = load(fichier)
+            if refresh is False:
+                return offset_info['offset']
+    except OSError:
+        print('tzoffset.json absent')
+    except KeyError:
+        print('tzoffset.json erreur contenu')
+
+    if offset_info is None:
+        # Generer fichier dummy
+        offset_info = {'offset': 0}
+        with open('tzoffset.json', 'wb') as fichier:
+            dump(offset_info, fichier)
+
+    timezone_str = get_timezone()
+    if timezone_str is not None:
+        print("Charger information timezone %s" % timezone_str)
+        buffer.set_text(dumps(await generer_message_timeinfo(timezone_str)))
+        
+        await asyncio.sleep_ms(1)  # Yield
+        collect()
+        await asyncio.sleep_ms(1)  # Yield
+
+        # Emettre requete
+        websocket.send(buffer.get_data())
+
+    return offset_info
+
+
 async def verifier_signature(reponse):
     return await verifier_message(reponse)
 
@@ -165,35 +199,28 @@ class PollingThread:
         # Forcer un refresh de la liste de relais (via fiche MilleGrille)
         print("Refresh config %d" % self.__refresh_step)
         
-        # Bypass, TODO fixme
-        self.__load_initial = False  # Complete load initial
-        self.__prochain_refresh_config = CONST_EXPIRATION_CONFIG + time.time()
-        self.__refresh_step = 0
-        print("Refresh config complete")
-        return
-        # Fin bypass, TODO fixme
-        
         # TODO - entretien / rotation URL relais
         self.entretien_url_relai()
         
         if self.__refresh_step <= 1:
             # Recharger la configuration des displays
-            await requete_configuration_displays(self.__url_relai, buffer=self.__buffer)
+            #await requete_configuration_displays(self.__url_relai, buffer=self.__buffer)
             self.__refresh_step = 2
-            return
 
         if self.__refresh_step <= 2:
-            self.__appareil.set_timezone_offset(
-                await charger_timeinfo(self.__url_relai, buffer=self.__buffer, refresh=not self.__load_initial))
+            offset = await charger_timeinfo(
+                self.__websocket,
+                buffer=self.__buffer,
+                refresh=True)  # not self.__load_initial)
+            print("Set offset %s" % offset)
+            self.__appareil.set_timezone_offset(offset)
             self.__refresh_step = 3
-            return
         
         if self.__refresh_step <= 3:
-            if self.__load_initial is False:
-                # Verifier si le certificat doit etre renouvelle
-                await verifier_renouveler_certificat(self.__url_relai, buffer=self.__buffer)
+            #if self.__load_initial is False:
+            #    # Verifier si le certificat doit etre renouvelle
+            #    await verifier_renouveler_certificat(self.__url_relai, buffer=self.__buffer)
             self.__refresh_step = 4
-            return
         
         # Succes - ajuster prochain refresh
         self.__load_initial = False  # Complete load initial
@@ -210,29 +237,18 @@ class PollingThread:
         while expiration_thread > time.time():
             if time.time() > self.__prochain_refresh_config:
                 await self._refresh_config()
-                await asyncio.sleep_ms(200)
+                await asyncio.sleep_ms(1)
                 collect()
-                await asyncio.sleep_ms(500)
+                await asyncio.sleep_ms(1)
 
-            if self.__url_relai is not None:
-                try:
-                    await self._poll()
-                except OSError as e:
-                    if e.errno == 12:
-                        e = None
-                        print("ENOMEM poll - reessai 1")
-                        await asyncio.sleep_ms(500)
-                        collect()
-                        await asyncio.sleep_ms(1)  # Yield
-                        await self._poll()
-                    elif e.errno == -104:
-                        print("Connexion websocket fermee (serveur)")
-                        return
-                    else:
-                        raise e
-            else:
-                print("Aucun relai, skip polling")
-                await asyncio.sleep(10)
+            try:
+                await self._poll()
+            except OSError as e:
+                if e.errno == -104:
+                    print("Connexion websocket fermee (serveur)")
+                    return
+                else:
+                    raise e
                 
     async def _poll(self):
         try:
@@ -246,7 +262,7 @@ class PollingThread:
 
             if reponse is not None and len(reponse) > 0:
                 # Remettre memoryview dans buffer - ajuste len
-                buffer.set_data(reponse)
+                self.__buffer.set_bytes(reponse)
                 reponse = None
 
                 # Cleanup memoire - tout est copie dans le buffer
@@ -254,16 +270,14 @@ class PollingThread:
                 collect()
                 await asyncio.sleep_ms(1)  # Yield
                 
-                reponse = loads(buffer.get_data())
+                reponse = loads(self.__buffer.get_data())
                 info_certificat = await verifier_signature(reponse)
+                print("Message websocket recu (valide)")
 
                 # Cleanup
                 info_certificat = None
             
-                if reponse.get('ok') is False:
-                    print("Polling complete, msg %s" % reponse.get('err'))
-                else:
-                    await _traiter_commande(self.__appareil, reponse)
+                await _traiter_commande(self.__appareil, reponse)
 
             # Cleanup
             reponse = None

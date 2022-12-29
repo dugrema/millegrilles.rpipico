@@ -154,6 +154,23 @@ async def get_timezone_offset(self):
         sys.print_exception(e)
         e = None
 
+
+async def set_timezone_offset(offset):
+    print("Offset : %s" % offset)
+
+    # Charger info, aucun write si information non changee
+    offset_info = None
+    try:
+        with open('tzoffset.json', 'rb') as fichier:
+            offset_info = load(fichier)
+    except OSError:
+        print('tzoffset.json absent')
+
+    if offset_info is None or offset_info['offset'] != offset:
+        with open('tzoffset.json', 'wb') as fichier:
+            dump({'offset': offset}, fichier)
+
+
 def set_configuration_display(configuration: dict):
     # print('Maj configuration display')
     with open(CONST_PATH_FICHIER_DISPLAY, 'wb') as fichier:
