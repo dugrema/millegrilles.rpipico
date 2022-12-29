@@ -254,9 +254,18 @@ class BufferMessage:
         self.__len_courant = len(data)
         self.__buffer[:self.__len_courant] = data
 
+    def set_len(self, len_data):
+        if len_data > len(self.__buffer):
+            raise ValueError('overflow')
+        self.__len_courant = len_data
+
     def clear(self):
         self.__len_courant = 0
         self.__buffer.clear()
+
+    @property
+    def buffer(self):
+        return self.__buffer
 
     def __iter__(self):
         for i in range(0, self.__len_courant):

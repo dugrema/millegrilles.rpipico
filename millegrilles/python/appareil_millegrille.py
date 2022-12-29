@@ -18,7 +18,7 @@ from millegrilles import wifi
 from millegrilles.ledblink import led_executer_sequence
 
 import config
-from polling_messages import PollingThread
+from websocket_messages import PollingThread
 from handler_devices import DeviceHandler
 from millegrilles.certificat import entretien_certificat as __entretien_certificat                       
 from message_inscription import run_inscription, \
