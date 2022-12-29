@@ -69,7 +69,7 @@ async def poll(websocket, buffer, timeout_http=60, generer_etat=None, ui_lock=No
         try:
             reponse = websocket.recv(buffer.buffer)
             if reponse is not None and len(reponse) > 0:
-                print("Reponse buffer %s" % reponse)
+                print("Reponse buffer taille %d" % len(reponse))
                 return reponse
         except OSError as e:
             if e.errno == -110:
@@ -277,15 +277,19 @@ class PollingThread:
                 await asyncio.sleep_ms(1)  # Yield
                 collect()
                 await asyncio.sleep_ms(1)  # Yield
-                
-                reponse = loads(self.__buffer.get_data())
-                info_certificat = await verifier_signature(reponse)
-                print("Message websocket recu (valide)")
 
-                # Cleanup
-                info_certificat = None
+                try:
+                    reponse = loads(self.__buffer.get_data())
+                    info_certificat = await verifier_signature(reponse)
+                    print("Message websocket recu (valide)")
+
+                    # Cleanup
+                    info_certificat = None
             
-                await _traiter_commande(self.__appareil, reponse)
+                    await _traiter_commande(self.__appareil, reponse)
+                except KeyError as e:
+                    print("Erreur reception KeyError %s" % str(e))
+                    print("ERR Message\n%s" % reponse)
 
             # Cleanup
             reponse = None

@@ -109,7 +109,6 @@ class Runner:
         self.__url_relais = None
         self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
         
-        self.__polling_thread = PollingThread(self, BUFFER_MESSAGE)
         self.__wifi_ok = False
         self.__ntp_ok = False
         self.__prochain_entretien_certificat = 0
@@ -286,23 +285,10 @@ class Runner:
         """
         Main thread d'execution du polling/commandes
         """
-        while self._mode_operation == CONST_MODE_POLLING:
-            try:
-                collect()
-                # Polling
-                await self.__polling_thread.run()
- 
-            except OSError as ose:
-                # Erreur OS (e.g. 12:memoire ou 6:WIFI), sortir de polling
-                raise ose
-            
-            except Exception as e:
-                print("Erreur polling")
-                sys.print_exception(e)
-                await led_executer_sequence(
-                    CODE_POLLING_ERREUR_GENERALE, executions=2, ui_lock=self.__ui_lock)
-                    
-            await asyncio.sleep_ms(100)
+        collect()
+        polling_thread = PollingThread(self, BUFFER_MESSAGE)
+        await polling_thread.preparer()
+        await polling_thread.run()
 
     async def __initialisation(self):
         await config.initialisation()
@@ -313,8 +299,6 @@ class Runner:
     async def __main(self):
         self._mode_operation = await detecter_mode_operation()
         print("Mode operation initial %d" % self._mode_operation)
-        
-        await self.__polling_thread.preparer()
         
         await led_executer_sequence(const_leds.CODE_MAIN_DEMARRAGE, executions=1, ui_lock=self.__ui_lock)
         while True:
@@ -355,15 +339,18 @@ class Runner:
                         print("ENOMEM count:%d, reset" % self.__erreurs_enomem)
                         reboot(e)
                     
-                    print("Erreur memoire no %d\n%s" % (self.__erreurs_enomem, mem_info()))
+                    print("Erreur memoire no %d" % self.__erreurs_enomem)
                     sys.print_exception(e)
                     collect()
+                    self.afficher_info()
                     await led_executer_sequence(
                         const_leds.CODE_ERREUR_MEMOIRE, executions=1, ui_lock=self.__ui_lock)
 
                 else:
                     print("OSError main")
                     sys.print_exception(e)
+                    collect()
+                    self.afficher_info()                    
                     await asyncio.sleep(60)
 
             except MemoryError as e:
@@ -376,11 +363,13 @@ class Runner:
                 sys.print_exception(e)
                 print("Erreur memoire no %d\n%s" % (self.__erreurs_memory, mem_info()))
                 collect()
-                print("Memoire post collect\n%s" % mem_info())
+                self.afficher_info()
                 await asyncio.sleep_ms(50)
             except Exception as e:
                 print("Erreur main")
+                collect()
                 sys.print_exception(e)
+                self.afficher_info()                
 
             await led_executer_sequence(const_leds.CODE_MAIN_ERREUR_GENERALE, 4, self.__ui_lock)
     
