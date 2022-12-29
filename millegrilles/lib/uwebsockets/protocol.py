@@ -232,6 +232,8 @@ class Websocket:
             buf = buf.encode('utf-8')
         elif isinstance(buf, bytes):
             opcode = OP_BYTES
+        elif isinstance(buf, memoryview):
+            opcode = OP_BYTES
         else:
             raise TypeError()
 
