@@ -223,44 +223,6 @@ class DriverBmp180(Driver):
 DRIVERS['BMP180'] = DriverBmp180
 
 
-class DummyOutput(Driver):
-    
-    def __init__(self, appareil, params, busses, ui_lock):
-        super().__init__(appareil, params, busses, ui_lock)
-        self.__instance = None
-        self.__busses = busses
-    
-    async def load(self):
-        pass
-    
-    async def run_display(self, feeds):
-        data_generator = feeds(name=self.__class__.__name__)
-        while True:
-            data_lu = False
-            
-            lignes = data_generator.generate()
-            if lignes is not None:
-                for ligne, flag, duree in lignes:
-                    print("Dummy output ligne : %s, flag: %s" % (ligne, flag))
-                    data_lu = True
-                    await asyncio.sleep(5)
-            
-            if data_lu is False:
-                # Aucun data
-                await asyncio.sleep(10)
-                
-    def get_display_params(self):
-        return {
-            'name': 'DummyOutput',
-            'format': 'text',
-            'width': 80,
-            'height': 20,
-        }
-
-
-DRIVERS['DUMMYOUTPUT'] = DummyOutput
-
-
 class OutputLignes(Driver):
     
     def __init__(self, appareil, params, busses, ui_lock: asyncio.Event, nb_chars=16, nb_lignes=2, duree_afficher_datetime=10):
@@ -349,6 +311,53 @@ class OutputLignes(Driver):
             'width': self._nb_chars,
             'height': self._nb_lignes,
         }
+
+
+class DummyOutput(OutputLignes):
+    
+    #def __init__(self, appareil, params, busses, ui_lock):
+    #    super().__init__(appareil, params, busses, ui_lock)
+    def __init__(self, appareil, params, busses, ui_lock):
+        super().__init__(appareil, params, busses, ui_lock, 80, 8)
+    
+    def _get_instance(self):
+        return None
+    
+    async def preparer_ligne(self, data, flag=None):
+        print("DummyOutput: %s (%s)" % (data, flag))
+        
+    async def show(self, attente=5.0):
+        await asyncio.sleep(attente)
+        
+    #async def load(self):
+    #    pass
+    
+    #async def run_display(self, feeds):
+    #    data_generator = feeds(name=self.__class__.__name__)
+    #    while True:
+    #        data_lu = False
+    #        
+    #        lignes = data_generator.generate()
+    #        if lignes is not None:
+    #            for ligne, flag, duree in lignes:
+    #                print("DummyOutput: %s, flag: %s" % (ligne, flag))
+    #                data_lu = True
+    #                await asyncio.sleep(5)
+    #        
+    #        if data_lu is False:
+    #            # Aucun data
+    #            await asyncio.sleep(10)
+                
+    #def get_display_params(self):
+    #    return {
+    #        'name': 'DummyOutput',
+    #        'format': 'text',
+    #        'width': 80,
+    #        'height': 20,
+    #    }
+
+
+DRIVERS['DUMMYOUTPUT'] = DummyOutput
 
 
 class LCD1602(OutputLignes):
