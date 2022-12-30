@@ -1,5 +1,7 @@
 from math import ceil
 
+MSG_WIFI_OFFLINE = const('WIFI OFFLINE')
+
 class FeedDisplay:
     
     def __init__(self, appareil):
@@ -26,6 +28,8 @@ class FeedDisplayDefault(FeedDisplay):
         ligne_mode = 'Mode: {:02d}'.format(self._appareil.mode_operation)
         
         data_lignes = ['WIFI IP', wifi_ip, ligne_mode]
+        if self._appareil.wifi_ok is not True:
+            data_lignes.append(MSG_WIFI_OFFLINE)
         while len(data_lignes) > 0:
             yield data_lignes.pop(0), None, None
 

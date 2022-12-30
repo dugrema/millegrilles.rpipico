@@ -4,7 +4,6 @@ SRC_PYTHON = \
     appareil_millegrille.mpy \
     config.mpy \
     handler_commandes.mpy \
-    handler_devices.mpy \
     message_inscription.mpy \
     polling_messages.mpy \
     websocket_messages.mpy
