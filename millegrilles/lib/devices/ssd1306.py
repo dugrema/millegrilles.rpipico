@@ -2,7 +2,7 @@ import uasyncio as asyncio
 
 from handler_devices import Driver
 
-from .display import OutputLignes
+from devices.display import OutputLignes
 
 
 class Ssd1306(OutputLignes):
@@ -34,7 +34,6 @@ class Ssd1306(OutputLignes):
         self.__ligne = 0
         await self._ui_lock.acquire()
         try:
-            self._instance.blink_cursor_off()  # Des fois le curseur apparait (bug)
             self._instance.show()
         finally:
             self._ui_lock.release()

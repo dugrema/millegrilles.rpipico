@@ -1,5 +1,6 @@
 import onewire
 import uasyncio as asyncio
+import ubinascii as binascii
 from machine import Pin
 
 from handler_devices import Driver
