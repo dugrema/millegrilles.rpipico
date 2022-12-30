@@ -151,6 +151,8 @@ class PollingThread:
         
         self.__buffer = buffer
         self.__websocket = None
+        
+        self.__nie_count = 0
 
     async def preparer(self):
         self.__timeout_http = get_http_timeout()
@@ -171,17 +173,17 @@ class PollingThread:
         mem_info()
         
     def entretien_url_relai(self):
-        if self.__url_relai is None:
+        if self.__url_relai is None or self.__nie_count >= 3:
             self.__url_relai = self.__appareil.pop_relais()
-            if self.__url_relai is None:
-                raise Exception('URL relai None')
+            print("Utilisation relai %s" % self.__url_relai)
+            self.__nie_count = 0  # Reset compte erreurs connexion
+
+        if self.__url_relai is None:
+            raise Exception('URL relai None')
 
     def _refresh_config(self):
         # Forcer un refresh de la liste de relais (via fiche MilleGrille)
         print("Refresh config %d" % self.__refresh_step)
-        
-        # Entretien / rotation URL relais
-        self.entretien_url_relai()
         
         if self.__refresh_step <= 1:
             # Recharger la configuration des displays
@@ -216,31 +218,59 @@ class PollingThread:
         # Faire expirer la thread pour reloader la fiche/url, entretien certificat
         expiration_thread = time.time() + CONST_DUREE_THREAD_POLLING
         
-        try:
-            await self.connecter()
-            while expiration_thread > time.time():
-                if time.time() > self.__prochain_refresh_config:
-                    await self._refresh_config()
-                    await asyncio.sleep_ms(1)
-                    collect()
-                    await asyncio.sleep_ms(1)
-
+        while expiration_thread > time.time():
+            try:
+                # Connecter
                 try:
-                    await self._poll()
+                    await self.connecter()
                 except OSError as e:
-                    if e.errno == -104:
-                        print("Connexion websocket fermee (serveur)")
-                        return
+                    if e.errno == 104:
+                        # ECONNRESET
+                        self.__nie_count += 1
+                        await asyncio.sleep_ms(500)
+                        continue  # Retry
                     else:
                         raise e
-        finally:
-            print("Close websocket")
-            mem_info()
-            self.__websocket.close()
-            self.__websocket = None
-            collect()
-            print("Socket closed")
-            mem_info()
+                    
+                # Boucle polling sur connexion websocket
+                while expiration_thread > time.time():
+                    if time.time() > self.__prochain_refresh_config:
+                        await self._refresh_config()
+                        await asyncio.sleep_ms(1)
+                        collect()
+                        await asyncio.sleep_ms(1)
+
+                    try:
+                        await self._poll()
+                        self.__nie_count = 0  # Reset erreurs
+                    except NotImplementedError:
+                        self.__nie_count += 1
+                        print("Erreur websocket (NotImplementedError)")
+                        break  # Break inner loop
+                    except OSError as e:
+                        if e.errno == -104:
+                            print("Connexion websocket fermee (serveur)")
+                            self.__nie_count += 1
+                            break  # Break inner loop
+                        else:
+                            # Erreur non geree, exit polling
+                            raise e
+            finally:
+                print("Close websocket")
+                mem_info()
+                try:
+                    self.__websocket.close()
+                except AttributeError:
+                    pass  # Websocket est None
+                except OSError as e:
+                    if e.errno == -104:
+                        pass  # Erreur frame fermeture - OK
+                    else:
+                        raise e
+                self.__websocket = None
+                collect()
+                print("Socket closed")
+                mem_info()
             
     async def _poll(self):
         try:
