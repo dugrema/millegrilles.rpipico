@@ -431,6 +431,7 @@ class Ssd1306(OutputLignes):
         self.__ligne = 0
         await self._ui_lock.acquire()
         try:
+            self._instance.blink_cursor_off()  # Des fois le curseur apparait (bug)
             self._instance.show()
         finally:
             self._ui_lock.release()

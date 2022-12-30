@@ -6,7 +6,8 @@ SRC_PYTHON = \
     handler_commandes.mpy \
     handler_devices.mpy \
     message_inscription.mpy \
-    polling_messages.mpy
+    polling_messages.mpy \
+    websocket_messages.mpy
 
 
 SRC_MILLEGRILLES = \
