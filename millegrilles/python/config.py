@@ -90,7 +90,7 @@ async def recuperer_ca(buffer=None):
     print("Init millegrille")
     idmg = get_idmg()
     fiche = await charger_fiche(no_validation=True, buffer=buffer)
-    del fiche['_millegrille']
+    # del fiche['_millegrille']
     
     if fiche['idmg'] != idmg:
         raise Exception('IDMG mismatch')
@@ -99,6 +99,14 @@ async def recuperer_ca(buffer=None):
     
     # Sauvegarder le certificat CA
     sauvegarder_ca(fiche['ca'], idmg)
+    
+    # Valider la fiche et conserver relais
+    info_cert = await verifier_message(fiche)
+    if 'core' not in info_cert['roles']:
+        raise Exception("Fiche signee par mauvais role")
+
+    # Sauvegarder les relais dans relais.json
+    sauvegarder_relais(fiche)
 
 
 #async def init_cle_privee(force=False):
@@ -249,6 +257,30 @@ async def charger_relais(ui_lock=None, refresh=False, buffer=None):
         return url_relais
         
     return None
+
+
+def sauvegarder_relais(fiche: dict):
+    info_relais = None
+    try:
+        with open('relais.json') as fichier:
+            info_relais = load(fichier)
+            if refresh is False:
+                return info_relais['relais']
+    except (OSError, KeyError):
+        print("relais.json non disponible")
+
+    url_relais = [app['url'] for app in fiche['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
+        
+    if info_relais is None or info_relais['relais'] != url_relais:
+        print('Sauvegarder relais.json maj')
+        try:
+            with open('relais.json', 'wb') as fichier:
+                dump({'relais': url_relais}, fichier)
+        except Exception as e:
+            print('Erreur sauvegarde relais.json')
+            print_exception(e)
+    
+    return url_relais
 
 
 async def generer_message_timeinfo(timezone_str: str):
