@@ -40,7 +40,7 @@ CONST_PATH_FICHIER_DISPLAY = const('displays.json')
 
 
 # Initialiser classe de buffer
-BUFFER_MESSAGE = mgmessages.BufferMessage()
+BUFFER_MESSAGE = mgmessages.BufferMessage(16*1024)
 
 
 def set_time():
