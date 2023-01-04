@@ -26,7 +26,7 @@ class Driver:
 
     @property
     def device_id(self):
-        return self._params['driver']
+        return self._params['driver'].replace('.', '_')
 
 
 class DeviceHandler:

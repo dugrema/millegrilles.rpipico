@@ -32,3 +32,6 @@ class DriverBmp180(Driver):
             }
         }
 
+    @property
+    def device_id(self):
+        return 'bmp180'
