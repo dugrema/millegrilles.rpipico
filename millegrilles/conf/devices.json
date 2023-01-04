@@ -3,12 +3,12 @@
         {"driver": "i2c", "bus": 0, "sda_pin": 8, "scl_pin": 9, "freq": 100000}
     ],
     "devices": [
-        {"driver": "RPiPicoW"},
-        {"driver": "dht", "model": "DHT22", "pin": 28},
-        {"driver": "onewire", "models": ["DS18X20"], "pin": 22},
-        {"driver": "bmp180", "bus": 0},
-        {"driver": "dummyoutput"},
-        {"driver": "lcd1602", "model": "i2c", "bus": 0},
-        {"driver": "ssd1306", "model": "i2c", "bus": 0}
+        {"driver": "devices.rpipico.RPiPicoW"},
+        {"driver": "devices.dht.DriverDHT", "model": "DHT22", "pin": 28},
+        {"driver": "devices.onewire.DriverOnewire", "models": ["DS18X20"], "pin": 22},
+        {"driver": "devices.bmp.DriverBmp180", "bus": 0},
+        {"driver": "devices.display.DummyOutput"},
+        {"driver": "devices.lcd1602.LCD1602", "model": "i2c", "bus": 0},
+        {"driver": "devices.ssd1306.Ssd1306", "model": "i2c", "bus": 0}
     ]
 }

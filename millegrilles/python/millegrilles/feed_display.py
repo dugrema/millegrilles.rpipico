@@ -1,4 +1,6 @@
 from math import ceil
+from sys import print_exception
+from time import time
 
 MSG_WIFI_OFFLINE = const('WIFI OFFLINE')
 
@@ -56,10 +58,17 @@ class FeedDisplayCustom(FeedDisplay):
         
         if group is None:
             # print('Display group None')
+            if self._appareil.wifi_ok is not True:
+                yield MSG_WIFI_OFFLINE, None, None
             for ligne in lignes:
                 yield self.formatter_ligne(ligne)
         else:
             # print('Display group %s' % group)
+            if self._appareil.wifi_ok is not True:
+                yield MSG_WIFI_OFFLINE, None, None
+                for _ in range(1, group):
+                    yield '', None, None
+            
             while len(lignes) > 0:
                 lignes_courantes = lignes[:group]
                 lignes = lignes[group:]
@@ -74,9 +83,6 @@ class FeedDisplayCustom(FeedDisplay):
                         yield self.formatter_ligne(ligne)
 
     def formatter_ligne(self, ligne):
-        from sys import print_exception
-        from time import time
-        
         masque = ligne['masque']
         duree = ligne.get('duree')
         flag = None

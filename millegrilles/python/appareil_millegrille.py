@@ -12,7 +12,8 @@ from micropython import mem_info
 
 from millegrilles import const_leds
 from millegrilles.const_leds import CODE_POLLING_ERREUR_GENERALE
-from millegrilles import feed_display
+#from millegrilles import feed_display
+import feed_display
 from millegrilles import mgmessages
 from millegrilles import wifi
 from millegrilles.ledblink import led_executer_sequence
@@ -149,6 +150,10 @@ class Runner:
     @property
     def ui_lock(self):
         return self.__ui_lock
+    
+    @property
+    def wifi_ok(self):
+        return self.__wifi_ok
     
     def reset_erreurs(self):
         self.__erreurs_memory = 0
