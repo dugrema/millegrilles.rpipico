@@ -168,51 +168,46 @@ async def run_challenge(challenge, ui_lock=None):
 async def run_inscription(url_relai: str, ui_lock, buffer):
     url_inscription = url_relai + CONST_PATH_INSCRIPTION
     certificat_recu = False
-    while certificat_recu is False:
-        try:
-            # Faire une demande d'inscription
-            await generer_message_inscription(buffer)
+    try:
+        # Faire une demande d'inscription
+        await generer_message_inscription(buffer)
+        
+        # Garbage collect
+        await sleep_ms(1)
+        collect()
+        await sleep_ms(1)
+        
+        status_code, buffer_reponse = await post_inscription(url_inscription, buffer)
+        
+        # Garbage collect
+        await sleep_ms(1)  # Yield
+        collect()
+        await sleep_ms(1)  # Yield
+        
+        reponse_dict = json.loads(buffer_reponse.get_data())
+        
+        if await valider_reponse(status_code, reponse_dict) is True:
+            # Extraire le certificat si fourni
+            try:
+                certificat = reponse_dict['certificat']
+            except KeyError:
+                pass  # On n'a pas recu le certificat
+            else:
+                await recevoir_certificat(certificat)
+                certificat_recu = True
             
-            # Garbage collect
-            await sleep_ms(1)
-            collect()
-            await sleep_ms(1)
-            
-            status_code, buffer_reponse = await post_inscription(url_inscription, buffer)
-            
-            # Garbage collect
-            await sleep_ms(1)  # Yield
-            collect()
-            await sleep_ms(1)  # Yield
-            
-            reponse_dict = json.loads(buffer_reponse.get_data())
-            
-            if await valider_reponse(status_code, reponse_dict) is True:
-                # Extraire le certificat si fourni
-                try:
-                    certificat = reponse_dict['certificat']
-                except KeyError:
-                    pass  # On n'a pas recu le certificat
-                else:
-                    await recevoir_certificat(certificat)
-                    certificat_recu = True
-                
-                # Extraire challenge/confirmation et executer si present
-                try:
-                    challenge = reponse_dict['challenge']
-                except KeyError:
-                    pass
-                else:
-                    await run_challenge(challenge, ui_lock)
-        except OSError:
-            raise
-        except Exception as e:
-            print("Erreur reception certificat")
-            print_exception(e)
-
-        await sleep(10)
-
-    print("Certificat recu")
+            # Extraire challenge/confirmation et executer si present
+            try:
+                challenge = reponse_dict['challenge']
+            except KeyError:
+                pass
+            else:
+                await run_challenge(challenge, ui_lock)
+    except OSError:
+        raise
+    except Exception as e:
+        print("Erreur reception certificat")
+        print_exception(e)
 
 
 async def verifier_renouveler_certificat(url_relai: str, buffer):

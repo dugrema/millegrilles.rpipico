@@ -191,12 +191,27 @@ class Runner:
         """
         # await config.init_cle_privee()
         
-        try:
-            url_relai = self.__url_relais.pop()
-            await run_inscription(url_relai, self.__ui_lock, buffer=BUFFER_MESSAGE)
-        except (AttributeError, IndexError):
-            print("Aucun url relais")
-            self.__url_relais = None  # Garanti un chargement via entretien
+        while True:
+            for url_relai in self.__url_relais:
+                try:
+                    print("Signature certificat avec relai %s " % url_relai)
+                    await run_inscription(url_relai, self.__ui_lock, buffer=BUFFER_MESSAGE)
+                    break
+                except OSError as ose:
+                    if ose.errno == 12:
+                        raise ose
+                    else:
+                        print("OS Error " % str(ose))
+                except (AttributeError, IndexError):
+                    print("Aucun url relais")
+                except Exception as e:
+                    print("Erreur chargement fiche %s" % e)
+                finally:
+                    collect()
+
+            await asyncio.sleep(10)
+
+        print("Certificat recu")
 
     def feed_default(self):
         return feed_display.FeedDisplayDefault(self)
