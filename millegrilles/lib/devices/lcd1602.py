@@ -22,7 +22,7 @@ class LCD1602(OutputLignes):
         if i2c is None:
             raise Exception('Bus %d non configure' % bus_no)
 
-        return I2cLcd(i2c, self._addr, self._nb_lignes, self._nb_chars)
+        return FunduinoI2cLcd(i2c, self._addr, self._nb_lignes, self._nb_chars)
 
     async def clear(self):
         self._instance.clear()
