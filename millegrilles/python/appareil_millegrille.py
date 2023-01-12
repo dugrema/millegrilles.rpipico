@@ -32,9 +32,12 @@ from config import \
      CONST_MODE_POLLING, \
      detecter_mode_operation
 
+from websocket_messages import CONST_DUREE_THREAD_POLLING
+
 CONST_INFO_SEP = const(' ---- INFO ----')
 CONST_NB_ERREURS_RESET = const(10)
 CONST_HTTP_TIMEOUT_DEFAULT = const(60)
+_CONST_INTERVALLE_REFRESH_FICHE = const(1 * 60 * 60)
 
 CONST_PATH_FICHIER_DISPLAY = const('displays.json')
 
@@ -112,6 +115,7 @@ class Runner:
         self.__wifi_ok = False
         self.__ntp_ok = False
         self.__prochain_entretien_certificat = 0
+        self.__prochain_refresh_fiche = 0
         self.__timezone_offset = None
         self.__erreurs_memory = 0  # Nombre de MemoryErrors depuis succes
         self.__erreurs_enomem = 0  # Nombre de Errno12 ENOMEM (ussl.wrap_socket) depuis succes
@@ -264,8 +268,18 @@ class Runner:
 
     async def charger_urls(self):
         if self.__wifi_ok is True:
-            relais = await config.charger_relais(self.__ui_lock, buffer=BUFFER_MESSAGE)
-            self.set_relais(relais)
+            if self.__prochain_refresh_fiche < time.time():
+                refresh = self.__prochain_refresh_fiche > 0
+
+                relais = await config.charger_relais(
+                    self.__ui_lock, refresh=refresh, buffer=BUFFER_MESSAGE)
+                self.set_relais(relais)
+
+                if refresh is False:
+                    # Faire rafraichir la fiche a la prochaine boucle d'entretien
+                    self.__prochain_refresh_fiche = time.time()
+                else:
+                    self.__prochain_refresh_fiche = _CONST_INTERVALLE_REFRESH_FICHE + time.time()
 
     def get_configuration_display(self):
         try:
@@ -290,7 +304,11 @@ class Runner:
         Main thread d'execution du polling/commandes
         """
         collect()
-        polling_thread = PollingThread(self, BUFFER_MESSAGE)
+        if self.__prochain_refresh_fiche <= time.time():
+            duree_thread = 60
+        else:
+            duree_thread = CONST_DUREE_THREAD_POLLING
+        polling_thread = PollingThread(self, BUFFER_MESSAGE, duree_thread=duree_thread)
         await polling_thread.preparer()
         await polling_thread.run()
 
@@ -311,7 +329,8 @@ class Runner:
                 print("Mode operation: %s" % self._mode_operation)
 
                 if self._mode_operation >= CONST_MODE_CHARGER_URL_RELAIS:
-                    if self.__url_relais is None or len(self.__url_relais) == 0:
+                    if self.__url_relais is None or len(self.__url_relais) == 0 or \
+                       self.__prochain_refresh_fiche < time.time():
                         # Recharger les relais
                         await self.charger_urls()
 
@@ -332,6 +351,7 @@ class Runner:
                     await self._signature_certificat()
                 elif self._mode_operation == CONST_MODE_POLLING:
                     await self._polling()
+                    continue
                 else:
                     print("Mode operation non supporte : %d" % self._mode_operation)
                     await led_executer_sequence(const_leds.CODE_MAIN_OPERATION_INCONNUE, executions=None)
@@ -375,6 +395,7 @@ class Runner:
                 sys.print_exception(e)
                 self.afficher_info()                
 
+            # Erreur execution ou changement runlevel
             await led_executer_sequence(const_leds.CODE_MAIN_ERREUR_GENERALE, 4, self.__ui_lock)
     
     async def run(self):

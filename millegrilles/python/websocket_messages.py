@@ -21,8 +21,8 @@ CONST_CHAMP_TIMEOUT = const('http_timeout')
 CONST_DOMAINE_SENSEURSPASSIFS = const('SenseursPassifs')
 CONST_REQUETE_DISPLAY = const('getAppareilDisplayConfiguration')
 
-CONST_DUREE_THREAD_POLLING = const(3 * 60 * 60)
-CONST_EXPIRATION_CONFIG = const(20 * 60)
+CONST_DUREE_THREAD_POLLING = const(1 * 60 * 60)
+CONST_EXPIRATION_CONFIG = const(5 * 60)
 
 
 class HttpErrorException(Exception):
@@ -65,7 +65,7 @@ async def poll(websocket, buffer, timeout_http=60, generer_etat=None, ui_lock=No
     expiration_polling = time.time() + timeout_http
 
     # Poll socket
-    while time.time() < expiration_polling:
+    while expiration_polling > time.time():
         try:
             reponse = websocket.recv(buffer.buffer)
             if reponse is not None and len(reponse) > 0:
@@ -139,9 +139,10 @@ async def _traiter_commande(appareil, reponse):
 
 class PollingThread:
 
-    def __init__(self, appareil, buffer):
+    def __init__(self, appareil, buffer, duree_thread):
         self.__appareil = appareil
         self.__timeout_http = 60
+        self.__duree_thread = duree_thread
 
         self.__load_initial = True
         self.__prochain_refresh_config = 0
@@ -186,28 +187,28 @@ class PollingThread:
         print("Refresh config %d" % self.__refresh_step)
         
         if self.__refresh_step <= 1:
+            self.__refresh_step = 2
             # Recharger la configuration des displays
             await requete_configuration_displays(self.__websocket, buffer=self.__buffer)
-            self.__refresh_step = 2
             return
 
         if self.__refresh_step <= 2:
+            self.__refresh_step = 3
             offset = await charger_timeinfo(
                 self.__websocket,
                 buffer=self.__buffer,
                 refresh=not self.__load_initial)
             print("Set offset %s" % offset)
             self.__appareil.set_timezone_offset(offset)
-            self.__refresh_step = 3
             return
         
         if self.__refresh_step <= 3:
+            self.__refresh_step = 4
             if self.__load_initial is False:
                 # Verifier si le certificat doit etre renouvelle
                 await verifier_renouveler_certificat_ws(self.__websocket, buffer=self.__buffer)
-            self.__refresh_step = 4
             return
-        
+
         # Succes - ajuster prochain refresh
         self.__load_initial = False  # Complete load initial
         self.__prochain_refresh_config = CONST_EXPIRATION_CONFIG + time.time()
@@ -216,10 +217,14 @@ class PollingThread:
 
     async def run(self):
         # Faire expirer la thread pour reloader la fiche/url, entretien certificat
-        expiration_thread = time.time() + CONST_DUREE_THREAD_POLLING
+        expiration_thread = time.time() + self.__duree_thread
         
+        print("Expiration thread %s" % expiration_thread)
+
         while expiration_thread > time.time():
             try:
+                print("Expiration thread dans %s " % (expiration_thread - time.time()))
+                
                 # Connecter
                 try:
                     await self.connecter()
@@ -234,6 +239,8 @@ class PollingThread:
                     
                 # Boucle polling sur connexion websocket
                 while expiration_thread > time.time():
+                    print("Expiration thread dans %s " % (expiration_thread - time.time()))
+                    
                     if time.time() > self.__prochain_refresh_config:
                         await self._refresh_config()
                         await asyncio.sleep_ms(1)

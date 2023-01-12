@@ -15,7 +15,7 @@ class LCD1602(OutputLignes):
         self.__ligne = 0
 
     def _get_instance(self):
-        from pico_i2c_lcd import I2cLcd
+        from pico_i2c_lcd import FunduinoI2cLcd
         
         bus_no = self._params['bus']
         i2c = self.__busses[bus_no]
