@@ -283,18 +283,19 @@ class Runner:
 
     async def charger_urls(self):
         if self.__wifi_ok is True:
-            if self.__prochain_refresh_fiche < time.time():
-                refresh = self.__prochain_refresh_fiche > 0
+            refresh = self.__prochain_refresh_fiche > 0
+            # if self.__prochain_refresh_fiche < time.time():
+            refresh = self.__prochain_refresh_fiche > 0
 
-                relais = await config.charger_relais(
-                    self.__ui_lock, refresh=refresh, buffer=BUFFER_MESSAGE)
-                self.set_relais(relais)
+            relais = await config.charger_relais(
+                self.__ui_lock, refresh=refresh, buffer=BUFFER_MESSAGE)
+            self.set_relais(relais)
 
-                if refresh is False:
-                    # Faire rafraichir la fiche a la prochaine boucle d'entretien
-                    self.__prochain_refresh_fiche = time.time()
-                else:
-                    self.__prochain_refresh_fiche = _CONST_INTERVALLE_REFRESH_FICHE + time.time()
+            if self.__prochain_refresh_fiche == 0:
+                # Faire rafraichir la fiche a la prochaine boucle d'entretien
+                self.__prochain_refresh_fiche = time.time()
+            elif refresh is True:
+                self.__prochain_refresh_fiche = _CONST_INTERVALLE_REFRESH_FICHE + time.time()
 
     def get_configuration_display(self):
         try:
