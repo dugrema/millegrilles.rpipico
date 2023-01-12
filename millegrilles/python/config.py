@@ -186,46 +186,65 @@ def set_configuration_display(configuration: dict):
 
 
 async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
+    liste_urls = set()
     try:
-        fiche_url = get_url_instance() + '/fiche.json'
-        print("Charger fiche via %s" % fiche_url)
+        with open('relais.json') as fichier:
+            info_relais = load(fichier)
+            for relai in info_relais['relais']:
+                proto, host, _ = parse_url(relai)
+                liste_urls.add(proto + '//' + host)
+    except (OSError, KeyError):
+        print("relais.json non disponible")
+    
+    try:
+        liste_urls.add(get_url_instance())
     except OSError:
         print("Fichier connexion absent")
         return
 
-    # Downloader la fiche
-    # print("Recuperer fiche a %s" % fiche_url)
-    fiche_json = None
-    reponse = await requests.get(fiche_url, lock=ui_lock)
-    try:
-        await sleep_ms(1)  # Yield
-        if reponse.status_code != 200:
-            raise Exception("fiche http status:%d" % reponse.status_code)
+    recu_ok = False
+    for url_instance in liste_urls:
+        fiche_url = url_instance + '/fiche.json'
+        print("Charger fiche via %s" % fiche_url)
+
+        # Downloader la fiche
+        # print("Recuperer fiche a %s" % fiche_url)
+        fiche_json = None
+        reponse = await requests.get(fiche_url, lock=ui_lock)
+        try:
+            await sleep_ms(1)  # Yield
+            if reponse.status_code != 200:
+                # raise Exception("fiche http status:%d" % reponse.status_code)
+                print("Erreur fiche %s status = %s" % (fiche_url, reponse.status_code))
+                continue
+            
+            await reponse.read_text_into(buffer)
+            recu_ok = True
+            break  # Ok
+            
+        except Exception as e:
+            print('Erreur chargement fiche')
+            print_exception(e)
+            continue
+        finally:
+            print("charger_fiche fermer reponse")
+            reponse.close()
+            reponse = None
+
+            # Cleanup memoire
+            collect()
+            await sleep_ms(1)  # Yield
+
+    if recu_ok is True:
+        fiche_json = loads(buffer.get_data())
         
-        await reponse.read_text_into(buffer)
-        
-    except Exception as e:
-        print('Erreur chargement fiche')
-        print_exception(e)
-        return None
-    finally:
-        print("charger_fiche fermer reponse")
-        reponse.close()
-        reponse = None
+        print("Fiche recue\n%s" % fiche_json)
+        if no_validation is True:
+            return fiche_json
 
-        # Cleanup memoire
-        collect()
-        await sleep_ms(1)  # Yield
-
-    fiche_json = loads(buffer.get_data())
-    
-    print("Fiche recue\n%s" % fiche_json)
-    if no_validation is True:
-        return fiche_json
-
-    info_cert = await verifier_message(fiche_json)
-    if 'core' in info_cert['roles']:
-        return fiche_json
+        info_cert = await verifier_message(fiche_json)
+        if 'core' in info_cert['roles']:
+            return fiche_json
     
     return None
 
@@ -241,22 +260,26 @@ async def charger_relais(ui_lock=None, refresh=False, buffer=None):
     except (OSError, KeyError):
         print("relais.json non disponible")
     
-    fiche_json = await charger_fiche(ui_lock, buffer=buffer)
-    if fiche_json is not None:
-        url_relais = [app['url'] for app in fiche_json['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
+    try:
+        fiche_json = await charger_fiche(ui_lock, buffer=buffer)
+        if fiche_json is not None:
+            url_relais = [app['url'] for app in fiche_json['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
+            
+            if info_relais is None or info_relais['relais'] != url_relais:
+                print('Sauvegarder relais.json maj')
+                try:
+                    with open('relais.json', 'wb') as fichier:
+                        dump({'relais': url_relais}, fichier)
+                except Exception as e:
+                    print('Erreur sauvegarde relais.json')
+                    print_exception(e)
+            
+            return url_relais
+    except Exception as e:
+        print("Erreur chargement fiche, utiliser relais connus : %s" % str(e))
         
-        if info_relais is None or info_relais['relais'] != url_relais:
-            print('Sauvegarder relais.json maj')
-            try:
-                with open('relais.json', 'wb') as fichier:
-                    dump({'relais': url_relais}, fichier)
-            except Exception as e:
-                print('Erreur sauvegarde relais.json')
-                print_exception(e)
-        
-        return url_relais
-        
-    return None
+    # Retourner les relais deja connus
+    return info_relais['relais']
 
 
 def sauvegarder_relais(fiche: dict):
@@ -354,3 +377,10 @@ async def charger_timeinfo(url_relai: str, buffer, refresh: False):
             with open('tzoffset.json', 'wb') as fichier:
                 dump({'offset': 0}, fichier)
         
+def parse_url(url):
+    try:
+        proto, dummy, host, path = url.split("/", 3)
+    except:
+        proto, dummy, host = url.split("/", 2)
+        path = None
+    return proto, host, path
