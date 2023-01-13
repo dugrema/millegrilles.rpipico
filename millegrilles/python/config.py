@@ -210,7 +210,15 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
         # Downloader la fiche
         # print("Recuperer fiche a %s" % fiche_url)
         fiche_json = None
-        reponse = await requests.get(fiche_url, lock=ui_lock)
+        try:
+            reponse = await requests.get(fiche_url, lock=ui_lock)
+        except OSError as e:
+            if e.errno == -2:
+                # Connexion refusee/serveur introuvable, essayer prochain relai
+                continue
+            else:
+                raise e
+            
         try:
             await sleep_ms(1)  # Yield
             if reponse.status_code != 200:
@@ -221,7 +229,7 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
             await reponse.read_text_into(buffer)
             recu_ok = True
             break  # Ok
-            
+        
         except Exception as e:
             print('Erreur chargement fiche')
             print_exception(e)
