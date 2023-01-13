@@ -75,7 +75,7 @@ class FeedDisplayCustom(FeedDisplay):
                 lignes = lignes[group:]
                 print('Display lignes : %s' % lignes_courantes)
                 try:
-                    reps = max([l.get('duree') for l in lignes_courantes if l.get('duree') is not None])
+                    duree = max([l.get('duree') for l in lignes_courantes if l.get('duree') is not None])
                     reps = ceil(reps / 5)
                 except ValueError:
                     reps = 1
