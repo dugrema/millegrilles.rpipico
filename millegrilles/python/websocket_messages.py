@@ -250,9 +250,10 @@ class PollingThread:
                     try:
                         await self._poll()
                         self.__nie_count = 0  # Reset erreurs
-                    except NotImplementedError:
+                    except NotImplementedError as e:
                         self.__nie_count += 1
-                        print("Erreur websocket (NotImplementedError)")
+                        print("Erreur websocket (NotImplementedError %s)" % str(e))
+                        print_exception()
                         break  # Break inner loop
                     except OSError as e:
                         if e.errno == -104:
