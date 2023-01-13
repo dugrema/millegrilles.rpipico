@@ -5,8 +5,9 @@ from handler_devices import Driver
 
 
 class OutputLignes(Driver):
-    
-    def __init__(self, appareil, params, busses, ui_lock: asyncio.Event, nb_chars=16, nb_lignes=2, duree_afficher_datetime=10):
+
+    def __init__(self, appareil, params, busses, ui_lock: asyncio.Event, nb_chars=16, nb_lignes=2,
+                 duree_afficher_datetime=10):
         super().__init__(appareil, params, busses, ui_lock)
         self._instance = None
         self.__busses = busses
@@ -17,7 +18,7 @@ class OutputLignes(Driver):
 
     async def load(self):
         self._instance = self._get_instance()
-        
+
     def _get_instance(self):
         raise Exception('Not implemented')
 
@@ -34,13 +35,13 @@ class OutputLignes(Driver):
         while True:
             try:
                 data_generator = feeds(name=self.__class__.__name__)
-                
+
                 # Maj duree affichage date (config)
                 try:
                     self.__duree_afficher_datetime = data_generator.duree_date
                 except AttributeError:
                     self.__duree_afficher_datetime = 10
-                
+
                 # Affichage heure
                 await self.afficher_datetime()
                 compteur = 0
@@ -48,8 +49,11 @@ class OutputLignes(Driver):
                 if lignes is not None:
                     await self.clear()
                     duree_page = 1.0  # Minimum 1 seconde
-                    for ligne, flag, duree in lignes:
+                    clear_after = True
+                    for ligne, flag, duree, no_clear in lignes:
                         compteur += 1
+                        if no_clear:
+                            clear_after = False  # Toggle clear
                         try:
                             duree_page = max(duree_page, duree)
                         except TypeError:
@@ -58,7 +62,9 @@ class OutputLignes(Driver):
                         if compteur == self._nb_lignes:
                             compteur = 0
                             await self.show(attente=duree_page)
-                            await self.clear()
+                            if clear_after is True:
+                                await self.clear()
+                            clear_after = True  # Reset
 
                     if compteur > 0:
                         # Afficher la derniere page (incomplete)
@@ -75,10 +81,10 @@ class OutputLignes(Driver):
                 print_exception(e)
                 # Attendre 30 secs avant de reessayer
                 await asyncio.sleep(30)
-    
+
     async def afficher_datetime(self):
         import time
-        
+
         if self.__duree_afficher_datetime is None:
             return
 
@@ -124,21 +130,22 @@ class OutputLignes(Driver):
 
 
 class DummyOutput(OutputLignes):
-    
-    #def __init__(self, appareil, params, busses, ui_lock):
+
+    # def __init__(self, appareil, params, busses, ui_lock):
     #    super().__init__(appareil, params, busses, ui_lock)
     def __init__(self, appareil, params, busses, ui_lock):
         super().__init__(appareil, params, busses, ui_lock, 80, 8)
-    
+
     def _get_instance(self):
         return None
-    
+
     async def preparer_ligne(self, data, flag=None):
         print("DummyOutput: %s (%s)" % (data, flag))
-        
+
     async def show(self, attente=5.0):
         await asyncio.sleep(attente)
-        
+
 
 class SkipRemainingLines(Exception):
     pass
+
