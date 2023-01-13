@@ -258,12 +258,7 @@ class Runner:
                         self.__ntp_ok = True
 
                     if self._mode_operation == CONST_MODE_POLLING:
-                        if self.__prochain_entretien_certificat < time.time():
-                            if await entretien_certificat() is True:
-                                self.__prochain_entretien_certificat = time.time() + 7200
-                            
-                        # Faire entretien
-                        pass
+                        await entretien_certificat()
 
             except Exception as e:
                 print("Erreur entretien: %s" % e)

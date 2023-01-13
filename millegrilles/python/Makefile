@@ -3,6 +3,7 @@ MPYCROSS = ../../micropython/mpy-cross/build/mpy-cross
 SRC_PYTHON = \
     appareil_millegrille.mpy \
     config.mpy \
+    feed_display.mpy \
     handler_commandes.mpy \
     message_inscription.mpy \
     polling_messages.mpy \
@@ -13,7 +14,6 @@ SRC_MILLEGRILLES = \
     millegrilles/certificat.mpy \
     millegrilles/const_leds.mpy \
     millegrilles/etat.mpy \
-    millegrilles/feed_display.mpy \
     millegrilles/ledblink.mpy \
     millegrilles/mgmessages.mpy \
     millegrilles/urequests2.mpy \
