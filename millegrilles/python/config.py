@@ -271,7 +271,7 @@ async def charger_relais(ui_lock=None, refresh=False, buffer=None):
     try:
         fiche_json = await charger_fiche(ui_lock, buffer=buffer)
         if fiche_json is not None:
-            sauvegarder_relais(fiche_json)
+            url_relais = sauvegarder_relais(fiche_json)
             return url_relais
     except Exception as e:
         print("Erreur chargement fiche, utiliser relais connus : %s" % str(e))

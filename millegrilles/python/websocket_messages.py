@@ -7,6 +7,7 @@ from sys import print_exception
 from micropython import mem_info
 
 from uwebsockets.client import connect
+from millegrilles.certificat import get_expiration_certificat_local
 from millegrilles.mgmessages import signer_message, verifier_message
 from handler_commandes import traiter_commande
 from config import get_http_timeout, charger_relais, set_configuration_display, \
@@ -23,7 +24,7 @@ CONST_REQUETE_DISPLAY = const('getAppareilDisplayConfiguration')
 CONST_REQUETE_FICHE_PUBLIQUE = const('getFichePublique')
 
 CONST_DUREE_THREAD_POLLING = const(6 * 60 * 60)
-CONST_EXPIRATION_CONFIG = const(20 * 60)
+CONST_EXPIRATION_CONFIG = const(10 * 60)
 
 
 class HttpErrorException(Exception):
@@ -219,9 +220,8 @@ class PollingThread:
         
         if self.__refresh_step <= 3:
             self.__refresh_step = 4
-            if self.__load_initial is False:
-                # Verifier si le certificat doit etre renouvelle
-                await verifier_renouveler_certificat_ws(self.__websocket, buffer=self.__buffer)
+            # Verifier si le certificat doit etre renouvelle
+            await verifier_renouveler_certificat_ws(self.__websocket, buffer=self.__buffer)
             return
 
         if self.__refresh_step <= 4:
@@ -238,9 +238,10 @@ class PollingThread:
 
     async def run(self):
         # Faire expirer la thread pour reloader la fiche/url, entretien certificat
-        expiration_thread = time.time() + self.__duree_thread
+        expiration_certificat, _pk = get_expiration_certificat_local()
+        expiration_thread = min(time.time() + self.__duree_thread, expiration_certificat)
         
-        print("Expiration thread %s" % expiration_thread)
+        print("Expiration thread %s (exp cert %s)" % (expiration_thread, expiration_certificat))
 
         while expiration_thread > time.time():
             try:
