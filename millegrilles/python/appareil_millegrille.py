@@ -320,10 +320,11 @@ class Runner:
         Main thread d'execution du polling/commandes
         """
         collect()
-        if self.__prochain_refresh_fiche <= time.time():
-            duree_thread = 60
-        else:
-            duree_thread = CONST_DUREE_THREAD_POLLING
+        #if self.__prochain_refresh_fiche <= time.time():
+        #    duree_thread = 60
+        #else:
+        #    duree_thread = CONST_DUREE_THREAD_POLLING
+        duree_thread = CONST_DUREE_THREAD_POLLING
         polling_thread = PollingThread(self, BUFFER_MESSAGE, duree_thread=duree_thread)
         await polling_thread.preparer()
         await polling_thread.run()

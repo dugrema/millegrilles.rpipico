@@ -1,6 +1,8 @@
 from config import set_configuration_display, set_timezone_offset, \
-    set_configuration_display
+    set_configuration_display, sauvegarder_relais
 from message_inscription import recevoir_certificat
+from millegrilles.mgmessages import verifier_message
+
 
 async def traiter_commande(appareil, commande: dict):
     print("Traiter : %s" % commande)
@@ -29,6 +31,8 @@ async def traiter_commande(appareil, commande: dict):
             await recevoir_certificat(certificat)
         except KeyError as e:
             print("Erreur reception certificat KeyError %s" % str(e))
+    elif action == 'fichePublique':
+        await recevoir_fiche_publique(commande)
     else:
         raise ValueError('Action inconnue : %s' % action)
 
@@ -55,3 +59,9 @@ async def recevoir_configuration_display(reponse):
         set_configuration_display(displays)
     except KeyError:
         print("Erreur reception displays %s" % reponse)
+
+async def recevoir_fiche_publique(fiche):
+    #info_cert = await verifier_message(fiche)
+    #if 'core' in info_cert['roles']:
+    #    sauvegarder_relais(fiche)
+    sauvegarder_relais(fiche)

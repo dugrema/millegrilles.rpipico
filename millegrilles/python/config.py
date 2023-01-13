@@ -271,17 +271,7 @@ async def charger_relais(ui_lock=None, refresh=False, buffer=None):
     try:
         fiche_json = await charger_fiche(ui_lock, buffer=buffer)
         if fiche_json is not None:
-            url_relais = [app['url'] for app in fiche_json['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
-            
-            if info_relais is None or info_relais['relais'] != url_relais:
-                print('Sauvegarder relais.json maj')
-                try:
-                    with open('relais.json', 'wb') as fichier:
-                        dump({'relais': url_relais}, fichier)
-                except Exception as e:
-                    print('Erreur sauvegarde relais.json')
-                    print_exception(e)
-            
+            sauvegarder_relais(fiche_json)
             return url_relais
     except Exception as e:
         print("Erreur chargement fiche, utiliser relais connus : %s" % str(e))
@@ -295,13 +285,11 @@ def sauvegarder_relais(fiche: dict):
     try:
         with open('relais.json') as fichier:
             info_relais = load(fichier)
-            if refresh is False:
-                return info_relais['relais']
     except (OSError, KeyError):
         print("relais.json non disponible")
-
+    
     url_relais = [app['url'] for app in fiche['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
-        
+            
     if info_relais is None or info_relais['relais'] != url_relais:
         print('Sauvegarder relais.json maj')
         try:

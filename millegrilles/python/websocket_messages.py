@@ -20,9 +20,10 @@ CONST_CHAMP_TIMEOUT = const('http_timeout')
 
 CONST_DOMAINE_SENSEURSPASSIFS = const('SenseursPassifs')
 CONST_REQUETE_DISPLAY = const('getAppareilDisplayConfiguration')
+CONST_REQUETE_FICHE_PUBLIQUE = const('getFichePublique')
 
-CONST_DUREE_THREAD_POLLING = const(1 * 60 * 60)
-CONST_EXPIRATION_CONFIG = const(5 * 60)
+CONST_DUREE_THREAD_POLLING = const(6 * 60 * 60)
+CONST_EXPIRATION_CONFIG = const(20 * 60)
 
 
 class HttpErrorException(Exception):
@@ -84,6 +85,20 @@ async def poll(websocket, buffer, timeout_http=60, generer_etat=None, ui_lock=No
 async def requete_configuration_displays(websocket, buffer):
     requete = await signer_message(
         dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY)
+    buffer.set_text(dumps(requete))
+    requete = None
+
+    # Cleanup memoire
+    await asyncio.sleep_ms(1)
+    collect()
+    await asyncio.sleep_ms(1)
+    
+    websocket.send(buffer.get_data())
+
+
+async def requete_fiche_publique(websocket, buffer):
+    requete = await signer_message(
+        dict(), domaine='senseurspassifs_relai', action=CONST_REQUETE_FICHE_PUBLIQUE)
     buffer.set_text(dumps(requete))
     requete = None
 
@@ -207,6 +222,12 @@ class PollingThread:
             if self.__load_initial is False:
                 # Verifier si le certificat doit etre renouvelle
                 await verifier_renouveler_certificat_ws(self.__websocket, buffer=self.__buffer)
+            return
+
+        if self.__refresh_step <= 4:
+            self.__refresh_step = 5
+            # Verifier si le certificat doit etre renouvelle
+            await requete_fiche_publique(self.__websocket, buffer=self.__buffer)
             return
 
         # Succes - ajuster prochain refresh
