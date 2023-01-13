@@ -1,6 +1,7 @@
 from math import ceil
 from sys import print_exception
 from time import time
+from devices.display import SkipRemainingLines
 
 MSG_WIFI_OFFLINE = const('WIFI OFFLINE')
 

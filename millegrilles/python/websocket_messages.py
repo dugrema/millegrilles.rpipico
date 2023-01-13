@@ -234,6 +234,11 @@ class PollingThread:
                         self.__nie_count += 1
                         await asyncio.sleep_ms(500)
                         continue  # Retry
+                    elif e.errno == -2:
+                        # Erreur connexion (e.g. refused)
+                        self.__url_relai = None
+                        self.entretien_url_relai()
+                        continue
                     else:
                         raise e
                     

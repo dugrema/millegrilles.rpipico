@@ -12,11 +12,11 @@ from micropython import mem_info
 
 from millegrilles import const_leds
 from millegrilles.const_leds import CODE_POLLING_ERREUR_GENERALE
-from millegrilles import feed_display
 from millegrilles import mgmessages
 from millegrilles import wifi
 from millegrilles.ledblink import led_executer_sequence
 
+import feed_display
 import config
 from websocket_messages import PollingThread
 from handler_devices import DeviceHandler
@@ -425,7 +425,7 @@ class Runner:
 
         # Task devices
         asyncio.create_task(self._device_handler.run(
-            self.__ui_lock, self.recevoir_lectures, self.get_feeds))
+            self.__ui_lock, self.recevoir_lectures, self.get_feeds, 1000))
 
         # Executer main loop
         await self.__main()
