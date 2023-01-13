@@ -34,7 +34,7 @@ class FeedDisplayDefault(FeedDisplay):
         if self._appareil.wifi_ok is not True:
             data_lignes.append(MSG_WIFI_OFFLINE)
         while len(data_lignes) > 0:
-            yield data_lignes.pop(0), None, None
+            yield data_lignes.pop(0), None, None, False
 
 
 class FeedDisplayCustom(FeedDisplay):
@@ -55,20 +55,22 @@ class FeedDisplayCustom(FeedDisplay):
         try:
             lignes = self.__config['lignes']
         except KeyError:
-            return None, None, None
+            return None, None, None, False
         
         if group is None:
             # print('Display group None')
             if self._appareil.wifi_ok is not True:
-                yield MSG_WIFI_OFFLINE, None, None
+                yield MSG_WIFI_OFFLINE, None, None, False
             for ligne in lignes:
                 yield self.formatter_ligne(ligne)
         else:
             # print('Display group %s' % group)
             if self._appareil.wifi_ok is not True:
-                yield MSG_WIFI_OFFLINE, None, None
+                yield MSG_WIFI_OFFLINE, None, None, False
                 for _ in range(1, group):
-                    yield '', None, None
+                    yield '', None, None, False
+            
+            refresh = 1.0
             
             while len(lignes) > 0:
                 lignes_courantes = lignes[:group]
@@ -76,23 +78,30 @@ class FeedDisplayCustom(FeedDisplay):
                 print('Display lignes : %s' % lignes_courantes)
                 try:
                     duree = max([l.get('duree') for l in lignes_courantes if l.get('duree') is not None])
-                    reps = ceil(reps / 5)
-                except ValueError:
+                    reps = ceil(duree / refresh)
+                    duree_override = refresh
+                    print("Duree %s, reps %s, override %s" % (duree, reps, duree_override))
+                except ValueError as e:
+                    print("Display value error pour \n%s" % lignes_courantes)
+                    print_exception(e)
                     reps = 1
-                for _ in range(0, reps):
+                    duree_override = None
+                for rep_no in range(0, reps):
+                    no_clear = rep_no != reps - 1
                     for ligne in lignes_courantes:
-                        yield self.formatter_ligne(ligne)
+                        yield self.formatter_ligne(
+                            ligne, duree_override=duree_override, no_clear=no_clear)
 
-    def formatter_ligne(self, ligne):
+    def formatter_ligne(self, ligne, duree_override=None, no_clear=False):
         masque = ligne['masque']
-        duree = ligne.get('duree')
+        duree = duree_override or ligne.get('duree')
         flag = None
         
         try:
             appareil_nom = None
             variable = ligne['variable']
             if variable is None or variable == '':
-                return masque, flag, None
+                return masque, flag, None, False
         except KeyError:
             pass
         else:
@@ -118,7 +127,7 @@ class FeedDisplayCustom(FeedDisplay):
                 print("Erreur generique formattage")
                 print_exception(e)
 
-        return masque, flag, duree
+        return masque, flag, duree, no_clear
 
     def get_valeur(self, senseur_nom: str):
         senseur_nom = senseur_nom.split(':')
