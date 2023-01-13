@@ -13,6 +13,7 @@ class OutputLignes(Driver):
         self._nb_lignes = nb_lignes
         self._nb_chars = nb_chars
         self.__duree_afficher_datetime = duree_afficher_datetime
+        self._generateur_override = None
 
     async def load(self):
         self._instance = self._get_instance()
@@ -46,12 +47,17 @@ class OutputLignes(Driver):
                 lignes = data_generator.generate(group=self._nb_lignes)
                 if lignes is not None:
                     await self.clear()
+                    duree_page = 1.0  # Minimum 1 seconde
                     for ligne, flag, duree in lignes:
                         compteur += 1
+                        try:
+                            duree_page = max(duree_page, duree)
+                        except TypeError:
+                            pass  # OK, default
                         await self.preparer_ligne(ligne[:self._nb_chars], flag)
                         if compteur == self._nb_lignes:
                             compteur = 0
-                            await self.show()
+                            await self.show(attente=duree_page)
                             await self.clear()
 
                     if compteur > 0:
@@ -59,7 +65,11 @@ class OutputLignes(Driver):
                         for _ in range(compteur, self._nb_lignes):
                             await self.preparer_ligne('')
                         await self.show()
-            
+
+            except SkipRemainingLines:
+                print("run_display SkipRemainingLines")
+                await self.clear()
+                await asyncio.sleep_ms(10)
             except OSError as e:
                 print("Display OSError")
                 print_exception(e)
@@ -74,16 +84,35 @@ class OutputLignes(Driver):
 
         await self.clear()
 
+        index_loop = 0
         temps_limite = time.time() + self.__duree_afficher_datetime
         while temps_limite >= time.time():
             now = time.time()
             if self._appareil.timezone is not None:
                 now += self._appareil.timezone
-            (year, month, day, hour, minutes, seconds, _, _) = time.localtime(now)
-            await self.preparer_ligne('{:d}-{:0>2d}-{:0>2d}'.format(year, month, day))
-            await self.preparer_ligne('{:0>2d}:{:0>2d}:{:0>2d}'.format(hour, minutes, seconds))
+
+            timenow = time.localtime(now)
+            for noligne in range(0, self._nb_lignes):
+                await self._preparer_ligne_datetime(timenow, noligne, index_loop)
+
             nouv_sec = (time.ticks_ms() % 1000) / 1000
             await self.show(nouv_sec)
+            index_loop += 1
+
+    async def _preparer_ligne_datetime(self, timenow, ligne: int, index_loop: int):
+        if ligne >= self._nb_lignes:
+            # Cet affichage ne peut pas affaire ce nombre de ligne en meme temps
+            return
+
+        (year, month, day, hour, minutes, seconds, _, _) = timenow
+        if ligne == 0:
+            await self.preparer_ligne('{:d}-{:0>2d}-{:0>2d}'.format(year, month, day))
+        elif ligne == 1:
+            await self.preparer_ligne('{:0>2d}:{:0>2d}:{:0>2d}'.format(hour, minutes, seconds))
+        elif ligne == 2:
+            await self.preparer_ligne('Ligne 3')
+        elif ligne == 3:
+            await self.preparer_ligne('Ligne 4')
 
     def get_display_params(self):
         return {
@@ -110,3 +139,6 @@ class DummyOutput(OutputLignes):
     async def show(self, attente=5.0):
         await asyncio.sleep(attente)
         
+
+class SkipRemainingLines(Exception):
+    pass

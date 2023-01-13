@@ -31,10 +31,10 @@ class LCD1602(OutputLignes):
         await self._ui_lock.acquire()
         try:
             self._instance.move_to(0, self.__ligne)
+            ligne_data = '{:<16}'.format(data).strip()
             if flag is not None:
-                self._instance.putstr('{:<15}'.format(data) + flag)
-            else:
-                self._instance.putstr('{:<16}'.format(data).strip())
+                ligne_data = ligne_data[:15] + flag
+            self._instance.putstr(ligne_data)
         finally:
             self.__ligne += 1
             self._ui_lock.release()

@@ -117,13 +117,13 @@ class DeviceHandler:
         if len(outputs) > 0:
             return outputs
 
-    async def run(self, ui_lock: asyncio.Event, sink_method, feeds=None):
+    async def run(self, ui_lock: asyncio.Event, sink_method, feeds=None, intervalle_ms=5000):
         if feeds is not None:
             asyncio.create_task(self._output_devices(feeds, ui_lock))
         
         while True:
             await self._lire_devices(sink_method)
-            await asyncio.sleep(5)
+            await asyncio.sleep_ms(intervalle_ms)
 
 
 def import_driver(path_driver):
