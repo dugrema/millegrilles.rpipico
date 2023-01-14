@@ -8,6 +8,7 @@ import ustruct as struct
 import urandom as random
 import usocket as socket
 from ucollections import namedtuple
+from time import sleep_ms
 
 LOGGER = logging.getLogger(__name__)
 
@@ -112,11 +113,33 @@ class Websocket:
         elif length == 127:  # Magic number, length header is 8 bytes
             length, = struct.unpack('!Q', self.sock.read(8))
 
+        # print("Websockets Payload length : %d" % length)
+
         if mask:  # Mask is 4 bytes
             mask_bits = self.sock.read(4)
 
-        if buffer is not None:
-            self.sock.readinto(buffer)
+        total_lu = 0
+        if buffer is not None and len(buffer) >= length:
+            while total_lu < length:
+                mv = memoryview(buffer)[total_lu:length]
+                # print("Taille mv buffer reception : %d" % len(mv))
+
+                res_len = self.sock.readinto(mv)
+                try:
+                    total_lu += res_len
+                except TypeError:
+                    # Rien recu, attendre et reessayer
+                    sleep_ms(5)
+                    res_len = self.sock.readinto(mv)
+                    total_lu += res_len
+
+                # print("Batch lu : %s, total lu : %s" % (res_len, total_lu))
+                if res_len == 0:
+                    raise Exception("Erreur lecture (0 bytes)")
+
+                if total_lu < length:
+                    sleep_ms(1)  # Attendre reception
+
             data = memoryview(buffer)[:length]
         else:
             try:
@@ -198,6 +221,7 @@ class Websocket:
                 raise ConnectionClosed()
 
             if not fin:
+                # Ajouter au buffer
                 raise NotImplementedError()
 
             if opcode == OP_TEXT:
