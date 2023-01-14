@@ -175,6 +175,10 @@ class PollingThread:
         self.__timeout_http = get_http_timeout()
         
     async def connecter(self):
+        self.__load_initial = True
+        self.__refresh_step = 0
+        self.__errnumber = 0
+        
         # Assigner un URL
         self.entretien_url_relai()
         
@@ -227,7 +231,7 @@ class PollingThread:
         if self.__refresh_step <= 4:
             self.__refresh_step = 5
             # Verifier si le certificat doit etre renouvelle
-            await requete_fiche_publique(self.__websocket, buffer=self.__buffer)
+            #await requete_fiche_publique(self.__websocket, buffer=self.__buffer)
             return
 
         # Succes - ajuster prochain refresh
@@ -280,7 +284,7 @@ class PollingThread:
                     except NotImplementedError as e:
                         self.__nie_count += 1
                         print("Erreur websocket (NotImplementedError %s)" % str(e))
-                        print_exception()
+                        print_exception(e)
                         break  # Break inner loop
                     except OSError as e:
                         if e.errno == -104:
@@ -329,16 +333,24 @@ class PollingThread:
 
                 try:
                     reponse = loads(self.__buffer.get_data())
-                    info_certificat = await verifier_signature(reponse)
-                    print("Message websocket recu (valide)")
+                except ValueError:
+                    len_buffer = len(self.__buffer.get_data())
+                    print('*** JSON Decode error, len %d ***' % len_buffer)
+                    #with open('err.txt', 'wb') as fichiers:
+                    #    fichiers.write(self.__buffer.get_data()[:len_buffer])
+                else:
+                    try:
+                        info_certificat = await verifier_signature(reponse)
+                        len_buffer = len(self.__buffer.get_data())
+                        print("Message websocket recu (valide, len %d)" % len_buffer)
 
-                    # Cleanup
-                    info_certificat = None
-            
-                    await _traiter_commande(self.__appareil, reponse)
-                except KeyError as e:
-                    print("Erreur reception KeyError %s" % str(e))
-                    print("ERR Message\n%s" % reponse)
+                        # Cleanup
+                        info_certificat = None
+                
+                        await _traiter_commande(self.__appareil, reponse)
+                    except KeyError as e:
+                        print("Erreur reception KeyError %s" % str(e))
+                        print("ERR Message\n%s" % reponse)
 
             # Cleanup
             reponse = None

@@ -177,6 +177,7 @@ class Runner:
                 except KeyError:
                     pass  # Pas de lignes configurees
             senseurs = list(senseurs)
+            print("Senseurs externes : %s" % senseurs)
         except (OSError, AttributeError):
             senseurs = None
         return {
