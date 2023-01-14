@@ -21,7 +21,7 @@ SRC_DEVICES = \
 
 
 %.mpy: %.py
-	$(MPYCROSS) -O3 -o build/$@ $<
+	$(MPYCROSS) -O0 -o build/$@ $<
 
 build_folders:
 	mkdir -p build/multiformats build/uwebsockets build/devices

@@ -119,10 +119,10 @@ class OutputLignes(Driver):
             await self.preparer_ligne('{:d}-{:0>2d}-{:0>2d}'.format(year, month, day))
         elif ligne == 1:
             await self.preparer_ligne('{:0>2d}:{:0>2d}:{:0>2d}'.format(hour, minutes, seconds))
-        elif ligne == 2:
-            await self.preparer_ligne('Ligne 3')
-        elif ligne == 3:
-            await self.preparer_ligne('Ligne 4')
+        #elif ligne == 2:
+        #    await self.preparer_ligne('Ligne 3')
+        #elif ligne == 3:
+        #    await self.preparer_ligne('Ligne 4')
 
     def get_display_params(self):
         return {
