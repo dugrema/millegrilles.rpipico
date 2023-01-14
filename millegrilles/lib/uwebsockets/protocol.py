@@ -8,7 +8,7 @@ import ustruct as struct
 import urandom as random
 import usocket as socket
 from ucollections import namedtuple
-from time import sleep_ms
+from uasyncio import sleep_ms
 
 LOGGER = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ class Websocket:
     def setblocking(self, blocking):
         self.sock.setblocking(blocking)
 
-    def read_frame(self, max_size=None, buffer=None):
+    async def read_frame(self, max_size=None, buffer=None):
         """
         Read a frame from the socket.
         See https://tools.ietf.org/html/rfc6455#section-5.2 for the details.
@@ -124,21 +124,22 @@ class Websocket:
                 mv = memoryview(buffer)[total_lu:length]
                 # print("Taille mv buffer reception : %d" % len(mv))
 
-                res_len = self.sock.readinto(mv)
-                try:
-                    total_lu += res_len
-                except TypeError:
-                    # Rien recu, attendre et reessayer
-                    sleep_ms(5)
+                res_len = None
+                for _ in range(0, 100):
                     res_len = self.sock.readinto(mv)
-                    total_lu += res_len
+                    try:
+                        total_lu += res_len
+                        break
+                    except TypeError:
+                        # Rien recu, attendre et reessayer
+                        await sleep_ms(20)
 
                 # print("Batch lu : %s, total lu : %s" % (res_len, total_lu))
-                if res_len == 0:
+                if res_len is None:
                     raise Exception("Erreur lecture (0 bytes)")
 
                 if total_lu < length:
-                    sleep_ms(1)  # Attendre reception
+                    await sleep_ms(5)  # Attendre reception
 
             data = memoryview(buffer)[:length]
         else:
@@ -199,7 +200,7 @@ class Websocket:
 
         self.sock.write(data)
 
-    def recv(self, buffer=None):
+    async def recv(self, buffer=None):
         """
         Receive data from the websocket.
 
@@ -212,7 +213,7 @@ class Websocket:
 
         while self.open:
             try:
-                fin, opcode, data = self.read_frame(buffer=buffer)
+                fin, opcode, data = await self.read_frame(buffer=buffer)
             except NoDataException:
                 return ''
             except ValueError:
