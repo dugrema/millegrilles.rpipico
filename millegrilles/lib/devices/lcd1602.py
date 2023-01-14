@@ -25,16 +25,16 @@ class LCD1602(OutputLignes):
         return FunduinoI2cLcd(i2c, self._addr, self._nb_lignes, self._nb_chars)
 
     async def clear(self):
-        self._instance.clear()
+        await self._instance.clear()
 
     async def preparer_ligne(self, data, flag=None):
         await self._ui_lock.acquire()
         try:
-            self._instance.move_to(0, self.__ligne)
+            await self._instance.move_to(0, self.__ligne)
             ligne_data = '{:<16}'.format(data).strip()
             if flag is not None:
                 ligne_data = ligne_data[:15] + flag
-            self._instance.putstr(ligne_data)
+            await self._instance.putstr(ligne_data)
         finally:
             self.__ligne += 1
             self._ui_lock.release()

@@ -17,29 +17,34 @@ class FunduinoI2cLcd(LcdApi):
     #Implements a HD44780 character LCD connected via PCF8574 on I2C
 
     def __init__(self, i2c, i2c_addr, num_lines, num_columns):
+        LcdApi.__init__(self, num_lines, num_columns)
         
         if i2c_addr not in i2c.scan():
             raise Exception('I2cLcd device not found')
         
         self.i2c = i2c
         self.i2c_addr = i2c_addr
+        
+    async def setup():
         self.i2c.writeto(self.i2c_addr, bytes([0]))
-        sleep_ms(20)   # Allow LCD time to powerup
+        await sleep_ms(20)   # Allow LCD time to powerup
         # Send reset 3 times
         self.hal_write_init_nibble(self.LCD_FUNCTION_RESET)
-        sleep_ms(5)    # Need to delay at least 4.1 msec
+        await sleep_ms(5)    # Need to delay at least 4.1 msec
         self.hal_write_init_nibble(self.LCD_FUNCTION_RESET)
-        sleep_ms(1)
+        await sleep_ms(1)
         self.hal_write_init_nibble(self.LCD_FUNCTION_RESET)
-        sleep_ms(1)
+        await sleep_ms(1)
         # Put LCD into 4-bit mode
         self.hal_write_init_nibble(self.LCD_FUNCTION)
-        sleep_ms(1)
-        LcdApi.__init__(self, num_lines, num_columns)
+        await sleep_ms(1)
+        
+        await super().setup()
+
         cmd = self.LCD_FUNCTION
         if num_lines > 1:
             cmd |= self.LCD_FUNCTION_2LINES
-        self.hal_write_command(cmd)
+        await self.hal_write_command(cmd)
 
     def hal_write_init_nibble(self, nibble):
         # Writes an initialization nibble to the LCD.
@@ -56,7 +61,7 @@ class FunduinoI2cLcd(LcdApi):
         #Allows the hal layer to turn the backlight off
         self.i2c.writeto(self.i2c_addr, bytes([0]))
         
-    def hal_write_command(self, cmd):
+    async def hal_write_command(self, cmd):
         # Write a command to the LCD. Data is latched on the falling edge of E.
         byte = ((self.backlight << SHIFT_BACKLIGHT) |
                 (((cmd >> 4) & 0x0f) << SHIFT_DATA))
@@ -68,7 +73,7 @@ class FunduinoI2cLcd(LcdApi):
         self.i2c.writeto(self.i2c_addr, bytes([byte]))
         if cmd <= 3:
             # The home and clear commands require a worst case delay of 4.1 msec
-            sleep_ms(5)
+            await sleep_ms(5)
 
     def hal_write_data(self, data):
         # Write data to the LCD. Data is latched on the falling edge of E.

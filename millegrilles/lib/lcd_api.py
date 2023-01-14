@@ -58,68 +58,70 @@ class LcdApi:
         self.cursor_y = 0
         self.implied_newline = False
         self.backlight = True
-        self.display_off()
-        self.backlight_on()
-        self.clear()
-        self.hal_write_command(self.LCD_ENTRY_MODE | self.LCD_ENTRY_INC)
-        self.hide_cursor()
-        self.display_on()
+        
+    async def setup():
+        await self.display_off()
+        await self.backlight_on()
+        await self.clear()
+        await self.hal_write_command(self.LCD_ENTRY_MODE | self.LCD_ENTRY_INC)
+        await self.hide_cursor()
+        await self.display_on()
 
-    def clear(self):
+    async def clear(self):
         """Clears the LCD display and moves the cursor to the top left
         corner.
         """
-        self.hal_write_command(self.LCD_CLR)
-        self.hal_write_command(self.LCD_HOME)
+        await self.hal_write_command(self.LCD_CLR)
+        await self.hal_write_command(self.LCD_HOME)
         self.cursor_x = 0
         self.cursor_y = 0
 
-    def show_cursor(self):
+    async def show_cursor(self):
         """Causes the cursor to be made visible."""
-        self.hal_write_command(self.LCD_ON_CTRL | self.LCD_ON_DISPLAY |
+        await self.hal_write_command(self.LCD_ON_CTRL | self.LCD_ON_DISPLAY |
                                self.LCD_ON_CURSOR)
 
-    def hide_cursor(self):
+    async def hide_cursor(self):
         """Causes the cursor to be hidden."""
-        self.hal_write_command(self.LCD_ON_CTRL | self.LCD_ON_DISPLAY)
+        await self.hal_write_command(self.LCD_ON_CTRL | self.LCD_ON_DISPLAY)
 
-    def blink_cursor_on(self):
+    async def blink_cursor_on(self):
         """Turns on the cursor, and makes it blink."""
-        self.hal_write_command(self.LCD_ON_CTRL | self.LCD_ON_DISPLAY |
+        await self.hal_write_command(self.LCD_ON_CTRL | self.LCD_ON_DISPLAY |
                                self.LCD_ON_CURSOR | self.LCD_ON_BLINK)
 
-    def blink_cursor_off(self):
+    async def blink_cursor_off(self):
         """Turns on the cursor, and makes it no blink (i.e. be solid)."""
-        self.hal_write_command(self.LCD_ON_CTRL | self.LCD_ON_DISPLAY |
+        await self.hal_write_command(self.LCD_ON_CTRL | self.LCD_ON_DISPLAY |
                                self.LCD_ON_CURSOR)
 
-    def display_on(self):
+    async def display_on(self):
         """Turns on (i.e. unblanks) the LCD."""
-        self.hal_write_command(self.LCD_ON_CTRL | self.LCD_ON_DISPLAY)
+        await self.hal_write_command(self.LCD_ON_CTRL | self.LCD_ON_DISPLAY)
 
-    def display_off(self):
+    async def display_off(self):
         """Turns off (i.e. blanks) the LCD."""
-        self.hal_write_command(self.LCD_ON_CTRL)
+        await self.hal_write_command(self.LCD_ON_CTRL)
 
-    def backlight_on(self):
+    async def backlight_on(self):
         """Turns the backlight on.
 
         This isn't really an LCD command, but some modules have backlight
         controls, so this allows the hal to pass through the command.
         """
         self.backlight = True
-        self.hal_backlight_on()
+        await self.hal_backlight_on()
 
-    def backlight_off(self):
+    async def backlight_off(self):
         """Turns the backlight off.
 
         This isn't really an LCD command, but some modules have backlight
         controls, so this allows the hal to pass through the command.
         """
         self.backlight = False
-        self.hal_backlight_off()
+        await self.hal_backlight_off()
 
-    def move_to(self, cursor_x, cursor_y):
+    async def move_to(self, cursor_x, cursor_y):
         """Moves the cursor position to the indicated position. The cursor
         position is zero based (i.e. cursor_x == 0 indicates first column).
         """
@@ -130,9 +132,9 @@ class LcdApi:
             addr += 0x40    # Lines 1 & 3 add 0x40
         if cursor_y & 2:    # Lines 2 & 3 add number of columns
             addr += self.num_columns
-        self.hal_write_command(self.LCD_DDRAM | addr)
+        await self.hal_write_command(self.LCD_DDRAM | addr)
 
-    def putchar(self, char):
+    async def putchar(self, char):
         """Writes the indicated character to the LCD at the current cursor
         position, and advances the cursor by one position.
         """
@@ -152,26 +154,26 @@ class LcdApi:
             self.implied_newline = (char != '\n')
         if self.cursor_y >= self.num_lines:
             self.cursor_y = 0
-        self.move_to(self.cursor_x, self.cursor_y)
+        await self.move_to(self.cursor_x, self.cursor_y)
 
-    def putstr(self, string):
+    async def putstr(self, string):
         """Write the indicated string to the LCD at the current cursor
         position and advances the cursor position appropriately.
         """
         for char in string:
-            self.putchar(char)
+            await self.putchar(char)
 
-    def custom_char(self, location, charmap):
+    async def custom_char(self, location, charmap):
         """Write a character to one of the 8 CGRAM locations, available
         as chr(0) through chr(7).
         """
         location &= 0x7
-        self.hal_write_command(self.LCD_CGRAM | (location << 3))
+        await self.hal_write_command(self.LCD_CGRAM | (location << 3))
         self.hal_sleep_us(40)
         for i in range(8):
             self.hal_write_data(charmap[i])
             self.hal_sleep_us(40)
-        self.move_to(self.cursor_x, self.cursor_y)
+        await self.move_to(self.cursor_x, self.cursor_y)
 
     def hal_backlight_on(self):
         """Allows the hal layer to turn the backlight on.
@@ -187,7 +189,7 @@ class LcdApi:
         """
         pass
 
-    def hal_write_command(self, cmd):
+    async def hal_write_command(self, cmd):
         """Write a command to the LCD.
 
         It is expected that a derived HAL class will implement this

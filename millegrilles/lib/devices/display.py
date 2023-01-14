@@ -18,6 +18,10 @@ class OutputLignes(Driver):
 
     async def load(self):
         self._instance = self._get_instance()
+        try:
+            await self._instance.setup()
+        except AttributeError:
+            pass  # No async setup required
 
     def _get_instance(self):
         raise Exception('Not implemented')
