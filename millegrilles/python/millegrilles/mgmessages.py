@@ -6,13 +6,14 @@ import time
 import uasyncio as asyncio
 import oryx_crypto
 
-from io import BytesIO
+from io import StringIO
 
 from . import certificat
 from .certificat import valider_certificats
 
 from multiformats import multibase, multihash
 from collections import OrderedDict
+from gc import collect
 
 
 VERSION_SIGNATURE = 2
@@ -28,9 +29,9 @@ async def signer_message(message, cle_privee=None, **kwargs):
     return message    
 
 
-async def __signer_message(message, cle_privee=None, **kwargs):
+async def __signer_message(message, cle_privee=None, buffer=None, **kwargs):
     message = prep_message_1(message)
-    hachage = hacher_message(message).decode('utf-8')
+    hachage = hacher_message(message, buffer).decode('utf-8')
 
     try:
         cert_local = certificat.load_pem_certificat(certificat.PATH_CERT)[0]
@@ -52,7 +53,7 @@ async def __signer_message(message, cle_privee=None, **kwargs):
     return entete, signature
 
 
-def __signer_message_2(message, cle_privee=None):
+def __signer_message_2(message, cle_privee=None, buffer=None):
     if cle_privee is None:
         # Charger la cle locale
         try:
@@ -65,7 +66,7 @@ def __signer_message_2(message, cle_privee=None):
                 
     cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
 
-    message_str = message_stringify(message)
+    message_str = message_stringify(message, buffer=buffer)
     hachage = oryx_crypto.blake2b(message_str)
     
     signature = bytes([VERSION_SIGNATURE]) + oryx_crypto.ed25519sign(cle_privee, cle_publique, hachage)
@@ -121,13 +122,13 @@ async def generer_entete(hachage,
     return entete
 
 
-def hacher_message(message):
+def hacher_message(message, buffer=None):
     from oryx_crypto import blake2s
     from multiformats.multihash import wrap
     from multiformats.multibase import encode
     from millegrilles.certificat import CONST_HACHAGE_FINGERPRINT
     
-    hachage = blake2s(message_stringify(message))
+    hachage = blake2s(message_stringify(message, buffer=buffer))
     fingerprint = wrap(CONST_HACHAGE_FINGERPRINT, hachage)
     return encode('base64', bytes(fingerprint))
 
@@ -166,13 +167,19 @@ def __traiter_value(value):
     return value
 
 
-def message_stringify(message):
-    #message_prep_hachage = prep_message_1(message)
-    #print("Message prep hachage avant json\n%s" % message_prep_hachage)
-    return json.dumps(message, separators=(',', ':')).encode('utf-8')
+def message_stringify(message, buffer=None):
+    # Utiliser StringIO - permet de creer buffers non-contigus
+    buffer_str = StringIO()
+    json.dump(message, buffer_str, separators=(',', ':'))
+    if buffer is None:
+        return buffer_str.getvalue().encode('utf-8')
+    else:
+        buffer_str.seek(0)  # Revenir au debut, transferer dans buffer
+        buffer.set_text(buffer_str)
+        return buffer.get_data()
 
 
-async def verifier_message(message: dict):
+async def verifier_message(message: dict, buffer=None):
     # Valider le certificat - raise Exception si erreur
     info_certificat = await valider_certificats(message['_certificat'])
     del message['_certificat']
@@ -185,12 +192,12 @@ async def verifier_message(message: dict):
     message = prep_message_1(message)
 
     await asyncio.sleep_ms(1)
-    verifier_signature(message, signature, info_certificat['public_key'])
-    
+    verifier_signature(message, signature, info_certificat['public_key'], buffer=buffer)
+
     return info_certificat
 
 
-def verifier_signature(message, signature, cle_publique):
+def verifier_signature(message, signature, cle_publique, buffer=None):
     from multiformats.multibase import decode
     from oryx_crypto import blake2b, ed25519verify
     
@@ -201,7 +208,7 @@ def verifier_signature(message, signature, cle_publique):
     if version_signature != VERSION_SIGNATURE:
         raise Exception("Signature non supportee")
     
-    hachage = blake2b(message_stringify(message))
+    hachage = blake2b(message_stringify(message, buffer=buffer))
     ed25519verify(cle_publique, signature[1:], hachage)
 
 
@@ -238,7 +245,7 @@ def uuid4():
 # Buffer pour recevoir l'etat
 class BufferMessage:
 
-    def __init__(self, bufsize = 8*1024):
+    def __init__(self, bufsize=8*1024):
         self.__buffer = bytearray(bufsize)
         self.__len_courant = 0
 
@@ -246,7 +253,23 @@ class BufferMessage:
         return memoryview(self.__buffer)[:self.__len_courant]
 
     def set_text(self, data):
-        self.set_bytes(data.encode('utf-8'))
+        try:
+            if len(data) > len(self.__buffer):
+                raise ValueError('overflow')
+        except TypeError:
+            pass  # Pas de len sur data
+
+        pos = 0
+        for c in data:
+            cv = c.encode('utf-8')
+
+            if pos + len(cv) > len(self.__buffer):
+                raise ValueError('overflow')
+
+            self.__buffer[pos:pos+len(cv)] = cv
+            pos += len(cv)
+
+        self.__len_courant = pos
 
     def set_bytes(self, data):
         if len(data) > len(self.__buffer):
