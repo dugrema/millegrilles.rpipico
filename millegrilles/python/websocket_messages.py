@@ -69,7 +69,7 @@ async def poll(websocket, buffer, timeout_http=60, generer_etat=None, ui_lock=No
     # Poll socket
     while expiration_polling > time.time():
         try:
-            reponse = websocket.recv(buffer.buffer)
+            reponse = await websocket.recv(buffer.buffer)
             if reponse is not None and len(reponse) > 0:
                 print("Reponse buffer taille %d" % len(reponse))
                 return reponse
@@ -145,8 +145,8 @@ async def charger_timeinfo(websocket, buffer, refresh: False):
     return offset_info
 
 
-async def verifier_signature(reponse):
-    return await verifier_message(reponse)
+async def verifier_signature(reponse, buffer):
+    return await verifier_message(reponse, buffer)
 
 
 async def _traiter_commande(appareil, reponse):
@@ -231,7 +231,7 @@ class PollingThread:
         if self.__refresh_step <= 4:
             self.__refresh_step = 5
             # Verifier si le certificat doit etre renouvelle
-            #await requete_fiche_publique(self.__websocket, buffer=self.__buffer)
+            await requete_fiche_publique(self.__websocket, buffer=self.__buffer)
             return
 
         # Succes - ajuster prochain refresh
@@ -340,8 +340,8 @@ class PollingThread:
                     #    fichiers.write(self.__buffer.get_data()[:len_buffer])
                 else:
                     try:
-                        info_certificat = await verifier_signature(reponse)
                         len_buffer = len(self.__buffer.get_data())
+                        info_certificat = await verifier_signature(reponse, self.__buffer)
                         print("Message websocket recu (valide, len %d)" % len_buffer)
 
                         # Cleanup
