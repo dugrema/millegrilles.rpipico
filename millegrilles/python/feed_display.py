@@ -9,9 +9,21 @@ class FeedDisplay:
     
     def __init__(self, appareil):
         self._appareil = appareil
-    
+
     def generate(self, group=None):
-        raise Exception('Not implemented')
+        if self._appareil.get_display_override() is not None:
+            return self.afficher_override()
+        else:
+            return self._generate(group)
+    
+    def _generate(self, group=None):
+        raise NotImplementedError()
+    
+    def afficher_override(self):
+        print("Afficher override")
+        lignes = self._appareil.get_display_override()
+        for ligne in lignes:
+            yield ligne, None, 30.0, False
 
 
 class FeedDisplayDefault(FeedDisplay):
@@ -19,9 +31,9 @@ class FeedDisplayDefault(FeedDisplay):
     def __init__(self, appareil):
         super().__init__(appareil)
 
-    def generate(self, group=None):
+    def _generate(self, group=None):
         try:
-            wifi_ip = self._appareil.lectures_courantes['rp2pico/wifi']['valeur_str']
+            wifi_ip = self._appareil.lectures_courantes['rp2picow/wifi']['valeur_str']
         except KeyError:
             print("No wifi lectures")
             #from wifi import get_etat_wifi
@@ -33,8 +45,17 @@ class FeedDisplayDefault(FeedDisplay):
         data_lignes = ['WIFI IP', wifi_ip, ligne_mode]
         if self._appareil.wifi_ok is not True:
             data_lignes.append(MSG_WIFI_OFFLINE)
+
+        # Afficher date/heure
+        yield '', 'DT', 5.0, True
+            
         while len(data_lignes) > 0:
+            # Verifier si un override est present
+            if self._appareil.get_display_override() is not None:
+                raise SkipRemainingLines()
+            
             yield data_lignes.pop(0), None, None, False
+
 
 
 class FeedDisplayCustom(FeedDisplay):
@@ -51,7 +72,11 @@ class FeedDisplayCustom(FeedDisplay):
         except KeyError:
             return None
 
-    def generate(self, group=None):
+    def _generate(self, group=None):
+        
+        # Afficher date/heure
+        yield None, 'DT', None, False
+        
         try:
             lignes = self.__config['lignes']
         except KeyError:
@@ -62,7 +87,12 @@ class FeedDisplayCustom(FeedDisplay):
             if self._appareil.wifi_ok is not True:
                 yield MSG_WIFI_OFFLINE, None, 5.0, True
             for ligne in lignes:
+                # Verifier si un override est present
+                if self._appareil.get_display_override() is not None:
+                    raise SkipRemainingLines()
+
                 yield self.formatter_ligne(ligne)
+                
         else:
             # print('Display group %s' % group)
             if self._appareil.wifi_ok is not True:
@@ -91,6 +121,10 @@ class FeedDisplayCustom(FeedDisplay):
                     for ligne in lignes_courantes:
                         yield self.formatter_ligne(
                             ligne, duree_override=duree_override, no_clear=no_clear)
+                        
+                        # Verifier si un override est present
+                        if self._appareil.get_display_override() is not None:
+                            raise SkipRemainingLines()
 
     def formatter_ligne(self, ligne, duree_override=None, no_clear=False):
         masque = ligne['masque']

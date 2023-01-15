@@ -340,6 +340,8 @@ class PollingThread:
                 self.__appareil.get_etat,
                 self.__appareil.ui_lock
             )
+            
+            await asyncio.sleep_ms(10)  # Yield
 
             if reponse is not None and len(reponse) > 0:
                 # Remettre memoryview dans buffer - ajuste len
@@ -347,9 +349,9 @@ class PollingThread:
                 reponse = None
 
                 # Cleanup memoire - tout est copie dans le buffer
-                await asyncio.sleep_ms(1)  # Yield
+                await asyncio.sleep_ms(20)  # Yield
                 collect()
-                await asyncio.sleep_ms(1)  # Yield
+                await asyncio.sleep_ms(30)  # Yield
 
                 try:
                     reponse = loads(self.__buffer.get_data())
@@ -359,6 +361,7 @@ class PollingThread:
                     #with open('err.txt', 'wb') as fichiers:
                     #    fichiers.write(self.__buffer.get_data()[:len_buffer])
                 else:
+                    await asyncio.sleep_ms(50)  # Yield
                     try:
                         len_buffer = len(self.__buffer.get_data())
                         info_certificat = await verifier_signature(reponse, self.__buffer)
@@ -366,6 +369,7 @@ class PollingThread:
 
                         # Cleanup
                         info_certificat = None
+                        await asyncio.sleep_ms(20)  # Yield
                 
                         await _traiter_commande(self.__appareil, reponse)
                     except KeyError as e:
@@ -374,9 +378,9 @@ class PollingThread:
 
             # Cleanup
             reponse = None
-            await asyncio.sleep_ms(1)  # Yield
+            await asyncio.sleep_ms(50)  # Yield
             collect()
-            await asyncio.sleep_ms(1)  # Yield
+            await asyncio.sleep_ms(50)  # Yield
             
             # Run polling completee, reset erreurs
             self.__errnumber = 0

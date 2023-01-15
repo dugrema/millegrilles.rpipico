@@ -164,13 +164,26 @@ async def recevoir_certificat(certificat):
     return True
 
 
-async def run_challenge(challenge, ui_lock=None):
+async def run_challenge(appareil, challenge, ui_lock=None):
     from millegrilles.ledblink import led_executer_sequence
     print("Run challenge %s" % challenge)
-    await led_executer_sequence(challenge, 2, ui_lock=ui_lock)
+    
+    try:
+        if appareil.display_actif:
+            challenge_str = [str(code) for code in challenge]
+            display = [
+                'Activation',
+                'Code: %s' % ','.join(challenge_str)
+            ]
+            appareil.set_display_override(display, duree=30)
+        else:
+            await led_executer_sequence(challenge, 2, ui_lock=ui_lock)
+    except Exception as e:
+        print("Erreur override display")
+        print_exception(e)
 
 
-async def run_inscription(url_relai: str, ui_lock, buffer):
+async def run_inscription(appareil, url_relai: str, ui_lock, buffer):
     url_inscription = url_relai + CONST_PATH_INSCRIPTION
     certificat_recu = False
     try:
@@ -207,7 +220,7 @@ async def run_inscription(url_relai: str, ui_lock, buffer):
                 pass
             else:
                 try:
-                    await run_challenge(challenge, ui_lock)
+                    await run_challenge(appareil, challenge, ui_lock)
                 except Exception:
                     pass  # OK
                 

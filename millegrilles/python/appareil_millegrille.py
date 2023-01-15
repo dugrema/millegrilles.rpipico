@@ -119,6 +119,9 @@ class Runner:
         self.__timezone_offset = None
         self.__erreurs_memory = 0  # Nombre de MemoryErrors depuis succes
         self.__erreurs_enomem = 0  # Nombre de Errno12 ENOMEM (ussl.wrap_socket) depuis succes
+        self.__override_display = None
+        self.__override_display_expiration = None
+        self.__display_actif = False
     
     async def configurer_devices(self):
         self.__ui_lock = asyncio.Lock()
@@ -157,6 +160,10 @@ class Runner:
     @property
     def wifi_ok(self):
         return self.__wifi_ok
+    
+    @property
+    def display_actif(self):
+        return self.__display_actif
     
     def reset_erreurs(self):
         self.__erreurs_memory = 0
@@ -202,7 +209,7 @@ class Runner:
             for url_relai in self.__url_relais:
                 try:
                     print("Signature certificat avec relai %s " % url_relai)
-                    await run_inscription(url_relai, self.__ui_lock, buffer=BUFFER_MESSAGE)
+                    await run_inscription(self, url_relai, self.__ui_lock, buffer=BUFFER_MESSAGE)
                     certificat_recu = True
                     break
                 except OSError as ose:
@@ -219,7 +226,7 @@ class Runner:
 
             await asyncio.sleep(10)
 
-        print("Certificat recu")
+        print("_signature_certificat Done")
 
     def feed_default(self):
         return feed_display.FeedDisplayDefault(self)
@@ -228,6 +235,7 @@ class Runner:
         return feed_display.FeedDisplayCustom(self, name, config)
 
     def get_feeds(self, name=None):
+        self.__display_actif = True
         if name is None:
             return self.feed_default()
         try:
@@ -236,6 +244,20 @@ class Runner:
         except (AttributeError, OSError, KeyError, TypeError):
             print("Feed %s inconnu, defaulting" % name)
             return self.feed_default()
+    
+    def set_display_override(self, override, duree=5):
+        print("Set display override %s" % override)
+        self.__override_display_expiration = time.time() + duree
+        self.__override_display = override
+        
+    def get_display_override(self):
+        if self.__override_display_expiration is not None:
+            if self.__override_display_expiration < time.time():
+                # Override est expire, on nettoie
+                self.__override_display_expiration = None
+            else:
+                return self.__override_display
+        self.__override_display = None
     
     async def entretien(self, init=False):
         """
@@ -368,6 +390,7 @@ class Runner:
                     await self.__recuperer_ca()
                 elif self._mode_operation == CONST_MODE_SIGNER_CERTIFICAT:
                     await self._signature_certificat()
+                    continue
                 elif self._mode_operation == CONST_MODE_POLLING:
                     await self._polling()
                     continue
@@ -380,14 +403,16 @@ class Runner:
                     self.__erreurs_enomem += 1
                     if self.__erreurs_enomem >= CONST_NB_ERREURS_RESET:
                         print("ENOMEM count:%d, reset" % self.__erreurs_enomem)
+                        await led_executer_sequence(
+                            const_leds.CODE_ERREUR_MEMOIRE, executions=1, ui_lock=self.__ui_lock)
                         reboot(e)
                     
                     print("Erreur memoire no %d" % self.__erreurs_enomem)
                     sys.print_exception(e)
                     collect()
                     self.afficher_info()
-                    await led_executer_sequence(
-                        const_leds.CODE_ERREUR_MEMOIRE, executions=1, ui_lock=self.__ui_lock)
+                    await asyncio.sleep_ms(500)
+                    continue
 
                 else:
                     print("OSError main")

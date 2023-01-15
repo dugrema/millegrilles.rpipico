@@ -11,7 +11,7 @@ async def traiter_commande(appareil, commande: dict):
         action = commande['_action']  # Correlation a la reponse d'action de requete
         
     if action == 'challengeAppareil':
-        await challenge_led_blink(commande)
+        await challenge_led_blink(appareil, commande)
     elif action == 'evenementMajDisplays':
         try:
             set_configuration_display(commande['displays'])
@@ -38,9 +38,16 @@ async def traiter_commande(appareil, commande: dict):
         raise ValueError('Action inconnue : %s' % action)
 
 
-async def challenge_led_blink(commande: dict):
+async def challenge_led_blink(appareil, commande: dict):
     from ledblink import led_executer_sequence
     challenge = commande['challenge']
+    
+    display = [
+        'Activation',
+        'Code: %s' % ','.join(challenge)
+    ]
+    appareil.set_display_override(display, duree=20)
+    
     await led_executer_sequence(challenge, executions=2)
 
 
