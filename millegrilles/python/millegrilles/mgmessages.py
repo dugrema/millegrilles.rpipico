@@ -19,9 +19,9 @@ from gc import collect
 VERSION_SIGNATURE = 2
 
 
-async def signer_message(message, cle_privee=None, **kwargs):
+async def signer_message(message, cle_privee=None, buffer=None, **kwargs):
     """ Genere l'en-tete et la signature d'un message """
-    entete, signature = await __signer_message(message, cle_privee, **kwargs)
+    entete, signature = await __signer_message(message, cle_privee, buffer, **kwargs)
     message['en-tete'] = entete
     message['_signature'] = signature
     if entete.get('fingerprint_certificat') is not None:
@@ -47,7 +47,7 @@ async def __signer_message(message, cle_privee=None, buffer=None, **kwargs):
     
     # Signer
     await asyncio.sleep_ms(10)
-    signature = __signer_message_2(message, cle_privee).decode('utf-8')
+    signature = __signer_message_2(message, cle_privee, buffer).decode('utf-8')
     # signature = __signer_message_2(message, cle_privee)
 
     return entete, signature
