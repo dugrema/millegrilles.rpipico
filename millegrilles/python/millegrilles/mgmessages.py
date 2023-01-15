@@ -6,7 +6,7 @@ import time
 import uasyncio as asyncio
 import oryx_crypto
 
-from io import StringIO
+from io import IOBase
 
 from . import certificat
 from .certificat import valider_certificats
@@ -168,14 +168,11 @@ def __traiter_value(value):
 
 
 def message_stringify(message, buffer=None):
-    # Utiliser StringIO - permet de creer buffers non-contigus
-    buffer_str = StringIO()
-    json.dump(message, buffer_str, separators=(',', ':'))
     if buffer is None:
-        return buffer_str.getvalue().encode('utf-8')
+        return json.dumps(message, separators=(',', ':')).encode('utf-8')
     else:
-        buffer_str.seek(0)  # Revenir au debut, transferer dans buffer
-        buffer.set_text(buffer_str)
+        buffer.clear()
+        json.dump(message, buffer, separators=(',', ':'))
         return buffer.get_data()
 
 
@@ -243,9 +240,10 @@ def uuid4():
 
 
 # Buffer pour recevoir l'etat
-class BufferMessage:
+class BufferMessage(IOBase):
 
     def __init__(self, bufsize=8*1024):
+        super().__init__()
         self.__buffer = bytearray(bufsize)
         self.__len_courant = 0
 
@@ -271,6 +269,27 @@ class BufferMessage:
 
         self.__len_courant = pos
 
+    def set_text_read(self, data):
+        try:
+            if len(data) > len(self.__buffer):
+                raise ValueError('overflow')
+        except TypeError:
+            pass  # Pas de len sur data
+
+        pos = 0
+        c = data.read(1)
+        while c != '':
+            cv = c.encode('utf-8')
+
+            if pos + len(cv) > len(self.__buffer):
+                raise ValueError('overflow')
+
+            self.__buffer[pos:pos+len(cv)] = cv
+            pos += len(cv)
+            c = data.read(1)
+
+        self.__len_courant = pos
+
     def set_bytes(self, data):
         if len(data) > len(self.__buffer):
             raise ValueError('overflow')
@@ -284,7 +303,21 @@ class BufferMessage:
 
     def clear(self):
         self.__len_courant = 0
-        self.__buffer.clear()
+        # self.__buffer.clear()
+
+    def write(self, data):
+        if len(data) + self.__len_courant > len(self.__buffer):
+            raise Exception('ouverflow')
+
+        if isinstance(data, bytes) or isinstance(data, bytearray):
+            self.__buffer[self.__len_courant:self.__len_courant+len(data)] = data
+            self.__len_courant += len(data)
+        elif isinstance(data, str):
+            for c in data:
+                cb = c.encode('utf-8')
+                self.write(cb)
+        else:
+            raise ValueError("non supporte %s" % data)
 
     @property
     def buffer(self):
