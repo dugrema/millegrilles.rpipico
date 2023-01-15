@@ -8,6 +8,7 @@ from millegrilles import urequests2 as requests
 from millegrilles import wifi
 from millegrilles.wifi import connect_wifi
 from millegrilles.mgmessages import verifier_message, signer_message
+from millegrilles.certificat import PATH_CERT, PATH_CA_CERT
 
 CONST_PATH_FICHIER_CONN = const('conn.json')
 CONST_PATH_FICHIER_DISPLAY = const('displays.json')
@@ -30,13 +31,13 @@ async def detecter_mode_operation():
         return CONST_MODE_INIT
     
     try:
-        stat('certs/ca.der')
+        stat(PATH_CA_CERT)
     except:
         print("Mode recuperer ca.der")
         return CONST_MODE_RECUPERER_CA
     
     try:
-        stat("certs/cert.pem")
+        stat(PATH_CERT)
     except:
         print("Mode signer certificat")
         return CONST_MODE_SIGNER_CERTIFICAT
@@ -281,15 +282,19 @@ async def charger_relais(ui_lock=None, refresh=False, buffer=None):
 
 
 def sauvegarder_relais(fiche: dict):
+    url_relais = [app['url'] for app in fiche['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
+    sauvegarder_relais_liste(url_relais)
+    return url_relais
+
+
+def sauvegarder_relais_liste(url_relais: list):
     info_relais = None
     try:
         with open('relais.json') as fichier:
             info_relais = load(fichier)
     except (OSError, KeyError):
         print("relais.json non disponible")
-    
-    url_relais = [app['url'] for app in fiche['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
-            
+
     if info_relais is None or info_relais['relais'] != url_relais:
         print('Sauvegarder relais.json maj')
         try:
@@ -298,8 +303,6 @@ def sauvegarder_relais(fiche: dict):
         except Exception as e:
             print('Erreur sauvegarde relais.json')
             print_exception(e)
-    
-    return url_relais
 
 
 async def generer_message_timeinfo(timezone_str: str):

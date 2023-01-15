@@ -20,7 +20,7 @@ import feed_display
 import config
 from websocket_messages import PollingThread
 from handler_devices import DeviceHandler
-from millegrilles.certificat import entretien_certificat as __entretien_certificat                       
+from millegrilles.certificat import entretien_certificat as __entretien_certificat, PATH_CERT
 from message_inscription import run_inscription, \
      verifier_renouveler_certificat as __verifier_renouveler_certificat
 
@@ -190,13 +190,20 @@ class Runner:
         """
         Mode d'attente de signature de certificat
         """
-        # await config.init_cle_privee()
-        
-        while True:
+        certificat_recu = False
+        while certificat_recu is False:
+            try:
+                stat(PATH_CERT)
+                certificat_recu = True
+                break  # Certificat existe
+            except:
+                pass  # Ok, certificat absent
+            
             for url_relai in self.__url_relais:
                 try:
                     print("Signature certificat avec relai %s " % url_relai)
                     await run_inscription(url_relai, self.__ui_lock, buffer=BUFFER_MESSAGE)
+                    certificat_recu = True
                     break
                 except OSError as ose:
                     if ose.errno == 12:
@@ -422,7 +429,7 @@ class Runner:
 
         # Task devices
         asyncio.create_task(self._device_handler.run(
-            self.__ui_lock, self.recevoir_lectures, self.get_feeds, 1000))
+            self.__ui_lock, self.recevoir_lectures, self.get_feeds, 2000))
 
         # Executer main loop
         await self.__main()

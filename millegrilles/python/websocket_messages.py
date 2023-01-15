@@ -22,6 +22,7 @@ CONST_CHAMP_TIMEOUT = const('http_timeout')
 CONST_DOMAINE_SENSEURSPASSIFS = const('SenseursPassifs')
 CONST_REQUETE_DISPLAY = const('getAppareilDisplayConfiguration')
 CONST_REQUETE_FICHE_PUBLIQUE = const('getFichePublique')
+CONST_REQUETE_RELAIS_WEB = const('getRelaisWeb')
 
 CONST_DUREE_THREAD_POLLING = const(6 * 60 * 60)
 CONST_EXPIRATION_CONFIG = const(10 * 60)
@@ -42,8 +43,10 @@ async def __preparer_message(timeout_http, generer_etat, buffer):
     etat[CONST_CHAMP_TIMEOUT] = timeout_http
 
     # Signer message
-    etat = await signer_message(etat, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil')
-    buffer.set_text(dumps(etat))
+    etat = await signer_message(
+        etat, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil', buffer=buffer)
+    buffer.clear()
+    dump(etat, buffer)
 
     return buffer
 
@@ -110,6 +113,22 @@ async def requete_fiche_publique(websocket, buffer):
     
     websocket.send(buffer.get_data())
 
+
+async def requete_relais_web(websocket, buffer):
+    requete = await signer_message(
+        dict(), domaine='senseurspassifs_relai', action=CONST_REQUETE_RELAIS_WEB, buffer=buffer)
+    buffer.clear()
+    dump(requete, buffer)
+    requete = None
+
+    # Cleanup memoire
+    await asyncio.sleep_ms(1)
+    collect()
+    await asyncio.sleep_ms(1)
+    
+    websocket.send(buffer.get_data())
+    
+    
 
 async def charger_timeinfo(websocket, buffer, refresh: False):
     
@@ -231,7 +250,7 @@ class PollingThread:
         if self.__refresh_step <= 4:
             self.__refresh_step = 5
             # Verifier si le certificat doit etre renouvelle
-            await requete_fiche_publique(self.__websocket, buffer=self.__buffer)
+            await requete_relais_web(self.__websocket, buffer=self.__buffer)
             return
 
         # Succes - ajuster prochain refresh
@@ -308,8 +327,9 @@ class PollingThread:
                         raise e
                 self.__websocket = None
                 collect()
-                print("Socket closed")
+                print("Collect")
                 mem_info()
+                print("--- Socket closed --- ")
             
     async def _poll(self):
         try:
