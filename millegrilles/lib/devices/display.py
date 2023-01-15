@@ -50,9 +50,6 @@ class OutputLignes(Driver):
                 except AttributeError:
                     self.__duree_afficher_datetime = 10
 
-                # Affichage heure
-                await self.afficher_datetime()
-
                 compteur = 0
                 lignes = data_generator.generate(group=self._nb_lignes)
                 if lignes is not None:
@@ -60,6 +57,12 @@ class OutputLignes(Driver):
                     duree_page = 1.0  # Minimum 1 seconde
                     clear_after = True
                     for ligne, flag, duree, no_clear in lignes:
+
+                        if flag == 'DT':
+                            # Afficher date/heure
+                            await self.afficher_datetime()
+                            continue
+
                         compteur += 1
                         if no_clear:
                             clear_after = False  # Toggle clear

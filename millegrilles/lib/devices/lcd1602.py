@@ -32,7 +32,7 @@ class LCD1602(OutputLignes):
         await self._ui_lock.acquire()
         try:
             self._instance.move_to(0, self.__ligne)
-            ligne_data = '{:<16}'.format(data).strip()
+            ligne_data = '{:<16}'.format(data)
             if flag is not None:
                 ligne_data = ligne_data[:15] + flag
             await self._instance.putstr_async(ligne_data)

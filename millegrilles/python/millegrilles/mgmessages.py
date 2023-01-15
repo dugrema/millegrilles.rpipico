@@ -32,14 +32,17 @@ async def signer_message(message, cle_privee=None, buffer=None, **kwargs):
 async def __signer_message(message, cle_privee=None, buffer=None, **kwargs):
     message = prep_message_1(message)
     hachage = hacher_message(message, buffer).decode('utf-8')
+    await asyncio.sleep_ms(10)
 
     try:
         cert_local = certificat.load_pem_certificat(certificat.PATH_CERT)[0]
         fingerprint = certificat.calculer_fingerprint(cert_local)
     except OSError:
         fingerprint = None
-    
+    await asyncio.sleep_ms(10)
+
     entete = await generer_entete(hachage, fingerprint=fingerprint, **kwargs)
+    await asyncio.sleep_ms(10)
     message['en-tete'] = entete
     
     # Re-trier le message
@@ -47,13 +50,13 @@ async def __signer_message(message, cle_privee=None, buffer=None, **kwargs):
     
     # Signer
     await asyncio.sleep_ms(10)
-    signature = __signer_message_2(message, cle_privee, buffer).decode('utf-8')
+    signature = (await __signer_message_2(message, cle_privee, buffer)).decode('utf-8')
     # signature = __signer_message_2(message, cle_privee)
 
     return entete, signature
 
 
-def __signer_message_2(message, cle_privee=None, buffer=None):
+async def __signer_message_2(message, cle_privee=None, buffer=None):
     if cle_privee is None:
         # Charger la cle locale
         try:
@@ -65,11 +68,15 @@ def __signer_message_2(message, cle_privee=None, buffer=None):
                 cle_privee = fichier.read()
                 
     cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
+    await asyncio.sleep_ms(10)
 
     message_str = message_stringify(message, buffer=buffer)
+    await asyncio.sleep_ms(10)
     hachage = oryx_crypto.blake2b(message_str)
-    
+    await asyncio.sleep_ms(10)
+
     signature = bytes([VERSION_SIGNATURE]) + oryx_crypto.ed25519sign(cle_privee, cle_publique, hachage)
+    await asyncio.sleep_ms(10)
     signature = multibase.encode('base64', signature)
     
     return signature
@@ -87,7 +94,7 @@ async def generer_entete(hachage,
         ca_der = fichier.read()
     await asyncio.sleep_ms(10)
     idmg = certificat.calculer_idmg(ca_der).decode('utf-8')
-    
+
     cle_publique = None
     if fingerprint is None:
         try:
@@ -186,15 +193,17 @@ async def verifier_message(message: dict, buffer=None):
     del message['_signature']
 
     # Trier tous les champs
+    await asyncio.sleep_ms(10)
     message = prep_message_1(message)
 
-    await asyncio.sleep_ms(1)
-    verifier_signature(message, signature, info_certificat['public_key'], buffer=buffer)
+    await asyncio.sleep_ms(10)
+    await __verifier_signature(message, signature, info_certificat['public_key'], buffer=buffer)
+    await asyncio.sleep_ms(10)
 
     return info_certificat
 
 
-def verifier_signature(message, signature, cle_publique, buffer=None):
+async def __verifier_signature(message, signature, cle_publique, buffer=None):
     from multiformats.multibase import decode
     from oryx_crypto import blake2b, ed25519verify
     
@@ -204,8 +213,12 @@ def verifier_signature(message, signature, cle_publique, buffer=None):
     version_signature = signature[0]
     if version_signature != VERSION_SIGNATURE:
         raise Exception("Signature non supportee")
-    
-    hachage = blake2b(message_stringify(message, buffer=buffer))
+
+    await asyncio.sleep_ms(10)
+    data = message_stringify(message, buffer=buffer)
+    await asyncio.sleep_ms(10)
+    hachage = blake2b(data)
+    await asyncio.sleep_ms(10)
     ed25519verify(cle_publique, signature[1:], hachage)
 
 
