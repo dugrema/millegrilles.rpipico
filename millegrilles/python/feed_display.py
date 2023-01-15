@@ -60,13 +60,13 @@ class FeedDisplayCustom(FeedDisplay):
         if group is None:
             # print('Display group None')
             if self._appareil.wifi_ok is not True:
-                yield MSG_WIFI_OFFLINE, None, None, False
+                yield MSG_WIFI_OFFLINE, None, 5.0, True
             for ligne in lignes:
                 yield self.formatter_ligne(ligne)
         else:
             # print('Display group %s' % group)
             if self._appareil.wifi_ok is not True:
-                yield MSG_WIFI_OFFLINE, None, None, False
+                yield MSG_WIFI_OFFLINE, None, 5.0, True
                 for _ in range(1, group):
                     yield '', None, None, False
             
@@ -101,7 +101,7 @@ class FeedDisplayCustom(FeedDisplay):
             appareil_nom = None
             variable = ligne['variable']
             if variable is None or variable == '':
-                return masque, flag, None, False
+                return masque, flag, duree, True
         except KeyError:
             pass
         else:
