@@ -36,12 +36,15 @@ async def generer_message_inscription(buffer, action='inscrire', domaine=None):
         "csr": generer_csr(),
     }
 
-    message_inscription = await signer_message(message_inscription, action=action, domaine=domaine)
+    message_inscription = await signer_message(
+        message_inscription, action=action, domaine=domaine, buffer=buffer)
     
-    buffer.set_text(json.dumps(message_inscription))
+    buffer.clear()
+    json.dump(message_inscription, buffer)
     # message_inscription = None
     
     # return message_inscription
+    return buffer
 
 
 def generer_csr():
@@ -93,12 +96,12 @@ async def post_inscription(url, buffer):
         reponse.close()
 
 
-async def valider_reponse(status_code: int, reponse: dict):
+async def valider_reponse(status_code: int, reponse: dict, buffer=None):
     
     if status_code not in[200, 202]:
         print("Erreur inscription : %s" % reponse.get('err'))
     else:    
-        info_certificat = await verifier_message(reponse)
+        info_certificat = await verifier_message(reponse, buffer=buffer)
         print("reponse valide, info certificat:\n%s" % info_certificat)
         roles = info_certificat.get('roles') or list()
         exchanges = info_certificat.get('exchanges') or list()
@@ -157,6 +160,8 @@ async def recevoir_certificat(certificat):
     rename(PATH_CLE_PRIVEE + '.new', PATH_CLE_PRIVEE)
     rename(PATH_CERT + '.new', PATH_CERT)
     print("Nouveau certificat installe")
+    
+    return True
 
 
 async def run_challenge(challenge, ui_lock=None):
@@ -186,15 +191,14 @@ async def run_inscription(url_relai: str, ui_lock, buffer):
         
         reponse_dict = json.loads(buffer_reponse.get_data())
         
-        if await valider_reponse(status_code, reponse_dict) is True:
+        if await valider_reponse(status_code, reponse_dict, buffer=buffer) is True:
             # Extraire le certificat si fourni
             try:
                 certificat = reponse_dict['certificat']
             except KeyError:
                 pass  # On n'a pas recu le certificat
             else:
-                await recevoir_certificat(certificat)
-                certificat_recu = True
+                certificat_recu = await recevoir_certificat(certificat)
             
             # Extraire challenge/confirmation et executer si present
             try:
@@ -202,12 +206,18 @@ async def run_inscription(url_relai: str, ui_lock, buffer):
             except KeyError:
                 pass
             else:
-                await run_challenge(challenge, ui_lock)
+                try:
+                    await run_challenge(challenge, ui_lock)
+                except Exception:
+                    pass  # OK
+                
     except OSError:
         raise
     except Exception as e:
         print("Erreur reception certificat")
         print_exception(e)
+        
+    return certificat_recu
 
 
 async def verifier_renouveler_certificat(url_relai: str, buffer):
@@ -250,7 +260,7 @@ async def verifier_renouveler_certificat(url_relai: str, buffer):
     reponse_dict = json.loads(buffer.get_data())
 
     # Extraire contenu de la reponse, cleanup
-    if await valider_reponse(status_code, reponse_dict) is True:
+    if await valider_reponse(status_code, reponse_dict, buffer=buffer) is True:
         # Extraire le certificat si fourni
         try:
             certificat = reponse_dict['certificat']
