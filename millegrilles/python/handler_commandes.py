@@ -5,7 +5,7 @@ from millegrilles.mgmessages import verifier_message
 
 
 async def traiter_commande(appareil, commande: dict):
-    print("Traiter : %s" % commande)
+    # print("Traiter : %s" % commande['en-tete'])
     try:
         action = commande['en-tete']['action']
     except KeyError:
