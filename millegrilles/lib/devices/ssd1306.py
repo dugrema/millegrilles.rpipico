@@ -27,9 +27,9 @@ class Ssd1306(OutputLignes):
         return SSD1306_I2C(self.__width, self.__height, i2c)
 
     async def preparer_ligne(self, data, flag=None):
-        ligne_data = '{:<16}'.format(data).strip()
+        ligne_data = ('{:<%d}' % self._nb_chars).format(data).strip()
         if flag is not None:
-            ligne_data = ligne_data[:self._nb_chars] + flag
+            ligne_data = ligne_data[:self._nb_chars-1] + flag
         self._instance.text(ligne_data, 0, self.__ligne * self.__char_size)
         self.__ligne += 1
 

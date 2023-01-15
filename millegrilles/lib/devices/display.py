@@ -18,10 +18,14 @@ class OutputLignes(Driver):
 
     async def load(self):
         self._instance = self._get_instance()
+
         try:
             await self._instance.setup()
         except AttributeError:
             pass  # No async setup required
+
+        await self.preparer_ligne(b"Initialisation")
+        await self.show(attente=0.1)
 
     def _get_instance(self):
         raise Exception('Not implemented')
@@ -48,6 +52,7 @@ class OutputLignes(Driver):
 
                 # Affichage heure
                 await self.afficher_datetime()
+
                 compteur = 0
                 lignes = data_generator.generate(group=self._nb_lignes)
                 if lignes is not None:
