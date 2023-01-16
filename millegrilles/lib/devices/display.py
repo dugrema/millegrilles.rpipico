@@ -1,5 +1,7 @@
-import uasyncio as asyncio
+import time
 from sys import print_exception
+
+import uasyncio as asyncio
 
 from handler_devices import Driver
 
@@ -54,35 +56,51 @@ class OutputLignes(Driver):
                 lignes = data_generator.generate(group=self._nb_lignes)
                 if lignes is not None:
                     await self.clear()
-                    duree_page = 1.0  # Minimum 1 seconde
+                    duree_page = 0.5  # Minimum 0.5 seconde
                     clear_after = True
-                    for ligne, flag, duree, no_clear in lignes:
+                    temps_debut_rendering = time.time()
+
+                    for ligne, flag, duree_ligne, no_clear in lignes:
 
                         if flag == 'DT':
                             # Afficher date/heure
                             await self.afficher_datetime()
+                            continue
+                        elif flag == 'PB':  # Page Break
+                            if compteur == 0:
+                                # Page Break, aucunes lignes
+                                continue
+                        elif flag == 'CL':  # Clear screen
+                            await self.clear()
                             continue
 
                         compteur += 1
                         if no_clear:
                             clear_after = False  # Toggle clear
                         try:
-                            duree_page = max(duree_page, duree)
+                            duree_page = max(0.5, duree_page, duree_ligne)
                         except TypeError:
                             pass  # OK, default
-                        await self.preparer_ligne(ligne[:self._nb_chars], flag)
-                        if compteur == self._nb_lignes:
+
+                        if flag != 'PB':
+                            await self.preparer_ligne(ligne[:self._nb_chars], flag)
+
+                        if flag == 'PB' or compteur == self._nb_lignes:
                             compteur = 0
+                            duree_page = max(0.5, temps_debut_rendering + duree_page - time.time())
                             await self.show(attente=duree_page)
-                            if clear_after is True:
+                            if clear_after is True and duree_page > 0.5:
                                 await self.clear()
+                            duree_page = 0.5
                             clear_after = True  # Reset
+                            temps_debut_rendering = time.time()  # Reset temps pour page
 
                     if compteur > 0:
+                        duree_page = max(0.5, temps_debut_rendering + duree_page - time.time())
                         # Afficher la derniere page (incomplete)
                         for _ in range(compteur, self._nb_lignes):
                             await self.preparer_ligne('')
-                        await self.show()
+                        await self.show(attente=duree_page)
 
             except SkipRemainingLines:
                 print("run_display SkipRemainingLines")
