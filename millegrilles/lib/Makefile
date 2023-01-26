@@ -17,7 +17,8 @@ SRC_DEVICES = \
     devices/lcd1602.mpy \
     devices/onewire.mpy \
     devices/rpipico.mpy \
-    devices/ssd1306.mpy
+    devices/ssd1306.mpy \
+    devices/switch.mpy
 
 
 %.mpy: %.py
