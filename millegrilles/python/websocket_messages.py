@@ -168,8 +168,8 @@ async def verifier_signature(reponse, buffer):
     return await verifier_message(reponse, buffer)
 
 
-async def _traiter_commande(appareil, reponse):
-    return await traiter_commande(appareil, reponse)
+async def _traiter_commande(appareil, reponse, info_certificat):
+    return await traiter_commande(appareil, reponse, info_certificat)
 
 
 class PollingThread:
@@ -368,10 +368,10 @@ class PollingThread:
                         print("Message websocket recu (valide, len %d)" % len_buffer)
 
                         # Cleanup
-                        info_certificat = None
+                        # info_certificat = None
                         await asyncio.sleep_ms(20)  # Yield
                 
-                        await _traiter_commande(self.__appareil, reponse)
+                        await _traiter_commande(self.__appareil, reponse, info_certificat)
                     except KeyError as e:
                         print("Erreur reception KeyError %s" % str(e))
                         print("ERR Message\n%s" % reponse)

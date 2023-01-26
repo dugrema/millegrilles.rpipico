@@ -17,6 +17,7 @@ CONST_HACHAGE_FINGERPRINT = 'blake2s-256'
 OID_EXCHANGES = bytearray([0x2a, 0x03, 0x04, 0x00])
 OID_ROLES = bytearray([0x2a, 0x03, 0x04, 0x01])
 OID_DOMAINES = bytearray([0x2a, 0x03, 0x04, 0x02])
+OID_USER_ID = bytearray([0x2a, 0x03, 0x04, 0x03])
 
 PATHNAME_RENOUVELER = const('/renouveler')
 
@@ -132,25 +133,35 @@ async def valider_certificats(pem_certs: list, date_validation=None, is_der=Fals
             parent = fichier.read()
         asyncio.sleep_ms(10)  # Yield
         oryx_crypto.x509validercertificate(cert, parent, date_validation)
-        
-    exchanges = oryx_crypto.x509Extension(x509_info, OID_EXCHANGES)
-    if exchanges is not None:
-        exchanges = exchanges.split(',')
-    roles = oryx_crypto.x509Extension(x509_info, OID_ROLES)
-    if roles is not None:
-        roles = roles.split(',')
-    domaines = oryx_crypto.x509Extension(x509_info, OID_DOMAINES)
-    if domaines is not None:
-        domaines = domaines.split(',')
-        
+
     enveloppe = {
         'fingerprint': fingerprint,
         'public_key': oryx_crypto.x509PublicKey(x509_info),
         'expiration': oryx_crypto.x509EndDate(x509_info),
-        'exchanges': exchanges,
-        'roles': roles,
-        'domaines': domaines,
+        # 'exchanges': exchanges,
+        # 'roles': roles,
+        # 'domaines': domaines,
+        # 'user_id': user_id,
     }
+
+    exchanges = oryx_crypto.x509Extension(x509_info, OID_EXCHANGES)
+    if exchanges is not None:
+        exchanges = exchanges.split(',')
+        enveloppe['exchanges'] = exchanges
+        
+    roles = oryx_crypto.x509Extension(x509_info, OID_ROLES)
+    if roles is not None:
+        roles = roles.split(',')
+        enveloppe['roles'] = roles
+        
+    domaines = oryx_crypto.x509Extension(x509_info, OID_DOMAINES)
+    if domaines is not None:
+        domaines = domaines.split(',')
+        enveloppe['domaines'] = domaines
+        
+    user_id = oryx_crypto.x509Extension(x509_info, OID_USER_ID)
+    if user_id is not None:
+        enveloppe['user_id'] = user_id
     
     return enveloppe
 
