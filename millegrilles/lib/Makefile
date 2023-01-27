@@ -28,14 +28,17 @@ SRC_DEVICES = \
     devices/ssd1306.mpy \
     devices/switch.mpy
 
+SRC_PROGRAMMES = \
+    programmes/environnement.mpy
+
 
 %.mpy: %.py
 	$(MPYCROSS) -O0 -o build/$@ $<
 
 build_folders:
-	mkdir -p build/multiformats build/uwebsockets build/devices
+	mkdir -p build/multiformats build/uwebsockets build/devices build/programmes
 
-python: $(SRC_PYTHON) ${SRC_MULTIFORMATS} ${SRC_UWEBSOCKETS} ${SRC_DEVICES}
+python: $(SRC_PYTHON) ${SRC_MULTIFORMATS} ${SRC_UWEBSOCKETS} ${SRC_DEVICES} ${SRC_PROGRAMMES}
 
 build: build_folders python
 
