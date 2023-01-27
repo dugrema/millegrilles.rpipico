@@ -18,6 +18,8 @@ from millegrilles.ledblink import led_executer_sequence
 
 import feed_display
 import config
+
+from programmes import ProgrammesHandler
 from websocket_messages import PollingThread
 from handler_devices import DeviceHandler
 from millegrilles.certificat import entretien_certificat as __entretien_certificat, PATH_CERT
@@ -107,6 +109,7 @@ class Runner:
     def __init__(self):
         self._mode_operation = 0
         self._device_handler = DeviceHandler(self)
+        self._programmes_handler = ProgrammesHandler(self)
         self._lectures_courantes = dict()
         self._lectures_externes = dict()
         self.__url_relais = None
@@ -126,6 +129,9 @@ class Runner:
     async def configurer_devices(self):
         self.__ui_lock = asyncio.Lock()
         await self._device_handler.load(self.__ui_lock)
+    
+    async def configurer_programmes(self):
+        await self._programmes_handler.initialiser()
     
     def recevoir_lectures(self, lectures):
         self._lectures_courantes = lectures
@@ -178,6 +184,8 @@ class Runner:
     async def get_etat(self):
         try:
             senseurs = set()
+            
+            # Extraire liste de senseurs utilises pour l'affichage
             for display in self.get_configuration_display().values():
                 try:
                     for ligne in display['lignes']:
@@ -189,9 +197,19 @@ class Runner:
                             pass  # Pas de variable configuree
                 except KeyError:
                     pass  # Pas de lignes configurees
+
+            # Extraire liste de senseurs utilises par les programmes
+            for senseur_id in self._programmes_handler.get_senseurs():
+                try:
+                    if len(senseur_id.split(':')) > 1:
+                        senseurs.add(senseur_id)
+                except KeyError:
+                    pass  # Pas un senseur externe
+                
             senseurs = list(senseurs)
             print("Senseurs externes : %s" % senseurs)
-        except (OSError, AttributeError):
+        except (OSError, AttributeError) as e:
+            print("get_etat Error %s" % e)
             senseurs = None
         return {
             'lectures_senseurs': self._lectures_courantes,
@@ -453,6 +471,8 @@ class Runner:
         
         # Charger configuration
         await self.configurer_devices()
+        
+        await self.configurer_programmes()
 
         # Demarrer thread entretien (wifi, date, configuration)
         await self.entretien(init=True)
