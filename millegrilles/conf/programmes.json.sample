@@ -1,0 +1,17 @@
+{
+    "programmes": [
+        {
+            "programme_id": "humidificateur",
+            "class": "programmes.environnement.Humidificateur",
+            "args": {
+                "senseurs_humidite": [
+                    "DHT11_p28/humidite",
+                    "10369beb-a6d3-492c-80bf-9f0268b73b6d:dummy/humidite"
+                ],
+                "switches_humidificateurs": ["switch_p18/etat"],
+                "humidite": 40.0, "precision": 5.0,
+                "duree_on_min": 20, "duree_off_min": 10
+            }
+        }
+    ]
+}

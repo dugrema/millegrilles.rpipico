@@ -1,7 +1,15 @@
 MPYCROSS = ../../micropython/mpy-cross/build/mpy-cross
 
 SRC_PYTHON = \
-    baseconv.mpy bmp180_rpi.mpy lcd_api.mpy logging.mpy morphys.mpy pico_i2c_lcd.mpy ssd1306.mpy handler_devices.mpy
+    baseconv.mpy \
+    bmp180_rpi.mpy \
+    lcd_api.mpy \
+    logging.mpy \
+    morphys.mpy \
+    pico_i2c_lcd.mpy \
+    ssd1306.mpy \
+    handler_devices.mpy \
+    handler_programmes.mpy
 
 SRC_MULTIFORMATS = \
     multiformats/converters.mpy multiformats/multibase.mpy multiformats/multihash.mpy
