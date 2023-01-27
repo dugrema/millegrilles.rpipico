@@ -117,6 +117,10 @@ class DeviceHandler:
         if len(outputs) > 0:
             return outputs
 
+    @property
+    def devices(self):
+        return self.__devices
+
     def get_device(self, device_id: str):
         return self.__devices[device_id]
 

@@ -535,11 +535,6 @@ STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
     }
 
     // Generer nouveau CSR
-    //    x509CreateCsr(const PrngAlgo *prngAlgo, void *prngContext,
-    //       const X509CertRequestInfo *certReqInfo, const void *subjectPublicKey,
-    //       const X509SignatureAlgoId *signatureAlgo, const void *signerPrivateKey,
-    //       uint8_t *output, size_t *written)
-
     error = x509CreateCsr(NULL, NULL,
        &certReqInfo, &publicKey,
        &signatureAlgoId, &privateKey,
