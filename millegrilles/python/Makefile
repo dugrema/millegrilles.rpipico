@@ -16,6 +16,7 @@ SRC_MILLEGRILLES = \
     millegrilles/etat.mpy \
     millegrilles/ledblink.mpy \
     millegrilles/mgmessages.mpy \
+    millegrilles/uping.mpy \
     millegrilles/urequests2.mpy \
     millegrilles/wifi.mpy
 

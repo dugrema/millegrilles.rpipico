@@ -1,6 +1,7 @@
 import json
 import network
 import uasyncio as asyncio
+from . import uping
 
 
 PATH_CONFIGURATION = const('conn.json')
@@ -60,8 +61,22 @@ def get_etat_wifi():
 
 def is_wifi_ok():
     wlan = network.WLAN(network.STA_IF)
+
+    if wlan.isconnected() is False:
+        return False
+
     status = wlan.status()
-    if status == 3:
-        return True
+    if status != 3:
+        return False
+
+    # Ping gateway, 1 seul paquet avec timeout court (la connexion est directe)
+    gw_ip = wlan.ifconfig()[2]
+    res = uping.ping(gw_ip, count=1, timeout=100, quiet=True)
+
+    # Verifier qu'au moins 1 paquet a ete recu (confirme par gateway)
+    if res[1] > 0:
+        return True  # Ping succes, connexion WIFI fonctionne
+    print("is_wifi_ok : Ping gateway (%s) failed" % gw_ip)
+
     return False
     
