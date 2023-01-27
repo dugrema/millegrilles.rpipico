@@ -165,6 +165,9 @@ class Runner:
     def display_actif(self):
         return self.__display_actif
     
+    def get_device(self, device_id):
+        return self._device_handler.get_device(device_id)
+    
     def reset_erreurs(self):
         self.__erreurs_memory = 0
         self.__erreurs_enomem = 0
