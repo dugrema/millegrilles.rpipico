@@ -166,6 +166,9 @@ class Runner:
         return self.__display_actif
     
     def get_device(self, device_id):
+        print("Charger device %s" % device_id)
+        devices = self._device_handler.devices
+        print("List devices %s" % devices.keys())
         return self._device_handler.get_device(device_id)
     
     def reset_erreurs(self):

@@ -1,10 +1,11 @@
 from config import set_configuration_display, set_timezone_offset, \
-    set_configuration_display, sauvegarder_relais, sauvegarder_relais_liste
+    set_configuration_display, sauvegarder_relais, sauvegarder_relais_liste, \
+    get_user_id
 from message_inscription import recevoir_certificat
 from millegrilles.mgmessages import verifier_message
 
 
-async def traiter_commande(appareil, commande: dict):
+async def traiter_commande(appareil, commande: dict, info_certificat: dict):
     try:
         action = commande['en-tete']['action']
     except KeyError:
@@ -34,6 +35,8 @@ async def traiter_commande(appareil, commande: dict):
         await recevoir_fiche_publique(commande)
     elif action == 'relaisWeb':
         await recevoir_relais_web(commande)
+    elif action == 'commandeAppareil':
+        await recevoir_commande_appareil(appareil, commande, info_certificat)
     else:
         raise ValueError('Action inconnue : %s' % action)
 
@@ -76,3 +79,26 @@ async def recevoir_relais_web(reponse):
         sauvegarder_relais_liste(reponse['relais'])
     except KeyError:
         print("Erreur reception relais web (relais manquant)")
+
+async def recevoir_commande_appareil(appareil, reponse, info_certificat):
+    print("Info certificat : %s" % info_certificat)
+    if info_certificat['user_id'] != get_user_id():
+        print("Commande appareil - mauvais user_id")
+        return
+    
+    print("Commande recue, user_id OK : %s" % reponse)
+    commande_action = reponse['commande_action']
+    
+    if commande_action == 'setSwitchValue':
+        await appareil_set_switch_value(appareil, reponse['senseur_id'], reponse['valeur'])
+    else:
+        print("recevoir_commande_appareil Commande inconnue : %s" % commande_action)
+
+async def appareil_set_switch_value(appareil, senseur_id, value):
+    print("appareil_set_switch_value %s -> %s" % (senseur_id, value))
+
+    device_id = senseur_id.split('/')[0]
+    device = appareil.get_device(device_id)
+    print("Device trouve : %s" % device)
+    device.value = value
+
