@@ -29,7 +29,8 @@ SRC_DEVICES = \
     devices/switch.mpy
 
 SRC_PROGRAMMES = \
-    programmes/environnement.mpy
+    programmes/environnement.mpy \
+    programmes/timers.mpy
 
 
 %.mpy: %.py
