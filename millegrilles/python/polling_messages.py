@@ -159,8 +159,8 @@ class PollingThread:
             return
 
         if self.__refresh_step <= 2:
-            self.__appareil.set_timezone_offset(
-                await charger_timeinfo(self.__url_relai, buffer=self.__buffer, refresh=not self.__load_initial))
+            # self.__appareil.set_timezone_offset(
+            #     await charger_timeinfo(self.__url_relai, buffer=self.__buffer, refresh=not self.__load_initial))
             self.__refresh_step = 3
             return
         

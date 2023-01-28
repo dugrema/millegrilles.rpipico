@@ -152,6 +152,15 @@ def get_timezone():
         return None
 
 
+def get_tz_offset():
+    try:
+        with open('tzoffset.json', 'rb') as fichier:
+            offset_info = load(fichier)
+        return offset_info['offset']
+    except (KeyError, OSError):
+        return None
+
+
 async def get_timezone_offset(self):
     try:
         if self.__timezone_offset is None:

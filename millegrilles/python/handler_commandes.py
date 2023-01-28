@@ -58,7 +58,7 @@ async def recevoir_timezone_offset(appareil, commande):
     try:
         offset = commande['timezone_offset']
         print("Set offset recu : %s" % offset)
-        appareil.set_timezone_offset(offset)
+        # appareil.set_timezone_offset(offset)
         await set_timezone_offset(offset)
     except KeyError:
         print("offset absent du message")

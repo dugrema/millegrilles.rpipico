@@ -238,7 +238,7 @@ class PollingThread:
                 buffer=self.__buffer,
                 refresh=not self.__load_initial)
             print("Set offset %s" % offset)
-            self.__appareil.set_timezone_offset(offset)
+            # self.__appareil.set_timezone_offset(offset)
             return
         
         if self.__refresh_step <= 3:
