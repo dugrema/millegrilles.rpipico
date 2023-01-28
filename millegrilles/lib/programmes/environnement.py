@@ -55,7 +55,7 @@ class Humidificateur(ProgrammeActif):
         """ Determine si la valeur des senseurs justifie etat ON ou OFF. """
 
         if self.__expiration_hold is not None:
-            if self.__expiration_hold < time.time():
+            if self.__expiration_hold > time.time():
                 return None  # Aucun changement permis pour le moment
             else:
                 # Expiration hold
