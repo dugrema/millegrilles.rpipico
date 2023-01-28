@@ -1,5 +1,5 @@
-import uasyncio as asyncio
 import time
+import uasyncio as asyncio
 from handler_programmes import ProgrammeActif
 
 
@@ -38,7 +38,7 @@ class HoraireMinuteEffet:
         if self.__minute < other.__minute: return True
         elif self.__minute != other.__minute: return False
 
-        if self.__jour is not None or other.__jours is not None:
+        if self.__jours is not None or other.__jours is not None:
             if self.__jours is None: return True
             if other.__jours is None: return False
             if self.__jours < other.__jours: return True
@@ -97,6 +97,7 @@ class TimerHebdomadaire(ProgrammeActif):
         self.__cedule = self.__charger_cedule(args['horaire'])
         
         self.__prochaine_transition = None
+        self.__tz = None
  
     async def run(self):
         while self._actif is True:
@@ -144,12 +145,16 @@ class TimerHebdomadaire(ProgrammeActif):
         nouvel_etat = None
         recalculer_transitions = False
 
-        if self.__prochaine_transition is None:
+        if self.__tz != self._appareil.timezone:
+            print('Changement de timezone, on recalcule')
+            recalculer_transitions = True
+            self.__tz = self._appareil.timezone
+        elif self.__prochaine_transition is None:
             recalculer_transitions = True
         else:
             # Verifier si on execute la transition
             if self.__prochaine_transition.timestamp <= time.time():
-                # print("Executer transition : %s" % self.__prochaine_transition.transition)
+                print("Executer transition : %s" % self.__prochaine_transition.transition)
                 # Conserver transition
                 nouvel_etat = self.__prochaine_transition.transition.etat
                 recalculer_transitions = True
@@ -171,9 +176,9 @@ class TimerHebdomadaire(ProgrammeActif):
         
         # Parcourir la cedule sur 3 jours (-24h a + 48h)
         jours = [
-            time.localtime(temps_courant - JOUR_SECS),
-            time.localtime(temps_courant),
-            time.localtime(temps_courant + JOUR_SECS)
+            self.time_localtime(temps_courant - JOUR_SECS),
+            self.time_localtime(temps_courant),
+            self.time_localtime(temps_courant + JOUR_SECS)
         ]
         
         # Trouver l'etat actuel en fonction de l'heure et la prochaine transition
@@ -189,10 +194,8 @@ class TimerHebdomadaire(ProgrammeActif):
                 if horaire.jours is not None and temps[6] not in horaire.jours:
                     continue  # Mauvais jour de la semaine, skip
                 
-                # Charger temps epoch pour cet horaire
-                tuple_temps_horaire = (
-                    temps[0], temps[1], temps[2], horaire.heure, horaire.minute, 0, None, None)
-                horaire_secs = time.mktime(tuple_temps_horaire)
+                # Charger temps epoch pour cet horaire - ajuste pour timezone
+                horaire_secs = self.time_localmktime(temps[0], temps[1], temps[2], horaire.heure, horaire.minute, 0)
                 
                 if horaire_secs > temps_courant:
                     # C'est le prochain etat

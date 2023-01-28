@@ -69,8 +69,8 @@ class Humidificateur(ProgrammeActif):
         
         for senseur in self.__senseurs_humidite:
             # Get senseur
-            print("Get lecture senseur : %s\n%s\n%s" % (
-                senseur, self._appareil.lectures_courantes, self._appareil.lectures_externes))
+            # print("Get lecture senseur : %s\n%s\n%s" % (
+            #     senseur, self._appareil.lectures_courantes, self._appareil.lectures_externes))
             senseur_split = senseur.split(':')
             if len(senseur_split) == 1:
                 try:
@@ -88,7 +88,7 @@ class Humidificateur(ProgrammeActif):
                 print("Nom senseur non supporte %s" % senseur)
                 continue  # Skip
             
-            print("Lecture %s" % lecture_senseur)
+            # print("Lecture %s" % lecture_senseur)
             
             try:
                 # Verifier que le senseur a une lecture de type humidite

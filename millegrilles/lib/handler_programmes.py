@@ -1,3 +1,4 @@
+import time
 import uasyncio as asyncio
 from ujson import load
 from handler_devices import import_driver
@@ -55,7 +56,7 @@ class ProgrammesHandler:
 
 """ Classe abstraite pour un programme """
 class ProgrammeActif:
-    
+
     def __init__(self, appareil, programme_id, args=None):
         self._appareil = appareil
         self._programme_id = programme_id
@@ -76,4 +77,21 @@ class ProgrammeActif:
     async def stop(self):
         self._actif = False
 
+    def time_localtime(self, ts=None):
+        if ts is None:
+            ts = time.time()
 
+        if self._appareil.timezone is not None:
+            ts = ts + self._appareil.timezone
+
+        return time.gmtime(ts)
+
+    def time_localmktime(self, annee, mois, jour, heure, minute, seconde):
+        """ Change le timestamp UTC avec timezone configuree. """
+        ts = time.mktime((annee, mois, jour, heure, minute, seconde, None, None))
+
+        if self._appareil.timezone is not None:
+            # Soustraire TZ pour ajuster a temps GMT
+            ts = ts - self._appareil.timezone
+
+        return ts
