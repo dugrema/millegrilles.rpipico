@@ -19,9 +19,9 @@ from millegrilles.ledblink import led_executer_sequence
 import feed_display
 import config
 
-from programmes import ProgrammesHandler
 from websocket_messages import PollingThread
 from handler_devices import DeviceHandler
+from handler_programmes import ProgrammesHandler
 from millegrilles.certificat import entretien_certificat as __entretien_certificat, PATH_CERT
 from message_inscription import run_inscription, \
      verifier_renouveler_certificat as __verifier_renouveler_certificat
