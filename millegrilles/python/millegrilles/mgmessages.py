@@ -1,6 +1,5 @@
 # Test PEM
 import json
-import os
 import math
 import time
 import uasyncio as asyncio
@@ -13,7 +12,6 @@ from .certificat import valider_certificats
 
 from multiformats import multibase, multihash
 from collections import OrderedDict
-from gc import collect
 
 
 VERSION_SIGNATURE = 2
@@ -66,16 +64,23 @@ async def __signer_message_2(message, cle_privee=None, buffer=None):
             print("Cle prive absente, utiliser .new")
             with open(certificat.PATH_CLE_PRIVEE + '.new', 'rb') as fichier:
                 cle_privee = fichier.read()
-                
+
+    ticks_debut = time.ticks_ms()
     cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
+    print("__signer_message_2 ed25519generatepubkey duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
     await asyncio.sleep_ms(10)
 
     message_str = message_stringify(message, buffer=buffer)
     await asyncio.sleep_ms(10)
+    ticks_debut = time.ticks_ms()
     hachage = oryx_crypto.blake2b(message_str)
+    print("__signer_message_2 blake2b duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
     await asyncio.sleep_ms(10)
 
+    ticks_debut = time.ticks_ms()
     signature = bytes([VERSION_SIGNATURE]) + oryx_crypto.ed25519sign(cle_privee, cle_publique, hachage)
+    print("__signer_message_2 ed25519sign duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+
     await asyncio.sleep_ms(10)
     signature = multibase.encode('base64', signature)
     
@@ -147,7 +152,7 @@ def prep_message_1(message, conserver_entete=True):
 
     # Re-inserer toutes les key/values en ordre
     # Filtrer/transformer les valeurs au besoin
-    for (key, value) in sorted(message.items(), key = lambda ele: ele[0]):
+    for (key, value) in sorted(message.items(), key=lambda ele: ele[0]):
         if key.startswith('_'):
             continue
         
