@@ -161,6 +161,7 @@ class LcdApi:
         """
         for char in string:
             self.putchar(char)
+            time.sleep_ms(1)
 
     async def putstr_async(self, string):
         """Write the indicated string to the LCD at the current cursor

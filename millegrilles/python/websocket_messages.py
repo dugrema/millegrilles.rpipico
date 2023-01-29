@@ -32,7 +32,7 @@ class HttpErrorException(Exception):
     pass
 
 
-async def __preparer_message(timeout_http, generer_etat, buffer):
+async def __preparer_message(timeout_http, generer_etat, buffer, task_runner=None):
     # Genrer etat
     if generer_etat is not None:
         etat = await generer_etat()
@@ -43,16 +43,17 @@ async def __preparer_message(timeout_http, generer_etat, buffer):
     etat[CONST_CHAMP_TIMEOUT] = timeout_http
 
     # Signer message
+    print("__preparer_message task_runner %s" % task_runner)
     etat = await signer_message(
-        etat, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil', buffer=buffer)
+        etat, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil', buffer=buffer, task_runner=task_runner)
     buffer.clear()
     dump(etat, buffer)
 
     return buffer
 
 
-async def poll(websocket, buffer, timeout_http=60, generer_etat=None, ui_lock=None):
-    buffer = await __preparer_message(timeout_http, generer_etat, buffer)
+async def poll(websocket, buffer, timeout_http=60, generer_etat=None, ui_lock=None, task_runner=None):
+    buffer = await __preparer_message(timeout_http, generer_etat, buffer, task_runner)
 
     # Cleanup memoire
     await asyncio.sleep_ms(1)
@@ -127,8 +128,7 @@ async def requete_relais_web(websocket, buffer):
     await asyncio.sleep_ms(1)
     
     websocket.send(buffer.get_data())
-    
-    
+
 
 async def charger_timeinfo(websocket, buffer, refresh: False):
     
@@ -164,8 +164,8 @@ async def charger_timeinfo(websocket, buffer, refresh: False):
     return offset_info
 
 
-async def verifier_signature(reponse, buffer):
-    return await verifier_message(reponse, buffer)
+async def verifier_signature(reponse, buffer, task_runner):
+    return await verifier_message(reponse, buffer, task_runner)
 
 
 async def _traiter_commande(appareil, reponse, info_certificat):
@@ -338,7 +338,8 @@ class PollingThread:
                 self.__buffer,
                 self.__timeout_http,
                 self.__appareil.get_etat,
-                self.__appareil.ui_lock
+                self.__appareil.ui_lock,
+                self.__appareil.task_runner
             )
             
             await asyncio.sleep_ms(10)  # Yield
@@ -364,7 +365,7 @@ class PollingThread:
                     await asyncio.sleep_ms(50)  # Yield
                     try:
                         len_buffer = len(self.__buffer.get_data())
-                        info_certificat = await verifier_signature(reponse, self.__buffer)
+                        info_certificat = await verifier_signature(reponse, self.__buffer, self.__appareil.task_runner)
                         print("Message websocket recu (valide, len %d)" % len_buffer)
 
                         # Cleanup

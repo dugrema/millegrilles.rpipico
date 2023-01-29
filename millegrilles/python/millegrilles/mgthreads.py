@@ -1,7 +1,62 @@
 import time
-import uasyncio
-from gc import collect
+import uasyncio as asyncio
 import _thread
+
+from gc import collect
+from sys import print_exception
+
+
+class TaskRunner:
+    """ Run des functions sur le processeur alternatif. """
+
+    def __init__(self):
+        self.thread_lock = _thread.allocate_lock()
+        self.__await_lock = asyncio.Lock()
+        self.reponse = None
+        self.exception = None
+
+    async def run_task(self, task, *args):
+        try:
+            # Attendre que le processeur soit disponible
+            await self.__await_lock.acquire()
+
+            # Cleanup pour tenter d'eviter erreurs de memoire
+            # collect()
+
+            # Demarrer thread
+            # print("Start thread")
+            _thread.start_new_thread(self.task_wrapper, (task, args))
+
+            # Attendre debut d'execution de la thread
+            await asyncio.sleep_ms(5)
+
+            # Attendre fin d'execution de la thread
+            while self.thread_lock.locked() is True:
+                await asyncio.sleep_ms(5)
+
+            if self.exception is not None:
+                raise self.exception
+
+            return self.reponse
+        finally:
+            self.reponse = None
+            self.exception = None
+            self.__await_lock.release()
+
+    def task_wrapper(self, task, args):
+        # print("task_wrapper waiting")
+
+        with self.thread_lock:
+            try:
+                # print("task_wrapper run task")
+                self.reponse = task(*args)
+            except Exception as e:
+                self.exception = e
+                # print("task_wrapper exception %s" % str(e))
+                _thread.exit()  # Force exit la thread
+
+        # print("task_wrapper task done")
+
 
 class ThreadExecutor():
     """
@@ -10,12 +65,12 @@ class ThreadExecutor():
     
     def __init__(self, ioloop_local=False):
         # Event asyncio externe
-        self.__core_asyncio = uasyncio.Event()
+        self.__core_asyncio = asyncio.Event()
         self.__core_asyncio.set()  # Pret par defaut
         
         # self.__internal_set = True
         self.__internal_set = True
-        self.__internal = uasyncio.ThreadSafeFlag()
+        self.__internal = asyncio.ThreadSafeFlag()
         
         # Lock interne entre cores
         self.__ioloop_local = ioloop_local

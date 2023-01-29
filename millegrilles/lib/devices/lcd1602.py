@@ -32,10 +32,16 @@ class LCD1602(OutputLignes):
         await self._ui_lock.acquire()
         try:
             self._instance.move_to(0, self.__ligne)
+            await asyncio.sleep_ms(5)
             ligne_data = '{:<16}'.format(data)
             if flag is not None:
                 ligne_data = ligne_data[:15] + flag
-            await self._instance.putstr_async(ligne_data)
+            #if self._appareil.task_runner is not None:
+            #    await self._appareil.task_runner.run_task(self._instance.putstr, ligne_data)
+            #else:
+            #    await self._instance.putstr_async(ligne_data)
+            self._instance.putstr(ligne_data)
+            await asyncio.sleep_ms(5)
         finally:
             self.__ligne += 1
             self._ui_lock.release()

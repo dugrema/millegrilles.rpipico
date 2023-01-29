@@ -5,6 +5,7 @@ import time
 import uasyncio as asyncio
 import oryx_crypto
 
+from gc import collect
 from io import IOBase
 
 from . import certificat
@@ -17,9 +18,9 @@ from collections import OrderedDict
 VERSION_SIGNATURE = 2
 
 
-async def signer_message(message, cle_privee=None, buffer=None, **kwargs):
+async def signer_message(message, cle_privee=None, buffer=None, task_runner=None, **kwargs):
     """ Genere l'en-tete et la signature d'un message """
-    entete, signature = await __signer_message(message, cle_privee, buffer, **kwargs)
+    entete, signature = await __signer_message(message, cle_privee, buffer, task_runner, **kwargs)
     message['en-tete'] = entete
     message['_signature'] = signature
     if entete.get('fingerprint_certificat') is not None:
@@ -27,7 +28,7 @@ async def signer_message(message, cle_privee=None, buffer=None, **kwargs):
     return message    
 
 
-async def __signer_message(message, cle_privee=None, buffer=None, **kwargs):
+async def __signer_message(message, cle_privee=None, buffer=None, task_runner=None, **kwargs):
     message = prep_message_1(message)
     hachage = hacher_message(message, buffer).decode('utf-8')
     await asyncio.sleep_ms(10)
@@ -48,13 +49,13 @@ async def __signer_message(message, cle_privee=None, buffer=None, **kwargs):
     
     # Signer
     await asyncio.sleep_ms(10)
-    signature = (await __signer_message_2(message, cle_privee, buffer)).decode('utf-8')
+    signature = (await __signer_message_2(message, cle_privee, buffer, task_runner)).decode('utf-8')
     # signature = __signer_message_2(message, cle_privee)
 
     return entete, signature
 
 
-async def __signer_message_2(message, cle_privee=None, buffer=None):
+async def __signer_message_2(message, cle_privee=None, buffer=None, task_runner=None):
     if cle_privee is None:
         # Charger la cle locale
         try:
@@ -190,7 +191,7 @@ def message_stringify(message, buffer=None):
         return buffer.get_data()
 
 
-async def verifier_message(message: dict, buffer=None):
+async def verifier_message(message: dict, buffer=None, task_runner=None):
     # Valider le certificat - raise Exception si erreur
     info_certificat = await valider_certificats(message['_certificat'])
     del message['_certificat']
@@ -206,13 +207,13 @@ async def verifier_message(message: dict, buffer=None):
     print("verifier_message prep_message_1 duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
 
     await asyncio.sleep_ms(10)
-    await __verifier_signature(message, signature, info_certificat['public_key'], buffer=buffer)
+    await __verifier_signature(message, signature, info_certificat['public_key'], buffer=buffer, task_runner=task_runner)
     await asyncio.sleep_ms(10)
 
     return info_certificat
 
 
-async def __verifier_signature(message, signature, cle_publique, buffer=None):
+async def __verifier_signature(message, signature, cle_publique, buffer=None, task_runner=None):
     from multiformats.multibase import decode
     from oryx_crypto import blake2b, ed25519verify
     
@@ -233,6 +234,9 @@ async def __verifier_signature(message, signature, cle_publique, buffer=None):
     print("__verifier_signature stringify blake2b %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
     await asyncio.sleep_ms(10)
     ticks_debut = time.ticks_ms()
+    #if task_runner is not None:
+    #    await task_runner.run_task(ed25519verify, cle_publique, signature[1:], hachage)
+    #else:
     ed25519verify(cle_publique, signature[1:], hachage)
     print("__verifier_signature ed25519verify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
 
