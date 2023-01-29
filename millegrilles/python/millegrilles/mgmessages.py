@@ -135,7 +135,9 @@ def hacher_message(message, buffer=None):
     from multiformats.multibase import encode
     from millegrilles.certificat import CONST_HACHAGE_FINGERPRINT
     
+    ticks_debut = time.ticks_ms()
     hachage = blake2s(message_stringify(message, buffer=buffer))
+    print("hacher_message stringify+blake2s duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
     fingerprint = wrap(CONST_HACHAGE_FINGERPRINT, hachage)
     return encode('base64', bytes(fingerprint))
 
@@ -194,7 +196,9 @@ async def verifier_message(message: dict, buffer=None):
 
     # Trier tous les champs
     await asyncio.sleep_ms(10)
+    ticks_debut = time.ticks_ms()
     message = prep_message_1(message)
+    print("verifier_message prep_message_1 duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
 
     await asyncio.sleep_ms(10)
     await __verifier_signature(message, signature, info_certificat['public_key'], buffer=buffer)
@@ -215,11 +219,17 @@ async def __verifier_signature(message, signature, cle_publique, buffer=None):
         raise Exception("Signature non supportee")
 
     await asyncio.sleep_ms(10)
+    ticks_debut = time.ticks_ms()
     data = message_stringify(message, buffer=buffer)
+    print("__verifier_signature stringify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
     await asyncio.sleep_ms(10)
+    ticks_debut = time.ticks_ms()
     hachage = blake2b(data)
+    print("__verifier_signature stringify blake2b %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
     await asyncio.sleep_ms(10)
+    ticks_debut = time.ticks_ms()
     ed25519verify(cle_publique, signature[1:], hachage)
+    print("__verifier_signature ed25519verify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
 
 
 # From : https://github.com/pfalcon/pycopy-lib
