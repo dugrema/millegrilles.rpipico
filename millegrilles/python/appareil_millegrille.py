@@ -23,6 +23,7 @@ from websocket_messages import PollingThread
 from handler_devices import DeviceHandler
 from handler_programmes import ProgrammesHandler
 from millegrilles.certificat import entretien_certificat as __entretien_certificat, PATH_CERT
+# from millegrilles.mgthreads import TaskRunner
 from message_inscription import run_inscription, \
      verifier_renouveler_certificat as __verifier_renouveler_certificat
 
@@ -111,6 +112,8 @@ class Runner:
         self._mode_operation = 0
         self._device_handler = DeviceHandler(self)
         self._programmes_handler = ProgrammesHandler(self)
+        self.task_runner = None  # TaskRunner()
+
         self._lectures_courantes = dict()
         self._lectures_externes = dict()
         self.__url_relais = None
@@ -489,12 +492,14 @@ class Runner:
     def afficher_info(self):
         print(CONST_INFO_SEP)
         print("Heure %s" % str(time.gmtime()))
+        print("CPU freq %d" % machine.freq())
         print("Memoire")
         mem_info()
         print(CONST_INFO_SEP + '\n')
 
 
 async def main():
+    machine.freq(133000000)
     runner = Runner()
     await runner.run()
 
