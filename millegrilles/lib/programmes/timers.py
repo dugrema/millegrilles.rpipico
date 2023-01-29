@@ -4,7 +4,7 @@ from handler_programmes import ProgrammeActif
 
 
 JOUR_SECS = const(86400)
-SLEEP_CHECK_SECS = const(300)
+SLEEP_CHECK_SECS = const(30)
 
 
 class HoraireMinuteEffet:
@@ -143,7 +143,7 @@ class TimerHebdomadaire(ProgrammeActif):
 
         # Par defaut, aucun changement
         nouvel_etat = None
-        recalculer_transitions = True  # False
+        recalculer_transitions = False
 
         if self.__tz != self._appareil.timezone:
             print('Changement de timezone, on recalcule')
