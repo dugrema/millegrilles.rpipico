@@ -143,7 +143,7 @@ class TimerHebdomadaire(ProgrammeActif):
 
         # Par defaut, aucun changement
         nouvel_etat = None
-        recalculer_transitions = False
+        recalculer_transitions = True  # False
 
         if self.__tz != self._appareil.timezone:
             print('Changement de timezone, on recalcule')
@@ -173,7 +173,9 @@ class TimerHebdomadaire(ProgrammeActif):
 
     def __calculer_horaire(self):
         temps_courant = time.time()
-        
+
+        print("__calculer_horaire Temps courant %s" % temps_courant)
+
         # Parcourir la cedule sur 3 jours (-24h a + 48h)
         jours = [
             self.time_localtime(temps_courant - JOUR_SECS),
@@ -187,7 +189,9 @@ class TimerHebdomadaire(ProgrammeActif):
         epoch_prochain_etat = None
         
         for temps in jours:  # Faire -24h, jour courant puis +24h
-            
+
+            print("__calculer_horaire temps %s" % str(temps))
+
             for horaire in self.__cedule:
                 
                 # Verifier si cet horaire depend du jour de la semaine ou non
@@ -196,7 +200,9 @@ class TimerHebdomadaire(ProgrammeActif):
                 
                 # Charger temps epoch pour cet horaire - ajuste pour timezone
                 horaire_secs = self.time_localmktime(temps[0], temps[1], temps[2], horaire.heure, horaire.minute, 0)
-                
+
+                print("__calculer_horaire Horaire %s epoch %s" % (horaire, horaire_secs))
+
                 if horaire_secs > temps_courant:
                     # C'est le prochain etat
                     epoch_prochain_etat = horaire_secs

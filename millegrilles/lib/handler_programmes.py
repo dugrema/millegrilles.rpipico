@@ -81,8 +81,9 @@ class ProgrammeActif:
         if ts is None:
             ts = time.time()
 
-        if self._appareil.timezone is not None:
-            ts = ts + self._appareil.timezone
+        tz = self._appareil.timezone
+        if tz is not None:
+            ts = ts + tz
 
         return time.gmtime(ts)
 
@@ -90,8 +91,9 @@ class ProgrammeActif:
         """ Change le timestamp UTC avec timezone configuree. """
         ts = time.mktime((annee, mois, jour, heure, minute, seconde, None, None))
 
-        if self._appareil.timezone is not None:
+        tz = self._appareil.timezone
+        if tz is not None:
             # Soustraire TZ pour ajuster a temps GMT
-            ts = ts - self._appareil.timezone
+            ts = ts - tz
 
         return ts
