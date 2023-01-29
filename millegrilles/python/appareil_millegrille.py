@@ -32,7 +32,8 @@ from config import \
      CONST_MODE_CHARGER_URL_RELAIS, \
      CONST_MODE_SIGNER_CERTIFICAT, \
      CONST_MODE_POLLING, \
-     detecter_mode_operation
+     detecter_mode_operation, \
+     get_tz_offset
 
 from websocket_messages import CONST_DUREE_THREAD_POLLING
 
@@ -155,9 +156,9 @@ class Runner:
     
     @property
     def timezone(self):
-        if isinstance(self.__timezone_offset, int):
-            return self.__timezone_offset
-        return None
+        if self.__ntp_ok is False:
+            return None
+        return get_tz_offset()
     
     @property
     def ui_lock(self):
@@ -361,8 +362,8 @@ class Runner:
     def pop_relais(self):
         return self.__url_relais.pop()
     
-    def set_timezone_offset(self, offset):
-        self.__timezone_offset = offset
+    # def set_timezone_offset(self, offset):
+    #     self.__timezone_offset = offset
 
     async def _polling(self):
         """

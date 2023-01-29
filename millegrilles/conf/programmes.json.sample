@@ -12,6 +12,19 @@
                 "humidite": 40.0, "precision": 5.0,
                 "duree_on_min": 20, "duree_off_min": 10
             }
+        },
+        {
+            "programme_id": "timer2",
+            "class": "programmes.timers.TimerHebdomadaire",
+            "args": {
+                "switches": ["switch_p19/etat"],
+                "horaire": [
+                    {"etat": 1, "heure": 19, "minute": 07},
+                    {"etat": 0, "heure": 19, "minute": 08},
+                    {"etat": 1, "heure": 19, "minute": 10},
+                    {"etat": 0, "heure": 19, "minute": 12}
+                ]
+            }
         }
     ]
 }
