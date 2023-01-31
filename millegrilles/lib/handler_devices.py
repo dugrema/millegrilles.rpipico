@@ -127,10 +127,24 @@ class DeviceHandler:
     async def run(self, ui_lock: asyncio.Event, sink_method, feeds=None, intervalle_ms=5000):
         if feeds is not None:
             asyncio.create_task(self._output_devices(feeds, ui_lock))
-        
+
         while True:
             await self._lire_devices(sink_method)
-            await asyncio.sleep_ms(intervalle_ms)
+
+            if self.__appareil.stale_event.is_set():
+                print('DeviceHandler.run stale detecte')
+                # Indiquer que l'etat est maintenant a jour
+                self.__appareil.stale_event.clear()
+
+                # Indiquer que l'etat a ete mis a jour et doit etre emis des que possible
+                self.__appareil.emit_event.set()
+
+            try:
+                #await asyncio.sleep_ms(intervalle_ms)
+                await asyncio.wait_for_ms(self.__appareil.stale_event.wait(), intervalle_ms)
+                print('DeviceHandler.run stale wait jump')
+            except asyncio.TimeoutError:
+                pass  # OK
 
 
 def import_driver(path_driver):

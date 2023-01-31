@@ -126,7 +126,8 @@ class TimerHebdomadaire(ProgrammeActif):
     async def __executer_cycle(self):
         etat_desire = self.__verifier_etat_desire()
         # print("%s etat desire %s" % (self.programme_id, etat_desire))
-        
+
+        changement = False
         if etat_desire is not None:
             # S'assurer que les switch sont dans le bon etat
             for switch_nom in self.__switches:
@@ -134,10 +135,14 @@ class TimerHebdomadaire(ProgrammeActif):
                 try:
                     print("TimerHebdomadaire Modifier etat switch %s => %s" % (switch_id, etat_desire))
                     device = self._appareil.get_device(switch_id)
+                    changement = changement or device.value != etat_desire
                     device.value = etat_desire
                 except (AttributeError, KeyError):
                     print("Erreur acces switch %s, non trouvee" % switch_id)
-        
+
+        if changement is True:
+            self._appareil.stale_event.set()
+
     def __verifier_etat_desire(self):
         """ Determine si la valeur des senseurs justifie etat ON ou OFF. """
 

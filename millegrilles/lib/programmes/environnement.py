@@ -2,6 +2,7 @@ import uasyncio as asyncio
 import time
 from handler_programmes import ProgrammeActif
 
+
 class Humidificateur(ProgrammeActif):
     
     def __init__(self, appareil, programme_id, args=dict()):
@@ -28,8 +29,7 @@ class Humidificateur(ProgrammeActif):
         self.__duree_off_min = args.get('duree_off_min') or 120
  
         self.__expiration_hold = None
- 
- 
+
     async def run(self):
         while self._actif is True:
             await self.__executer_cycle()
@@ -39,7 +39,8 @@ class Humidificateur(ProgrammeActif):
     async def __executer_cycle(self):
         etat_desire = self.__verifier_etat_desire()
         print("%s etat desire %s" % (self.programme_id, etat_desire))
-        
+
+        changement = False
         if etat_desire is not None:
             # S'assurer que les switch sont dans le bon etat
             for switch_nom in self.__switches_humidificateurs:
@@ -47,9 +48,13 @@ class Humidificateur(ProgrammeActif):
                 try:
                     device = self._appareil.get_device(switch_id)
                     print("Modifier etat switch %s => %s" % (switch_id, etat_desire))
+                    changement = changement or device.value != etat_desire
                     device.value = etat_desire
                 except KeyError:
                     print("Erreur acces switch %s, non trouvee" % switch_id)
+
+        if changement is True:
+            self._appareil.stale_event.set()
         
     def __verifier_etat_desire(self):
         """ Determine si la valeur des senseurs justifie etat ON ou OFF. """
@@ -60,8 +65,6 @@ class Humidificateur(ProgrammeActif):
             else:
                 # Expiration hold
                 self.__expiration_hold = None
-        
-        lectures_courantes = self._appareil.lectures_courantes
         
         temps_expire = time.time() - 300
         valeur_totale = 0.0

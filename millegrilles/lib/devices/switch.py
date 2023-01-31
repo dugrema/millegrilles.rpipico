@@ -28,10 +28,16 @@ class DriverSwitchPin(Driver):
 
     @value.setter
     def value(self, value_in: int):
+        changement = self.value != value_in
+
         if value_in == 1:
             self.__pin.on()
         else:
             self.__pin.off()
+
+        if changement is True:
+            # Indique a l'appareil qu'une valeur a change
+            self._appareil.stale_event.set()
 
     @property
     def device_id(self):
