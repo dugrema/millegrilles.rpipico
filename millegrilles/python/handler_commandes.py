@@ -1,5 +1,5 @@
-from config import set_configuration_display, set_timezone_offset, \
-    set_configuration_display, sauvegarder_relais, sauvegarder_relais_liste, \
+from config import set_configuration_display, set_configuration_programmes, set_timezone_offset, \
+    sauvegarder_relais, sauvegarder_relais_liste, \
     get_user_id
 from message_inscription import recevoir_certificat
 from millegrilles.mgmessages import verifier_message
@@ -18,10 +18,18 @@ async def traiter_commande(appareil, commande: dict, info_certificat: dict):
             set_configuration_display(commande['displays'])
         except KeyError:
             print("Erreur reception maj displays")
+    elif action == 'evenementMajProgrammes':
+        try:
+            set_configuration_programmes(commande['programmes'])
+        except KeyError:
+            print("Erreur reception maj programmes")
     elif action == 'lectures_senseurs':
         appareil.recevoir_lectures_externes(commande['lectures_senseurs'])
     elif action == 'timezoneInfo':
         await recevoir_timezone_offset(appareil, commande)
+    elif action == 'getAppareilProgrammesConfiguration':
+        # Reponse display
+        await recevoir_configuration_programmes(commande)
     elif action == 'getAppareilDisplayConfiguration':
         # Reponse display
         await recevoir_configuration_display(commande)
@@ -71,6 +79,13 @@ async def recevoir_configuration_display(reponse):
     except KeyError:
         print("Erreur reception displays %s" % reponse)
 
+async def recevoir_configuration_programmes(reponse):
+    try:
+        programmes = reponse['programmes_configuration']['configuration']['programmes']
+        set_configuration_programmes(programmes)
+    except KeyError:
+        print("Erreur reception programmes %s" % reponse)
+
 async def recevoir_fiche_publique(fiche):
     sauvegarder_relais(fiche)
 
@@ -101,4 +116,6 @@ async def appareil_set_switch_value(appareil, senseur_id, value):
     device = appareil.get_device(device_id)
     print("Device trouve : %s" % device)
     device.value = value
-
+    
+    await appareil.trigger_emit_event()
+    

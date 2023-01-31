@@ -12,6 +12,7 @@ from millegrilles.certificat import PATH_CERT, PATH_CA_CERT
 
 CONST_PATH_FICHIER_CONN = const('conn.json')
 CONST_PATH_FICHIER_DISPLAY = const('displays.json')
+CONST_PATH_FICHIER_PROGRAMMES = const('programmes.json')
 CONST_PATH_TIMEINFO = const('timeinfo')
 
 CONST_MODE_INIT = const(1)
@@ -194,6 +195,11 @@ def set_configuration_display(configuration: dict):
     with open(CONST_PATH_FICHIER_DISPLAY, 'wb') as fichier:
         dump(configuration, fichier)
 
+
+def set_configuration_programmes(configuration: dict):
+    with open(CONST_PATH_FICHIER_PROGRAMMES, 'wb') as fichier:
+        dump(configuration, fichier)
+    
 
 async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
     liste_urls = set()

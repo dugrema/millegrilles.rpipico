@@ -116,6 +116,8 @@ class Runner:
 
         self._lectures_courantes = dict()
         self._lectures_externes = dict()
+        self.__emit_event = asyncio.Event()    # Indique que l'etat a ete modifie, doit etre emis
+        self.__stale_event = asyncio.Event()   # Indique que l'etat interne doit etre mis a jour
         self.__url_relais = None
         self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
         
@@ -129,6 +131,17 @@ class Runner:
         self.__override_display = None
         self.__override_display_expiration = None
         self.__display_actif = False
+    
+    @property
+    def emit_event(self):
+        return self.__emit_event
+    
+    @property
+    def stale_event(self):
+        return self.__stale_event
+    
+    async def trigger_emit_event(self):
+        self.__emit_event.set()
     
     async def configurer_devices(self):
         self.__ui_lock = asyncio.Lock()
@@ -187,6 +200,9 @@ class Runner:
     
     async def get_etat(self):
         try:
+            # Clear evenement emit - les changements subsequents ne sont pas captures
+            self.emit_event.clear()
+            
             senseurs = set()
             
             # Extraire liste de senseurs utilises pour l'affichage
@@ -215,6 +231,7 @@ class Runner:
         except (OSError, AttributeError) as e:
             print("get_etat Error %s" % e)
             senseurs = None
+
         return {
             'lectures_senseurs': self._lectures_courantes,
             'displays': self._device_handler.get_output_devices(),

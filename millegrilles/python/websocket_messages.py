@@ -52,26 +52,34 @@ async def __preparer_message(timeout_http, generer_etat, buffer, task_runner=Non
     return buffer
 
 
-async def poll(websocket, buffer, timeout_http=60, generer_etat=None, ui_lock=None, task_runner=None):
-    buffer = await __preparer_message(timeout_http, generer_etat, buffer, task_runner)
-
-    # Cleanup memoire
-    await asyncio.sleep_ms(1)
-    collect()
-    print("Taille etat: %d" % len(buffer))
-    await asyncio.sleep_ms(1)
-
-    # Emettre etat
-    websocket.send(buffer.get_data())
-    await asyncio.sleep_ms(1)  # Yield
-
+async def poll(websocket, emit_event, buffer, timeout_http=60, generer_etat=None, ui_lock=None, task_runner=None):
     # Calculer limite de la periode de polling
     if timeout_http is None or timeout_http < 1:
         timeout_http = 1  # Min pour executer entretien websocket
+
     expiration_polling = time.time() + timeout_http
+    print("expiration polling dans %s" % timeout_http)
+
+    # emit_event.set()  # Forcer emission de l'etat
+
+    #buffer = await __preparer_message(timeout_http, generer_etat, buffer, task_runner)
+    #emit_event.clear()
+
+    # Cleanup memoire
+    #await asyncio.sleep_ms(1)
+    #collect()
+    #await asyncio.sleep_ms(1)
+
+    # Emettre etat
+    #print("poll Send data, taille etat: %d" % len(buffer))
+    #websocket.send(buffer.get_data())
+    #await asyncio.sleep_ms(1)  # Yield
 
     # Poll socket
+    cycle = 0
     while expiration_polling > time.time():
+        cycle += 1
+        
         try:
             reponse = await websocket.recv(buffer.buffer)
             if reponse is not None and len(reponse) > 0:
@@ -83,8 +91,24 @@ async def poll(websocket, buffer, timeout_http=60, generer_etat=None, ui_lock=No
             else:
                 raise e
         
-        # Intervalle polling socket
-        await asyncio.sleep_ms(100)
+        if cycle == 30:
+            buffer = await __preparer_message(timeout_http, generer_etat, buffer, task_runner)
+
+            # Cleanup memoire
+            await asyncio.sleep_ms(1)
+            collect()
+            await asyncio.sleep_ms(1)
+
+            # Emettre etat
+            print("poll Send data, taille etat: %d" % len(buffer))
+            websocket.send(buffer.get_data())
+            await asyncio.sleep_ms(1)  # Yield
+        elif cycle > 60 and emit_event.is_set():
+            print("Emit event set, break poll")
+            break
+        else:
+            # Intervalle polling socket
+            await asyncio.sleep_ms(100)
 
 
 async def requete_configuration_displays(websocket, buffer):
@@ -189,6 +213,11 @@ class PollingThread:
         self.__websocket = None
         
         self.__nie_count = 0
+        self.__memory_error = 0
+
+    @property
+    def emit_event(self):
+        return self.__appareil.emit_event
 
     async def preparer(self):
         self.__timeout_http = get_http_timeout()
@@ -266,7 +295,7 @@ class PollingThread:
         
         print("Expiration thread %s (exp cert %s)" % (expiration_thread, expiration_certificat))
 
-        while expiration_thread > time.time():
+        while expiration_thread > time.time() and self.__memory_error < 10:
             try:
                 print("Expiration thread dans %s " % (expiration_thread - time.time()))
                 
@@ -288,9 +317,9 @@ class PollingThread:
                         raise e
                     
                 # Boucle polling sur connexion websocket
-                while expiration_thread > time.time():
+                while expiration_thread > time.time() and self.__memory_error < 10:
                     print("Expiration thread dans %s " % (expiration_thread - time.time()))
-                    
+
                     if time.time() > self.__prochain_refresh_config:
                         await self._refresh_config()
                         await asyncio.sleep_ms(1)
@@ -298,8 +327,12 @@ class PollingThread:
                         await asyncio.sleep_ms(1)
 
                     try:
+                        print("debut ws poll")
                         await self._poll()
-                        self.__nie_count = 0  # Reset erreurs
+                        print("fin ws poll OK")
+                        # Reset erreurs
+                        self.__nie_count = 0
+                        self.__memory_error = 0
                     except NotImplementedError as e:
                         self.__nie_count += 1
                         print("Erreur websocket (NotImplementedError %s)" % str(e))
@@ -310,9 +343,16 @@ class PollingThread:
                             print("Connexion websocket fermee (serveur)")
                             self.__nie_count += 1
                             break  # Break inner loop
+                        elif e.errno == 12:
+                            self.__memory_error += 1
+                            collect()
                         else:
                             # Erreur non geree, exit polling
                             raise e
+                    except MemoryError as e:
+                        self.__memory_error += 1
+                        collect()
+
             finally:
                 print("Close websocket")
                 mem_info()
@@ -335,6 +375,7 @@ class PollingThread:
         try:
             reponse = await poll(
                 self.__websocket,
+                self.emit_event,
                 self.__buffer,
                 self.__timeout_http,
                 self.__appareil.get_etat,
