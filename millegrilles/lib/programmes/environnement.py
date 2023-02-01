@@ -9,34 +9,38 @@ class Humidificateur(ProgrammeActif):
         """
         @param appareil: Appareil avec acces aux lectures, devices (switch)
         """
-        super().__init__(appareil, programme_id)
-
         # Liste des switch d'humidificateur
-        self.__senseurs_humidite = args['senseurs_humidite']
+        self.__senseurs_humidite = None
         # Liste de senseurs d'humidite par senseur_id
-        self.__switches_humidificateurs = args['switches_humidificateurs']
+        self.__switches_humidificateurs = None
 
         # ---
         # Parametres optionnels avec valeur par defaut
 
         # Pourcentage cible pour l'humidite
-        self.__humidite_cible = args.get('humidite') or 45.0
+        self.__humidite_cible = 45.0
         # +/- cette valeur de la cible declenche un changement
-        self.__precision = args.get('precision') or 0.5
+        self.__precision = 0.5
         # Duree d'activite (ON) minimale en secondes par declenchement
-        self.__duree_on_min = args.get('duree_on_min') or 180
+        self.__duree_on_min = 180
         # Duree minimale d'arret (OFF) en secondes par declenchement
-        self.__duree_off_min = args.get('duree_off_min') or 120
- 
+        self.__duree_off_min = 120
+
+        # Init apres, appelle charger_args() dans super
+        super().__init__(appareil, programme_id, args, intervalle=60_000)
         self.__expiration_hold = None
 
-    async def run(self):
-        while self._actif is True:
-            await self.__executer_cycle()
-            # Attendre prochaine verification
-            await asyncio.sleep(5)
-        
-    async def __executer_cycle(self):
+    def charger_args(self, args: dict):
+        super().charger_args(args)
+        self.__senseurs_humidite = args['senseurs_humidite']
+        self.__switches_humidificateurs = args['switches_humidificateurs']
+        self.__humidite_cible = args.get('humidite') or self.__humidite_cible
+        self.__precision = args.get('precision') or self.__precision
+        self.__duree_on_min = args.get('duree_on_min') or self.__duree_on_min
+        self.__duree_off_min = args.get('duree_off_min') or self.__duree_off_min
+        print("Nouvelle config chargee pour %s : %s" % (self._programme_id, args))
+
+    async def loop(self):
         etat_desire = self.__verifier_etat_desire()
         print("%s etat desire %s" % (self.programme_id, etat_desire))
 

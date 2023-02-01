@@ -87,27 +87,26 @@ class TimerHebdomadaire(ProgrammeActif):
         """
         @param appareil: Appareil avec acces aux lectures, devices (switch)
         """
-        super().__init__(appareil, programme_id)
-
         # Liste de senseurs d'humidite par senseur_id
-        self.__switches = args['switches']
+        self.__switches = list()
 
         # Liste des horaires
         # Format: [ {"etat": 1, "heure": 8, "minute": 15, "jours_semaine": [5]}, ... ] 
-        self.__cedule = self.__charger_cedule(args['horaire'])
-        
+        self.__cedule = list()
+
+        # Init apres, appelle charger_args() dans super
+        super().__init__(appareil, programme_id, args, intervalle=60_000)
+
+        self.__expiration_hold = None
         self.__prochaine_transition = None
         self.__tz = None
- 
-    async def run(self):
-        while self._actif is True:
-            await self.__executer_cycle()
-            # Attendre prochaine verification
-            sleep_duration = SLEEP_CHECK_SECS
-            if self.__prochaine_transition is not None:
-                sleep_duration = min(sleep_duration, self.__prochaine_transition.timestamp - time.time())
-            await asyncio.sleep(sleep_duration)
-        
+
+    def charger_args(self, args: dict):
+        super().charger_args(args)
+        self.__switches = args['switches']
+        self.__cedule = self.__charger_cedule(args['horaire'])
+        print("Nouvelle cedule chargee pour %s : %s" % (self._programme_id, self.__cedule))
+
     def __charger_cedule(self, cedule_args: list):
         cedule_transitions = list()
 
@@ -120,12 +119,15 @@ class TimerHebdomadaire(ProgrammeActif):
             ))
 
         cedule_transitions.sort()
-        
+
+        # S'assurer de forcer un nouveau calcul de l'horaire
+        self.__prochaine_transition = None
+
         return cedule_transitions
         
-    async def __executer_cycle(self):
+    async def loop(self):
         etat_desire = self.__verifier_etat_desire()
-        # print("%s etat desire %s" % (self.programme_id, etat_desire))
+        print("TimerHebdomadaire %s etat desire %s" % (self.programme_id, etat_desire))
 
         changement = False
         if etat_desire is not None:
@@ -142,6 +144,12 @@ class TimerHebdomadaire(ProgrammeActif):
 
         if changement is True:
             self._appareil.stale_event.set()
+
+        if self.__prochaine_transition is not None:
+            sleep_duration = (self.__prochaine_transition.timestamp - time.time()) * 1000
+            if sleep_duration < self.intervalle:
+                # Indiquer qu'on veut une action plus rapidement que la duree habituelle de sleep
+                self.set_intervalle_onetime(sleep_duration)
 
     def __verifier_etat_desire(self):
         """ Determine si la valeur des senseurs justifie etat ON ou OFF. """

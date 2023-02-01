@@ -16,7 +16,7 @@ from millegrilles import mgmessages
 from millegrilles import wifi
 from millegrilles.ledblink import led_executer_sequence
 
-from millegrilles import feed_display, config
+from millegrilles import feed_display
 
 from websocket_messages import PollingThread
 from handler_devices import DeviceHandler
@@ -26,7 +26,8 @@ from millegrilles.certificat import entretien_certificat as __entretien_certific
 from message_inscription import run_inscription, \
      verifier_renouveler_certificat as __verifier_renouveler_certificat
 
-from config import \
+from millegrilles import config
+from millegrilles.config import \
      CONST_MODE_INIT, \
      CONST_MODE_RECUPERER_CA, \
      CONST_MODE_CHARGER_URL_RELAIS, \

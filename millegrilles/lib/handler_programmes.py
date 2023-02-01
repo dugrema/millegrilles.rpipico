@@ -27,12 +27,26 @@ class ProgrammesHandler:
 
         return list(senseurs)
     
-    async def ajouter_programme(self, programme):
-        self._programmes[programme.programme_id] = programme
-        asyncio.create_task(programme.run())
-        print("Programme %s demarre" % programme.programme_id)
+    async def ajouter_programme(self, configuration: dict):
+        try:
+            existant = self._programmes[configuration['programme_id']]
+            # Le programme existe, on le met a jour
+            await existant.maj(configuration)
+            print("Programme %s maj" % existant.programme_id)
+        except KeyError:
+            # Programme n'existe pas
+            programme_id = configuration['programme_id']
+            print("Charger programme %s" % programme_id)
+            programme_class = import_driver(configuration['class'])
+            args = configuration.get('args') or dict()
+            programme_instance = programme_class(self._appareil, programme_id, args)
 
-    async def arreter_programme(programme_id):
+            # Ajouter programme et demarrer thread
+            self._programmes[programme_instance.programme_id] = programme_instance
+            asyncio.create_task(programme_instance.run_task())
+            print("Programme %s demarre" % programme_id)
+
+    async def arreter_programme(self, programme_id):
         programme = self._programmes[programme_id]
         await programme.stop()
         del self._programmes[programme_id]
@@ -45,23 +59,31 @@ class ProgrammesHandler:
         except OSError:
             return  # Le fichier n'existe pas, rien a faire
 
-        for programme in config_programmes['programmes']:
-            programme_id = programme['programme_id']
-            print("Charger programme %s" % programme_id)
-            programme_class = import_driver(programme['class'])
-            args = programme.get('args') or dict()
-            programme_instance = programme_class(self._appareil, programme_id, args)
-            await self.ajouter_programme(programme_instance)
-            
+        for programme in config_programmes.values():  # config_programmes['programmes']:
+            # programme_id = programme['programme_id']
+            # print("Charger programme %s" % programme_id)
+            # programme_class = import_driver(programme['class'])
+            # args = programme.get('args') or dict()
+            # programme_instance = programme_class(self._appareil, programme_id, args)
+            await self.ajouter_programme(programme)
 
-""" Classe abstraite pour un programme """
+
 class ProgrammeActif:
+    """ Classe abstraite pour un programme """
 
-    def __init__(self, appareil, programme_id, args=None):
+    def __init__(self, appareil, programme_id, args=None, intervalle=5000):
         self._appareil = appareil
         self._programme_id = programme_id
-        self._args = args
-        self._actif = True
+        self.__intervalle = intervalle
+        self._arreter = asyncio.Event()
+        self.__reloading = False
+        self.__intervalle_onetime = None  # Permet de faire un override de l'intervalle
+
+        if args is not None:
+            self.charger_args(args)
+
+    def charger_args(self, args):
+        pass
 
     @property
     def programme_id(self):
@@ -71,11 +93,62 @@ class ProgrammeActif:
         """ Retourne la liste des senseurs requis """
         return None
 
-    async def run(self):
-        raise('Not Implemented')
+    @property
+    def intervalle(self):
+        return self.__intervalle
 
-    async def stop(self):
-        self._actif = False
+    def set_intervalle_onetime(self, intervalle_ms):
+        """ Set override de sleep pour le prochain cycle """
+        if intervalle_ms < 0:
+            intervalle_ms = 1000  # Minimum 1 seconde
+        self.__intervalle_onetime = intervalle_ms
+
+    async def run_task(self):
+        while not self._arreter.is_set():
+            await self.loop()
+            try:
+                await self.wait()
+            except ProgrammeInterrompu:
+                if self.__reloading is True:
+                    # Toggle reloading flag, clear _arreter pour loop
+                    self.__reloading = False
+                    self._arreter.clear()
+
+    async def loop(self):
+        raise Exception('loop() Not Implemented')
+
+    async def maj(self, configuration: dict):
+        self.charger_args(configuration['args'])
+
+        actif = configuration.get('actif') or False
+        if actif is True and self._arreter.is_set():
+            print("Redemarrer programme %s" % self._programme_id)
+            self._arreter.clear()
+            asyncio.create_task(self.run_task())
+        elif actif is False and self._arreter.is_set() is False:
+            print("Arreter programme %s" % self._programme_id)
+            self.stop()
+        else:
+            # Trigger un reload immediat de la thread
+            print("Reload programme %s" % self._programme_id)
+            self.__reloading = True
+            self._arreter.set()
+
+    def stop(self):
+        print("Arreter programme %s" % self._programme_id)
+        self._arreter.set()
+
+    async def wait(self):
+        try:
+            if self.__intervalle_onetime is not None and self.__intervalle_onetime < self.__intervalle:
+                self.__intervalle_onetime = None  # Reset
+                await asyncio.wait_for_ms(self._arreter.wait(), self.__intervalle_onetime)
+            else:
+                self.__intervalle_onetime = None  # Reset
+                await asyncio.wait_for_ms(self._arreter.wait(), self.__intervalle)
+            raise ProgrammeInterrompu()
+        except asyncio.TimeoutError:
+            pass  # OK
 
     def time_localtime(self, ts=None):
         if ts is None:
@@ -97,3 +170,7 @@ class ProgrammeActif:
             ts = ts - tz
 
         return ts
+
+
+class ProgrammeInterrompu(Exception):
+    pass
