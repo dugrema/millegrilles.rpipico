@@ -16,8 +16,7 @@ from millegrilles import mgmessages
 from millegrilles import wifi
 from millegrilles.ledblink import led_executer_sequence
 
-import feed_display
-import config
+from millegrilles import feed_display, config
 
 from websocket_messages import PollingThread
 from handler_devices import DeviceHandler
