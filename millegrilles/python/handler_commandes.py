@@ -1,4 +1,4 @@
-from config import set_configuration_display, update_configuration_programmes, \
+from millegrilles.config import set_configuration_display, update_configuration_programmes, \
      set_timezone_offset, sauvegarder_relais, sauvegarder_relais_liste, \
      get_user_id
 from message_inscription import recevoir_certificat

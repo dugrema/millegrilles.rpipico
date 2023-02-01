@@ -10,7 +10,7 @@ from uwebsockets.client import connect
 from millegrilles.certificat import get_expiration_certificat_local
 from millegrilles.mgmessages import signer_message, verifier_message
 from handler_commandes import traiter_commande
-from config import get_http_timeout, charger_relais, set_configuration_display, \
+from millegrilles.config import get_http_timeout, charger_relais, set_configuration_display, \
      get_timezone, generer_message_timeinfo
 
 from message_inscription import verifier_renouveler_certificat_ws

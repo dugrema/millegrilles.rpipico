@@ -18,7 +18,8 @@ def flash_led(cycles=6):
         sleep_ms(250)
 
 def root():
-    from appareil_millegrille import main
+    from millegrilles.appareil_millegrille import main
+    # from appareil_millegrille import main
     run(main())
 
 try:

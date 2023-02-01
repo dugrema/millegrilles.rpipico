@@ -14,7 +14,7 @@ from millegrilles.certificat import valider_certificats, charger_cle_publique, \
      PATH_CERT, PATH_CLE_PRIVEE, PATHNAME_RENOUVELER
 from millegrilles.mgmessages import signer_message, verifier_message
 
-from config import get_user_id
+from millegrilles.config import get_user_id
 
 
 # Generer le nom d'appareil avec le machine unique_id du RPi PICO

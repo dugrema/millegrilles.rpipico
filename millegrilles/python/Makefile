@@ -1,9 +1,6 @@
 MPYCROSS = ../../micropython/mpy-cross/build/mpy-cross
 
 SRC_PYTHON = \
-    appareil_millegrille.mpy \
-    config.mpy \
-    feed_display.mpy \
     handler_commandes.mpy \
     message_inscription.mpy \
     websocket_messages.mpy
