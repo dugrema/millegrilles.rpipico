@@ -47,9 +47,17 @@ class ProgrammesHandler:
             print("Programme %s demarre" % programme_id)
 
     async def arreter_programme(self, programme_id):
-        programme = self._programmes[programme_id]
-        await programme.stop()
-        del self._programmes[programme_id]
+        try:
+            programme = self._programmes[programme_id]
+            await programme.stop()
+        except (KeyError, TypeError):
+            pass  # Programme deja arrete
+        finally:
+            try:
+                del self._programmes[programme_id]
+            except KeyError:
+                pass  # Ok
+
         print("Programme %s arrete" % programme_id)
 
     async def initialiser(self):

@@ -208,35 +208,48 @@ async def update_configuration_programmes(configuration: dict, appareil):
     except OSError:
         # Fichier inexistant
         set_configuration_programmes(configuration)
-        # Retourner liste de programmes (tous MAJ)
-        return configuration.keys()
-    
-    # Detecter quels programmes ont changes
-    ficher_dirty = False
-    for prog_id, programme in configuration.items():
-        if existant[prog_id] is not None:
-            del existant[prog_id]
+        existant = dict()
 
+    # Detecter quels programmes ont changes
+    fichier_dirty = False
+    for prog_id, programme in configuration.items():
+        changement = True
+        if existant.get(prog_id) is not None:
             # Detecter changements au programme existant
-            changement = comparer_dict(existant, programme)
+            changement = not comparer_dict(existant[prog_id], programme)
 
             if changement is False:
                 print("Programme %s - aucun changement" % prog_id)
-                continue  # Skip ajouter_programme, aucun changement
+                # Skip ajouter_programme, aucun changement
             else:
                 print("Programme %s - changements detectes" % prog_id)
-        
-        # Ajouter/modifier programme
-        await appareil.ajouter_programme(programme)
-        ficher_dirty = True
+                print("Ancien %s" % existant[prog_id])
+                print("Nouveau %s" % programme)
+                print("---\n")
+
+            del existant[prog_id]
+
+        if changement is True:
+            # Ajouter/modifier programme
+            try:
+                await appareil.ajouter_programme(programme)
+            except Exception as e:
+                print("Erreur ajout programme %s" % prog_id)
+                print_exception(e)
+            fichier_dirty = True
     
     # Supprimer tous les programmes existants non listes
     for programme_id in existant.keys():
-        await appareil.supprimer_programme(programme_id)
-        ficher_dirty = True
+        try:
+            await appareil.supprimer_programme(programme_id)
+        except Exception as e:
+            print("Erreur retrait programme %s" % programme_id)
+            print_exception(e)
+        fichier_dirty = True
     
-    if ficher_dirty is True:
+    if fichier_dirty is True:
         # Si au moins un changement, on sauvegarde le fichier complet
+        print("Sauvegarder programmes.json")
         set_configuration_programmes(configuration)
     
 
