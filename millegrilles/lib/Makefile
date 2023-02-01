@@ -5,6 +5,7 @@ SRC_PYTHON = \
     bmp180_rpi.mpy \
     lcd_api.mpy \
     logging.mpy \
+    mgutils.mpy \
     morphys.mpy \
     pico_i2c_lcd.mpy \
     ssd1306.mpy \

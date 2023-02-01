@@ -4,6 +4,7 @@ from uasyncio import sleep, sleep_ms
 from sys import print_exception
 from gc import collect
 
+from mgutils import comparer_dict
 from millegrilles import urequests2 as requests
 from millegrilles import wifi
 from millegrilles.wifi import connect_wifi
@@ -216,11 +217,14 @@ async def update_configuration_programmes(configuration: dict, appareil):
         if existant[prog_id] is not None:
             del existant[prog_id]
 
-            # TODO - detecter changements programme existant
-            changement = True
+            # Detecter changements au programme existant
+            changement = comparer_dict(existant, programme)
 
             if changement is False:
+                print("Programme %s - aucun changement" % prog_id)
                 continue  # Skip ajouter_programme, aucun changement
+            else:
+                print("Programme %s - changements detectes" % prog_id)
         
         # Ajouter/modifier programme
         await appareil.ajouter_programme(programme)
