@@ -140,12 +140,14 @@ class ProgrammeActif:
 
     async def wait(self):
         try:
-            if self.__intervalle_onetime is not None and self.__intervalle_onetime < self.__intervalle:
+            attente = self.__intervalle
+
+            if self.__intervalle_onetime is not None:
+                if self.__intervalle_onetime < self.__intervalle:
+                    attente = self.__intervalle_onetime
                 self.__intervalle_onetime = None  # Reset
-                await asyncio.wait_for_ms(self._arreter.wait(), self.__intervalle_onetime)
-            else:
-                self.__intervalle_onetime = None  # Reset
-                await asyncio.wait_for_ms(self._arreter.wait(), self.__intervalle)
+
+            await asyncio.wait_for_ms(self._arreter.wait(), attente)
             raise ProgrammeInterrompu()
         except asyncio.TimeoutError:
             pass  # OK
