@@ -1,6 +1,6 @@
-from config import set_configuration_display, set_configuration_programmes, set_timezone_offset, \
-    sauvegarder_relais, sauvegarder_relais_liste, \
-    get_user_id
+from config import set_configuration_display, update_configuration_programmes, \
+     set_timezone_offset, sauvegarder_relais, sauvegarder_relais_liste, \
+     get_user_id
 from message_inscription import recevoir_certificat
 from millegrilles.mgmessages import verifier_message
 
@@ -19,17 +19,13 @@ async def traiter_commande(appareil, commande: dict, info_certificat: dict):
         except KeyError:
             print("Erreur reception maj displays")
     elif action == 'evenementMajProgrammes':
-        try:
-            set_configuration_programmes(commande['programmes'])
-        except KeyError:
-            print("Erreur reception maj programmes")
+        await recevoir_configuration_programmes(appareil, commande)
     elif action == 'lectures_senseurs':
         appareil.recevoir_lectures_externes(commande['lectures_senseurs'])
     elif action == 'timezoneInfo':
         await recevoir_timezone_offset(appareil, commande)
     elif action == 'getAppareilProgrammesConfiguration':
-        # Reponse display
-        await recevoir_configuration_programmes(commande)
+        await recevoir_configuration_programmes(appareil, commande)
     elif action == 'getAppareilDisplayConfiguration':
         # Reponse display
         await recevoir_configuration_display(commande)
@@ -47,6 +43,8 @@ async def traiter_commande(appareil, commande: dict, info_certificat: dict):
         await recevoir_commande_appareil(appareil, commande, info_certificat)
     else:
         raise ValueError('Action inconnue : %s' % action)
+    
+    print("Commande %s traitee" % action)
 
 
 async def challenge_led_blink(appareil, commande: dict):
@@ -79,12 +77,18 @@ async def recevoir_configuration_display(reponse):
     except KeyError:
         print("Erreur reception displays %s" % reponse)
 
-async def recevoir_configuration_programmes(reponse):
+async def recevoir_configuration_programmes(appareil, reponse):
     try:
-        programmes = reponse['programmes_configuration']['configuration']['programmes']
-        set_configuration_programmes(programmes)
+        programmes = reponse['programmes']['configuration']['programmes']
     except KeyError:
-        print("Erreur reception programmes %s" % reponse)
+        try:
+            programmes = reponse['programmes']
+        except KeyError:
+            print("Erreur reception programmes %s" % reponse)
+            return
+
+    print("%d programmes recus, ids %s)" % (len(programmes), programmes.keys()))
+    await update_configuration_programmes(programmes, appareil)
 
 async def recevoir_fiche_publique(fiche):
     sauvegarder_relais(fiche)

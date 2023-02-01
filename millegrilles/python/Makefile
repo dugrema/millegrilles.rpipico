@@ -6,14 +6,15 @@ SRC_PYTHON = \
     feed_display.mpy \
     handler_commandes.mpy \
     message_inscription.mpy \
-    polling_messages.mpy \
     websocket_messages.mpy
 
 
 SRC_MILLEGRILLES = \
-    millegrilles/certificat.mpy \
+    millegrilles/appareil_millegrille.mpy \
+    millegrilles/config.mpy \
     millegrilles/const_leds.mpy \
     millegrilles/etat.mpy \
+    millegrilles/feed_display.mpy \
     millegrilles/ledblink.mpy \
     millegrilles/mgmessages.mpy \
     millegrilles/mgthreads.mpy \

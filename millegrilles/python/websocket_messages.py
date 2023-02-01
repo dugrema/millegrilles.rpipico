@@ -21,6 +21,7 @@ CONST_CHAMP_TIMEOUT = const('http_timeout')
 
 CONST_DOMAINE_SENSEURSPASSIFS = const('SenseursPassifs')
 CONST_REQUETE_DISPLAY = const('getAppareilDisplayConfiguration')
+CONST_REQUETE_PROGRAMMES = const('getAppareilProgrammesConfiguration')
 CONST_REQUETE_FICHE_PUBLIQUE = const('getFichePublique')
 CONST_REQUETE_RELAIS_WEB = const('getRelaisWeb')
 
@@ -122,6 +123,22 @@ async def requete_configuration_displays(websocket, buffer):
     collect()
     await asyncio.sleep_ms(1)
     
+    print('requete_configuration_displays')
+    websocket.send(buffer.get_data())
+
+
+async def requete_configuration_programmes(websocket, buffer):
+    requete = await signer_message(
+        dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_PROGRAMMES)
+    buffer.set_text(dumps(requete))
+    requete = None
+
+    # Cleanup memoire
+    await asyncio.sleep_ms(1)
+    collect()
+    await asyncio.sleep_ms(1)
+    
+    print('requete_configuration_programmes')
     websocket.send(buffer.get_data())
 
 
@@ -190,10 +207,6 @@ async def charger_timeinfo(websocket, buffer, refresh: False):
 
 async def verifier_signature(reponse, buffer, task_runner):
     return await verifier_message(reponse, buffer, task_runner)
-
-
-async def _traiter_commande(appareil, reponse, info_certificat):
-    return await traiter_commande(appareil, reponse, info_certificat)
 
 
 class PollingThread:
@@ -272,12 +285,18 @@ class PollingThread:
         
         if self.__refresh_step <= 3:
             self.__refresh_step = 4
+            # Recharger la configuration des programmes
+            await requete_configuration_programmes(self.__websocket, buffer=self.__buffer)
+            return
+        
+        if self.__refresh_step <= 4:
+            self.__refresh_step = 5
             # Verifier si le certificat doit etre renouvelle
             await verifier_renouveler_certificat_ws(self.__websocket, buffer=self.__buffer)
             return
 
-        if self.__refresh_step <= 4:
-            self.__refresh_step = 5
+        if self.__refresh_step <= 5:
+            self.__refresh_step = 6
             # Verifier si le certificat doit etre renouvelle
             await requete_relais_web(self.__websocket, buffer=self.__buffer)
             return
@@ -413,7 +432,7 @@ class PollingThread:
                         # info_certificat = None
                         await asyncio.sleep_ms(20)  # Yield
                 
-                        await _traiter_commande(self.__appareil, reponse, info_certificat)
+                        await traiter_commande(self.__appareil, reponse, info_certificat)
                     except KeyError as e:
                         print("Erreur reception KeyError %s" % str(e))
                         print("ERR Message\n%s" % reponse)

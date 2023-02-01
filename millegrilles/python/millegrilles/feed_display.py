@@ -86,7 +86,6 @@ class FeedDisplayCustom(FeedDisplay):
             # print('Display group None')
             if self._appareil.wifi_ok is not True:
                 yield MSG_WIFI_OFFLINE, None, 5.0, True
-                yield None, 'PB', None, False
             for ligne in lignes:
                 # Verifier si un override est present
                 if self._appareil.get_display_override() is not None:
@@ -98,7 +97,8 @@ class FeedDisplayCustom(FeedDisplay):
             # print('Display group %s' % group)
             if self._appareil.wifi_ok is not True:
                 yield MSG_WIFI_OFFLINE, None, 5.0, True
-                yield None, 'PB', None, False
+                for _ in range(1, group):
+                    yield '', None, None, False
             
             refresh = 1.0
             
@@ -108,25 +108,16 @@ class FeedDisplayCustom(FeedDisplay):
                 print('Display lignes : %s' % lignes_courantes)
                 try:
                     duree = max([l.get('duree') for l in lignes_courantes if l.get('duree') is not None])
-                    # reps = ceil(duree / refresh)
+                    reps = ceil(duree / refresh)
                     duree_override = refresh
-                    print("Ligne duree %s, override %s" % (duree, duree_override))
+                    print("Duree %s, reps %s, override %s" % (duree, reps, duree_override))
                 except ValueError as e:
                     print("Display value error pour \n%s" % lignes_courantes)
                     print_exception(e)
-                    # reps = 1
-                    duree = 10
+                    reps = 1
                     duree_override = None
-                
-                expiration_page = time() + duree
-                
-                yield None, 'CL', None, False  # Clear manuel
-                while True:  # Rep jusqu'a expiration
-                    if time() > expiration_page:
-                        break  # Passer a la prochaine page
-                    
-                    # no_clear = rep_no != reps - 1
-                    no_clear = True
+                for rep_no in range(0, reps):
+                    no_clear = rep_no != reps - 1
                     for ligne in lignes_courantes:
                         yield self.formatter_ligne(
                             ligne, duree_override=duree_override, no_clear=no_clear)
@@ -134,10 +125,6 @@ class FeedDisplayCustom(FeedDisplay):
                         # Verifier si un override est present
                         if self._appareil.get_display_override() is not None:
                             raise SkipRemainingLines()
-
-                    # Page break
-                    yield None, 'PB', None, False
-
 
     def formatter_ligne(self, ligne, duree_override=None, no_clear=False):
         masque = ligne['masque']
