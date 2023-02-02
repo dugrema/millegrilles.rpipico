@@ -365,7 +365,7 @@ class Runner:
 
     async def charger_urls(self):
         if self.__wifi_ok is True:
-            refresh = self.__prochain_refresh_fiche > 0
+            refresh = self.__prochain_refresh_fiche != 0 and self.__prochain_refresh_fiche >= time.time()
 
             collect()
             relais = await config.charger_relais(
@@ -474,8 +474,9 @@ class Runner:
                     print("OSError main")
                     sys.print_exception(e)
                     collect()
-                    self.afficher_info()                    
-                    await asyncio.sleep(60)
+                    self.afficher_info()
+                    self.__prochain_refresh_fiche = time.time()  # Forcer refresh de la fiche
+                    await asyncio.sleep(20)
 
             except MemoryError as e:
                 self.__erreurs_memory += 1
@@ -493,10 +494,11 @@ class Runner:
                 print("Erreur main")
                 collect()
                 sys.print_exception(e)
-                self.afficher_info()                
+                self.afficher_info()
+                self.__prochain_refresh_fiche = time.time()  # Forcer refresh de la fiche
 
             # Erreur execution ou changement runlevel
-            await led_executer_sequence(const_leds.CODE_MAIN_ERREUR_GENERALE, 4, self.__ui_lock)
+            await led_executer_sequence(const_leds.CODE_MAIN_ERREUR_GENERALE, 2, self.__ui_lock)
     
     async def run(self):
         self.afficher_info()
