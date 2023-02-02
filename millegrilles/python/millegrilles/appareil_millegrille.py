@@ -248,6 +248,8 @@ class Runner:
         """
         Mode d'attente de signature de certificat
         """
+        collect()
+
         certificat_recu = False
         while certificat_recu is False:
             try:
@@ -317,35 +319,8 @@ class Runner:
         while True:
             print("Entretien mode %d" % self._mode_operation)
             await self.__ui_lock.acquire()
-            try:
-                if self._mode_operation >= 1:
-                    # Verifier etat wifi
-                    self.__wifi_ok = wifi.is_wifi_ok()
-                    
-                    if self.__wifi_ok is False:
-                        print("Restart wifi")
-                        ip = await config.initialiser_wifi()
-                        if ip is not None:
-                            wifi_ok = True
-                            print("Wifi OK : ", ip)
-                        else:
-                            print("Wifi echec")
-                        ip = None
-                
-                if self.__wifi_ok is True:
-                
-                    if self.__ntp_ok is False:
-                        set_time()
-                        self.__ntp_ok = True
 
-                    if self._mode_operation == CONST_MODE_POLLING:
-                        await entretien_certificat()
-
-            except Exception as e:
-                print("Erreur entretien: %s" % e)
-                sys.print_exception(e)
-            finally:
-                self.__ui_lock.release()
+            await self.__entretien_cycle()
             
             if init is True:
                 # Premiere run a l'initialisation
@@ -357,12 +332,42 @@ class Runner:
             else:
                 await asyncio.sleep(120)
 
+    async def __entretien_cycle(self):
+        try:
+            if self._mode_operation >= 1:
+                # Verifier etat wifi
+                self.__wifi_ok = wifi.is_wifi_ok()
+
+                if self.__wifi_ok is False:
+                    print("Restart wifi")
+                    ip = await config.initialiser_wifi()
+                    if ip is not None:
+                        wifi_ok = True
+                        print("Wifi OK : ", ip)
+                    else:
+                        print("Wifi echec")
+                    ip = None
+
+            if self.__wifi_ok is True:
+
+                if self.__ntp_ok is False:
+                    set_time()
+                    self.__ntp_ok = True
+
+                if self._mode_operation == CONST_MODE_POLLING:
+                    await entretien_certificat()
+
+        except Exception as e:
+            print("Erreur entretien: %s" % e)
+            sys.print_exception(e)
+        finally:
+            self.__ui_lock.release()
+
     async def charger_urls(self):
         if self.__wifi_ok is True:
             refresh = self.__prochain_refresh_fiche > 0
-            # if self.__prochain_refresh_fiche < time.time():
-            refresh = self.__prochain_refresh_fiche > 0
 
+            collect()
             relais = await config.charger_relais(
                 self.__ui_lock, refresh=refresh, buffer=BUFFER_MESSAGE)
             self.set_relais(relais)
