@@ -193,14 +193,14 @@ async def run_inscription(appareil, url_relai: str, ui_lock, buffer):
         # Garbage collect
         await sleep_ms(1)
         collect()
-        await sleep_ms(1)
+        await sleep_ms(20)
         
         status_code, buffer_reponse = await post_inscription(url_inscription, buffer)
         
         # Garbage collect
         await sleep_ms(1)  # Yield
         collect()
-        await sleep_ms(1)  # Yield
+        await sleep_ms(20)  # Yield
         
         reponse_dict = json.loads(buffer_reponse.get_data())
         

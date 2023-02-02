@@ -94,7 +94,9 @@ async def recevoir_fiche_publique(fiche):
 
 async def recevoir_relais_web(reponse):
     try:
-        sauvegarder_relais_liste(reponse['relais'])
+        relais = reponse['relais']
+        print("recevoir_relais_web %s" % relais)
+        sauvegarder_relais_liste(relais)
     except KeyError:
         print("Erreur reception relais web (relais manquant)")
 
