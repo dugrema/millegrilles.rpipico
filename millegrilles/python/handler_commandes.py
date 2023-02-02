@@ -19,13 +19,21 @@ async def traiter_commande(appareil, commande: dict, info_certificat: dict):
         except KeyError:
             print("Erreur reception maj displays")
     elif action == 'evenementMajProgrammes':
-        await recevoir_configuration_programmes(appareil, commande)
+        try:
+            programmes = commande['programmes']
+            await recevoir_configuration_programmes(appareil, programmes)
+        except KeyError:
+            print("evenementMajProgrammes Aucuns programmes recus")
     elif action == 'lectures_senseurs':
         appareil.recevoir_lectures_externes(commande['lectures_senseurs'])
     elif action == 'timezoneInfo':
         await recevoir_timezone_offset(appareil, commande)
     elif action == 'getAppareilProgrammesConfiguration':
-        await recevoir_configuration_programmes(appareil, commande)
+        try:
+            programmes = commande['programmes']['configuration']['programmes']
+            await recevoir_configuration_programmes(appareil, programmes)
+        except (KeyError, AttributeError):
+            print("getAppareilProgrammesConfiguration Aucuns programmes recus")
     elif action == 'getAppareilDisplayConfiguration':
         # Reponse display
         await recevoir_configuration_display(commande)
@@ -77,16 +85,7 @@ async def recevoir_configuration_display(reponse):
     except KeyError:
         print("Erreur reception displays %s" % reponse)
 
-async def recevoir_configuration_programmes(appareil, reponse):
-    try:
-        programmes = reponse['programmes']['configuration']['programmes']
-    except KeyError:
-        try:
-            programmes = reponse['programmes']
-        except KeyError:
-            print("Erreur reception programmes %s" % reponse)
-            return
-
+async def recevoir_configuration_programmes(appareil, programmes):
     print("%d programmes recus, ids %s)" % (len(programmes), programmes.keys()))
     await update_configuration_programmes(programmes, appareil)
 
