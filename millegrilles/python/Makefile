@@ -1,9 +1,7 @@
 MPYCROSS = ../../micropython/mpy-cross/build/mpy-cross
 
 SRC_PYTHON = \
-    handler_commandes.mpy \
-    message_inscription.mpy \
-    websocket_messages.mpy
+    handler_commandes.mpy
 
 
 SRC_MILLEGRILLES = \
