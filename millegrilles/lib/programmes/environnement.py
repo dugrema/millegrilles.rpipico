@@ -29,8 +29,12 @@ class ProgrammeEnvironnement(ProgrammeActif):
         self.__duree_off_min = 120
 
         # Init apres, appelle charger_args() dans super
-        super().__init__(appareil, programme_id, args, intervalle=60_000)
+        super().__init__(appareil, programme_id, args, intervalle=5_000)
         self.__expiration_hold = None
+
+    def get_senseurs(self):
+        """ @return Liste des senseurs. Utilise pour identifier deps externe. """
+        return self._senseurs
 
     def get_type_senseur(self):
         """ @return Type de senseur (e.g. temperature, humidite, pression) """
@@ -61,9 +65,10 @@ class ProgrammeEnvironnement(ProgrammeActif):
                 switch_id = switch_nom.split('/')[0]
                 try:
                     device = self._appareil.get_device(switch_id)
-                    print("Modifier etat switch %s => %s" % (switch_id, etat_desire))
-                    changement = changement or device.value != etat_desire
-                    device.value = etat_desire
+                    if device.value != etat_desire:
+                        print("Modifier etat switch %s => %s" % (switch_id, etat_desire))
+                        changement = True
+                        device.value = etat_desire
                 except KeyError:
                     print("Erreur acces switch %s, non trouvee" % switch_id)
 
@@ -189,7 +194,7 @@ class Chauffage(ProgrammeEnvironnement):
 
     def charger_args(self, args: dict):
         super().charger_args(args)
-        self._valeur_cible = args.get('temperature') or self._valeur_cible
+        self._valeur_cible = args['temperature']
 
     def get_type_senseur(self):
         return TYPE_SENSEUR_TEMPERATURE
@@ -205,7 +210,11 @@ class Climatisation(ProgrammeEnvironnement):
 
     def charger_args(self, args: dict):
         super().charger_args(args)
-        self._valeur_cible = args.get('temperature') or self._valeur_cible
+        self._valeur_cible = args['temperature']
 
     def get_type_senseur(self):
         return TYPE_SENSEUR_TEMPERATURE
+
+    def reverse_state(self):
+        # Climatisation fonctionne a l'envers des autres programmes, ON si temperature est > cible
+        return True
