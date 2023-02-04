@@ -34,7 +34,8 @@ class ProgrammeEnvironnement(ProgrammeActif):
 
     def get_senseurs(self):
         """ @return Liste des senseurs. Utilise pour identifier deps externe. """
-        return self._senseurs
+        if self.actif is True:
+            return self._senseurs
 
     def get_type_senseur(self):
         """ @return Type de senseur (e.g. temperature, humidite, pression) """
@@ -61,16 +62,7 @@ class ProgrammeEnvironnement(ProgrammeActif):
         changement = False
         if etat_desire is not None:
             # S'assurer que les switch sont dans le bon etat
-            for switch_nom in self._switches:
-                switch_id = switch_nom.split('/')[0]
-                try:
-                    device = self._appareil.get_device(switch_id)
-                    if device.value != etat_desire:
-                        print("Modifier etat switch %s => %s" % (switch_id, etat_desire))
-                        changement = True
-                        device.value = etat_desire
-                except KeyError:
-                    print("Erreur acces switch %s, non trouvee" % switch_id)
+            changement = self.set_etat_switches(etat_desire)
 
         if changement is True:
             self._appareil.stale_event.set()
@@ -142,28 +134,51 @@ class ProgrammeEnvironnement(ProgrammeActif):
             if valeur_courante < (self._valeur_cible - self.__precision):
                 # Valeur est inferieure
                 if self.reverse_state() is True:
-                    return self.set_etat_off()
+                    return self.action_etat_off()
                 else:
-                    return self.set_etat_on()
+                    return self.action_etat_on()
             elif valeur_courante > (self._valeur_cible + self.__precision):
                 # Valeur est superieure
                 if self.reverse_state() is True:
-                    return self.set_etat_on()
+                    return self.action_etat_on()
                 else:
-                    return self.set_etat_off()
+                    return self.action_etat_off()
             else:
                 return None  # Etat desire est l'etat courant (aucun changement)
 
         # On n'a aucune valeur courante - valeur desiree est 0 (OFF) sans timer de blocage
         return 0
 
-    def set_etat_on(self):
+    def action_etat_on(self):
         self.__expiration_hold = time.time() + self.__duree_on_min
         return 1  # Etat desire est ON
 
-    def set_etat_off(self):
+    def action_etat_off(self):
         self.__expiration_hold = time.time() + self.__duree_off_min
         return 0  # Etat desire est OFF
+
+    def set_etat_switches(self, etat_desire):
+        changement = False
+
+        for switch_nom in self._switches:
+            switch_id = switch_nom.split('/')[0]
+            try:
+                device = self._appareil.get_device(switch_id)
+                if device.value != etat_desire:
+                    print("Modifier etat switch %s => %s" % (switch_id, etat_desire))
+                    changement = True
+                    device.value = etat_desire
+            except KeyError:
+                print("Erreur acces switch %s, non trouvee" % switch_id)
+
+        return changement
+
+    def stop(self):
+        """
+        Arreter thread et mettre toutes les switch a OFF.
+        """
+        super().stop()
+        self.set_etat_switches(0)
 
 
 class Humidificateur(ProgrammeEnvironnement):

@@ -14,10 +14,12 @@ SRC_MILLEGRILLES = \
     millegrilles/etat.mpy \
     millegrilles/feed_display.mpy \
     millegrilles/ledblink.mpy \
+    millegrilles/message_inscription.mpy \
     millegrilles/mgmessages.mpy \
     millegrilles/mgthreads.mpy \
     millegrilles/uping.mpy \
     millegrilles/urequests2.mpy \
+    millegrilles/websocket_messages.mpy \
     millegrilles/wifi.mpy
 
 %.mpy: %.py

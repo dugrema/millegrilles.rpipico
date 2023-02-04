@@ -11,19 +11,18 @@ from gc import collect
 from micropython import mem_info
 
 from millegrilles import const_leds
-from millegrilles.const_leds import CODE_POLLING_ERREUR_GENERALE
 from millegrilles import mgmessages
 from millegrilles import wifi
 from millegrilles.ledblink import led_executer_sequence
 
 from millegrilles import feed_display
 
-from websocket_messages import PollingThread
+from millegrilles.websocket_messages import PollingThread, CONST_DUREE_THREAD_POLLING
 from handler_devices import DeviceHandler
 from handler_programmes import ProgrammesHandler
 from millegrilles.certificat import entretien_certificat as __entretien_certificat, PATH_CERT
 # from millegrilles.mgthreads import TaskRunner
-from message_inscription import run_inscription, \
+from millegrilles.message_inscription import run_inscription, \
      verifier_renouveler_certificat as __verifier_renouveler_certificat
 
 from millegrilles import config
@@ -35,8 +34,6 @@ from millegrilles.config import \
      CONST_MODE_POLLING, \
      detecter_mode_operation, \
      get_tz_offset
-
-from websocket_messages import CONST_DUREE_THREAD_POLLING
 
 CONST_INFO_SEP = const(' ---- INFO ----')
 CONST_NB_ERREURS_RESET = const(10)

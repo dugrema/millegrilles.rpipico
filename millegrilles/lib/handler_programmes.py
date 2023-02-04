@@ -94,6 +94,10 @@ class ProgrammeActif:
         pass
 
     @property
+    def actif(self):
+        return not self._arreter.is_set()
+
+    @property
     def programme_id(self):
         return self._programme_id
     
@@ -112,15 +116,23 @@ class ProgrammeActif:
         self.__intervalle_onetime = intervalle_ms
 
     async def run_task(self):
+        print("Programme %s demarre" % self._programme_id)
         while not self._arreter.is_set():
             await self.loop()
             try:
                 await self.wait()
-            except ProgrammeInterrompu:
-                if self.__reloading is True:
-                    # Toggle reloading flag, clear _arreter pour loop
-                    self.__reloading = False
-                    self._arreter.clear()
+            except ProgrammeInterrompu as e:
+                if self._arreter.is_set() is False:
+                    # Situation anormale
+                    raise e
+
+            if self.__reloading is True:
+                # Toggle reloading flag, clear _arreter pour loop
+                print("Programme %s redemarre" % self._programme_id)
+                self.__reloading = False
+                self._arreter.clear()
+
+        print("Programme %s arrete" % self._programme_id)
 
     async def loop(self):
         raise Exception('loop() Not Implemented')
