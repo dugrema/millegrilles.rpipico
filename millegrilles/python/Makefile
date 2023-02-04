@@ -8,6 +8,7 @@ SRC_PYTHON = \
 
 SRC_MILLEGRILLES = \
     millegrilles/appareil_millegrille.mpy \
+    millegrilles/certificat.mpy \
     millegrilles/config.mpy \
     millegrilles/const_leds.mpy \
     millegrilles/etat.mpy \
