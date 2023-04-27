@@ -1,4 +1,5 @@
 # Test PEM
+import binascii
 import json
 import math
 import time
@@ -10,6 +11,10 @@ from io import IOBase
 
 from . import certificat
 from .certificat import valider_certificats
+# -- DEV --
+#from millegrilles import certificat
+#from millegrilles.certificat import valider_certificats
+# -- DEV --
 
 from multiformats import multibase, multihash
 from collections import OrderedDict
@@ -194,7 +199,7 @@ def message_stringify(message, buffer=None):
 async def verifier_message(message: dict, buffer=None, task_runner=None):
     # Valider le certificat - raise Exception si erreur
     info_certificat = await valider_certificats(message['_certificat'])
-    del message['_certificat']
+    del message['certificat']
 
     # Verifier la signature du message
     signature = message['_signature']
@@ -362,3 +367,62 @@ class BufferMessage(IOBase):
     def __len__(self):
         return self.__len_courant
 
+
+# Changements 2023.5 - nouveau format de message (similaire a nostr)
+# {pubkey, estampille, kind, contenu, routage, pre-migration, id, sig}
+# id = blake2s(json.dumps([pubkey, estampille, kind, contenu, routage?, pre-migration?]))
+# sig = ed25519.sign(pubkey, id)
+# valeurs binaires proviennent de binascii.hexlify(BIN).decode('utf-8')
+
+async def signer_message_2023_5(id_message: str, cle_privee=None):
+    cle_publique = None
+    if cle_privee is None:
+        # Charger la cle locale
+        try:
+            with open(certificat.PATH_CLE_PRIVEE, 'rb') as fichier:
+                cle_privee = fichier.read()
+            if len(cle_privee) == 64:
+                # Split cle privee/publique
+                cle_publique = cle_privee[32:]
+                cle_privee = cle_privee[:32]
+        except OSError:
+            print("Cle prive absente, utiliser .new")
+            with open(certificat.PATH_CLE_PRIVEE + '.new', 'rb') as fichier:
+                cle_privee = fichier.read()
+
+    ticks_debut = time.ticks_ms()
+    if cle_publique is None:
+        # Deriver la cle publique a partir de la cle privee
+        cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
+    print("Cle publique : %s" % binascii.hexlify(cle_publique))
+    print("signer_message_2023_5 ed25519generatepubkey duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+    await asyncio.sleep_ms(1)
+
+    hachage = binascii.unhexlify(id_message)
+
+    ticks_debut = time.ticks_ms()
+    signature = oryx_crypto.ed25519sign(cle_privee, cle_publique, hachage)
+    print("__signer_message_2 ed25519sign duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+
+    await asyncio.sleep_ms(1)
+    #signature = multibase.encode('base64', signature)
+    signature = binascii.hexlify(signature).decode('utf-8')
+    
+    return signature
+
+
+def verifier_signature_2023_5(id_message: str, signature: str, cle_publique: str):
+    """ Verifie la signature d'un message. Lance une exception en cas de signature invalide. """
+    hachage = binascii.unhexlify(id_message)
+    cle_publique = binascii.unhexlify(cle_publique)
+    signature = binascii.unhexlify(signature)
+    ticks_debut = time.ticks_ms()
+    oryx_crypto.ed25519verify(cle_publique, signature, hachage)
+    print("__verifier_signature ed25519verify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+
+
+def hacher_message_2023_5(message, buffer=None):
+    ticks_debut = time.ticks_ms()
+    hachage = oryx_crypto.blake2s(message_stringify(message, buffer=buffer))
+    print("hacher_message stringify+blake2s duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+    return binascii.hexlify(hachage).decode('utf-8')
