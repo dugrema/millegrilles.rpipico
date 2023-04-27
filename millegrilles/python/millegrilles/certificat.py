@@ -107,7 +107,7 @@ def get_certificat_local():
         return None
 
 
-async def valider_certificats(pem_certs: list, date_validation=None, is_der=False):
+async def valider_certificats(pem_certs: list, date_validation=None, is_der=False, fingerprint=None):
     """ Valide la chaine de certificats, incluant le dernier avec le CA.
         @return Information du certificat leaf
         @raises Exception Si la chaine est invalide. """
