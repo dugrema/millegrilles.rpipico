@@ -23,74 +23,74 @@ from collections import OrderedDict
 VERSION_SIGNATURE = 2
 
 
-async def signer_message(message, cle_privee=None, buffer=None, task_runner=None, **kwargs):
-    """ Genere l'en-tete et la signature d'un message """
-    entete, signature = await __signer_message(message, cle_privee, buffer, task_runner, **kwargs)
-    message['en-tete'] = entete
-    message['_signature'] = signature
-    if entete.get('fingerprint_certificat') is not None:
-        message['_certificat'] = certificat.split_pem(certificat.get_certificat_local(), format_str=True)
-    return message    
+# async def signer_message(message, cle_privee=None, buffer=None, task_runner=None, **kwargs):
+#     """ Genere l'en-tete et la signature d'un message """
+#     entete, signature = await __signer_message(message, cle_privee, buffer, task_runner, **kwargs)
+#     message['en-tete'] = entete
+#     message['_signature'] = signature
+#     if entete.get('fingerprint_certificat') is not None:
+#         message['_certificat'] = certificat.split_pem(certificat.get_certificat_local(), format_str=True)
+#     return message    
 
 
-async def __signer_message(message, cle_privee=None, buffer=None, task_runner=None, **kwargs):
-    message = prep_message_1(message)
-    hachage = hacher_message(message, buffer).decode('utf-8')
-    await asyncio.sleep_ms(10)
+# async def __signer_message(message, cle_privee=None, buffer=None, task_runner=None, **kwargs):
+#     message = prep_message_1(message)
+#     hachage = hacher_message(message, buffer).decode('utf-8')
+#     await asyncio.sleep_ms(10)
+# 
+#     try:
+#         cert_local = certificat.load_pem_certificat(certificat.PATH_CERT)[0]
+#         fingerprint = certificat.calculer_fingerprint(cert_local)
+#     except OSError:
+#         fingerprint = None
+#     await asyncio.sleep_ms(10)
+# 
+#     entete = await generer_entete(hachage, fingerprint=fingerprint, **kwargs)
+#     await asyncio.sleep_ms(10)
+#     message['en-tete'] = entete
+#     
+#     # Re-trier le message
+#     message = prep_message_1(message)
+#     
+#     # Signer
+#     await asyncio.sleep_ms(10)
+#     signature = (await __signer_message_2(message, cle_privee, buffer, task_runner)).decode('utf-8')
+#     # signature = __signer_message_2(message, cle_privee)
+# 
+#     return entete, signature
 
-    try:
-        cert_local = certificat.load_pem_certificat(certificat.PATH_CERT)[0]
-        fingerprint = certificat.calculer_fingerprint(cert_local)
-    except OSError:
-        fingerprint = None
-    await asyncio.sleep_ms(10)
 
-    entete = await generer_entete(hachage, fingerprint=fingerprint, **kwargs)
-    await asyncio.sleep_ms(10)
-    message['en-tete'] = entete
-    
-    # Re-trier le message
-    message = prep_message_1(message)
-    
-    # Signer
-    await asyncio.sleep_ms(10)
-    signature = (await __signer_message_2(message, cle_privee, buffer, task_runner)).decode('utf-8')
-    # signature = __signer_message_2(message, cle_privee)
-
-    return entete, signature
-
-
-async def __signer_message_2(message, cle_privee=None, buffer=None, task_runner=None):
-    if cle_privee is None:
-        # Charger la cle locale
-        try:
-            with open(certificat.PATH_CLE_PRIVEE, 'rb') as fichier:
-                cle_privee = fichier.read()
-        except OSError:
-            print("Cle prive absente, utiliser .new")
-            with open(certificat.PATH_CLE_PRIVEE + '.new', 'rb') as fichier:
-                cle_privee = fichier.read()
-
-    ticks_debut = time.ticks_ms()
-    cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
-    print("__signer_message_2 ed25519generatepubkey duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
-    await asyncio.sleep_ms(10)
-
-    message_str = message_stringify(message, buffer=buffer)
-    await asyncio.sleep_ms(10)
-    ticks_debut = time.ticks_ms()
-    hachage = oryx_crypto.blake2b(message_str)
-    print("__signer_message_2 blake2b duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
-    await asyncio.sleep_ms(10)
-
-    ticks_debut = time.ticks_ms()
-    signature = bytes([VERSION_SIGNATURE]) + oryx_crypto.ed25519sign(cle_privee, cle_publique, hachage)
-    print("__signer_message_2 ed25519sign duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
-
-    await asyncio.sleep_ms(10)
-    signature = multibase.encode('base64', signature)
-    
-    return signature
+# async def __signer_message_2(message, cle_privee=None, buffer=None, task_runner=None):
+#     if cle_privee is None:
+#         # Charger la cle locale
+#         try:
+#             with open(certificat.PATH_CLE_PRIVEE, 'rb') as fichier:
+#                 cle_privee = fichier.read()
+#         except OSError:
+#             print("Cle prive absente, utiliser .new")
+#             with open(certificat.PATH_CLE_PRIVEE + '.new', 'rb') as fichier:
+#                 cle_privee = fichier.read()
+# 
+#     ticks_debut = time.ticks_ms()
+#     cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
+#     print("__signer_message_2 ed25519generatepubkey duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+#     await asyncio.sleep_ms(10)
+# 
+#     message_str = message_stringify(message, buffer=buffer)
+#     await asyncio.sleep_ms(10)
+#     ticks_debut = time.ticks_ms()
+#     hachage = oryx_crypto.blake2b(message_str)
+#     print("__signer_message_2 blake2b duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+#     await asyncio.sleep_ms(10)
+# 
+#     ticks_debut = time.ticks_ms()
+#     signature = bytes([VERSION_SIGNATURE]) + oryx_crypto.ed25519sign(cle_privee, cle_publique, hachage)
+#     print("__signer_message_2 ed25519sign duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+# 
+#     await asyncio.sleep_ms(10)
+#     signature = multibase.encode('base64', signature)
+#     
+#     return signature
 
 
 async def generer_entete(hachage,
@@ -140,17 +140,17 @@ async def generer_entete(hachage,
     return entete
 
 
-def hacher_message(message, buffer=None):
-    from oryx_crypto import blake2s
-    from multiformats.multihash import wrap
-    from multiformats.multibase import encode
-    from millegrilles.certificat import CONST_HACHAGE_FINGERPRINT
-    
-    ticks_debut = time.ticks_ms()
-    hachage = blake2s(message_stringify(message, buffer=buffer))
-    print("hacher_message stringify+blake2s duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
-    fingerprint = wrap(CONST_HACHAGE_FINGERPRINT, hachage)
-    return encode('base64', bytes(fingerprint))
+# def hacher_message(message, buffer=None):
+#     from oryx_crypto import blake2s
+#     from multiformats.multihash import wrap
+#     from multiformats.multibase import encode
+#     from millegrilles.certificat import CONST_HACHAGE_FINGERPRINT
+#     
+#     ticks_debut = time.ticks_ms()
+#     hachage = blake2s(message_stringify(message, buffer=buffer))
+#     print("hacher_message stringify+blake2s duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+#     fingerprint = wrap(CONST_HACHAGE_FINGERPRINT, hachage)
+#     return encode('base64', bytes(fingerprint))
 
 
 def prep_message_1(message, conserver_entete=True):
@@ -196,54 +196,56 @@ def message_stringify(message, buffer=None):
         return buffer.get_data()
 
 
-async def verifier_message(message: dict, buffer=None, task_runner=None):
+async def verifier_message(message: dict, buffer=None):
     # Valider le certificat - raise Exception si erreur
-    info_certificat = await valider_certificats(message['_certificat'])
+    pubkey = message['pubkey']
+
+    ticks_debut = time.ticks_ms()
+    info_certificat = await valider_certificats(message['certificat'])  #, fingerprint=message['pubkey'])
+    print("verifier_message verifier certificat duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
     del message['certificat']
 
     # Verifier la signature du message
-    signature = message['_signature']
-    del message['_signature']
+    signature = message['sig']
+    id_message = message['id']
+    # Raise une exception si la signature est invalide
+    verifier_signature_2023_5(id_message, signature, pubkey)
 
-    # Trier tous les champs
-    await asyncio.sleep_ms(10)
-    ticks_debut = time.ticks_ms()
-    message = prep_message_1(message)
-    print("verifier_message prep_message_1 duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
-
-    await asyncio.sleep_ms(10)
-    await __verifier_signature(message, signature, info_certificat['public_key'], buffer=buffer, task_runner=task_runner)
-    await asyncio.sleep_ms(10)
+    # Hacher le message, comparer id
+    id_calcule = hacher_message_2023_5(message, buffer=buffer)
+    if id_calcule != id_message:
+        print('Mismatch, id_calcule : %s, id_message : %s' % (id_calcule, id_message))
+        raise Exception('Mismatch id message')
 
     return info_certificat
 
 
-async def __verifier_signature(message, signature, cle_publique, buffer=None, task_runner=None):
-    from multiformats.multibase import decode
-    from oryx_crypto import blake2b, ed25519verify
-    
-    """ Verifie la signature d'un message. Lance une exception en cas de signature invalide. """
-    signature = decode(signature)
-
-    version_signature = signature[0]
-    if version_signature != VERSION_SIGNATURE:
-        raise Exception("Signature non supportee")
-
-    await asyncio.sleep_ms(10)
-    ticks_debut = time.ticks_ms()
-    data = message_stringify(message, buffer=buffer)
-    print("__verifier_signature stringify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
-    await asyncio.sleep_ms(10)
-    ticks_debut = time.ticks_ms()
-    hachage = blake2b(data)
-    print("__verifier_signature stringify blake2b %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
-    await asyncio.sleep_ms(10)
-    ticks_debut = time.ticks_ms()
-    #if task_runner is not None:
-    #    await task_runner.run_task(ed25519verify, cle_publique, signature[1:], hachage)
-    #else:
-    ed25519verify(cle_publique, signature[1:], hachage)
-    print("__verifier_signature ed25519verify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+# async def __verifier_signature(message, signature, cle_publique, buffer=None, task_runner=None):
+#     from multiformats.multibase import decode
+#     from oryx_crypto import blake2b, ed25519verify
+#     
+#     """ Verifie la signature d'un message. Lance une exception en cas de signature invalide. """
+#     signature = decode(signature)
+# 
+#     version_signature = signature[0]
+#     if version_signature != VERSION_SIGNATURE:
+#         raise Exception("Signature non supportee")
+# 
+#     await asyncio.sleep_ms(10)
+#     ticks_debut = time.ticks_ms()
+#     data = message_stringify(message, buffer=buffer)
+#     print("__verifier_signature stringify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+#     await asyncio.sleep_ms(10)
+#     ticks_debut = time.ticks_ms()
+#     hachage = blake2b(data)
+#     print("__verifier_signature stringify blake2b %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+#     await asyncio.sleep_ms(10)
+#     ticks_debut = time.ticks_ms()
+#     #if task_runner is not None:
+#     #    await task_runner.run_task(ed25519verify, cle_publique, signature[1:], hachage)
+#     #else:
+#     ed25519verify(cle_publique, signature[1:], hachage)
+#     print("__verifier_signature ed25519verify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
 
 
 # From : https://github.com/pfalcon/pycopy-lib
@@ -421,8 +423,31 @@ def verifier_signature_2023_5(id_message: str, signature: str, cle_publique: str
     print("__verifier_signature ed25519verify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
 
 
-def hacher_message_2023_5(message, buffer=None):
+def hacher_message_2023_5(message: dict, buffer=None):
     ticks_debut = time.ticks_ms()
-    hachage = oryx_crypto.blake2s(message_stringify(message, buffer=buffer))
+    message_array = preparer_array_hachage_2023_5(message)
+    hachage = oryx_crypto.blake2s(message_stringify(message_array, buffer=buffer))
     print("hacher_message stringify+blake2s duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
     return binascii.hexlify(hachage).decode('utf-8')
+
+
+def preparer_array_hachage_2023_5(message) -> list:
+    kind = message['kind']
+    
+    message_array = [
+        message['pubkey'],
+        message['estampille'],
+        message['kind'],
+        message['contenu'],
+    ]
+
+    if kind in [1, 2, 3, 5, 7]:
+        routage = prep_message_1(message['routage'])
+        message_array.append(routage)
+    if kind in [7]:
+        message_array.append(message['pre-migration'])
+    
+    if kind > 7:
+        raise Error('kind message non supporte' % kind)
+
+    return message_array
