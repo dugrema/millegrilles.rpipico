@@ -1,8 +1,9 @@
+import binascii
 import json
 import oryx_crypto
 import time
 import uasyncio as asyncio
-from . import urequests2 as requests
+# from . import urequests2 as requests
 
 from os import mkdir, remove
 from math import ceil
@@ -11,8 +12,8 @@ from random import getrandbits
 
 from multiformats import multihash, multibase
 
-MARQUEUR_END_CERTIFICATE = b'-----END CERTIFICATE-----'
-CONST_HACHAGE_FINGERPRINT = 'blake2s-256'
+MARQUEUR_END_CERTIFICATE = const(b'-----END CERTIFICATE-----')
+CONST_HACHAGE_FINGERPRINT = const('blake2s-256')
 
 OID_EXCHANGES = bytearray([0x2a, 0x03, 0x04, 0x00])
 OID_ROLES = bytearray([0x2a, 0x03, 0x04, 0x01])
@@ -42,9 +43,14 @@ def rnd_bytes(nb_bytes):
 
 def calculer_fingerprint(contenu_der):
     """ Calculer le fingerprint d'un certificat """
-    fingerprint = oryx_crypto.blake2s(contenu_der)
-    fingerprint = multihash.wrap(CONST_HACHAGE_FINGERPRINT, fingerprint)
-    fingerprint = multibase.encode('base58btc', bytes(fingerprint))
+    #fingerprint = oryx_crypto.blake2s(contenu_der)
+    #fingerprint = multihash.wrap(CONST_HACHAGE_FINGERPRINT, fingerprint)
+    #fingerprint = multibase.encode('base58btc', bytes(fingerprint))
+    
+    x509_info = oryx_crypto.x509certificatinfo(contenu_der)
+    # Nouveau calcul 2023.5 : la cle publique ed25519 est le fingerprint
+    public_key = oryx_crypto.x509PublicKey(x509_info)
+    fingerprint = binascii.hexlify(public_key).decode('utf-8')
     
     return fingerprint
 
