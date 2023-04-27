@@ -93,51 +93,51 @@ VERSION_SIGNATURE = 2
 #     return signature
 
 
-async def generer_entete(hachage,
-                         domaine: str = None,
-                         version: int = 1,
-                         action: str = None,
-                         partition: str = None,
-                         fingerprint: str = None):
-    entete = OrderedDict([])
-
-    with open(certificat.PATH_CA_CERT, 'rb') as fichier:
-        ca_der = fichier.read()
-    await asyncio.sleep_ms(10)
-    idmg = certificat.calculer_idmg(ca_der).decode('utf-8')
-
-    cle_publique = None
-    if fingerprint is None:
-        try:
-            with open(certificat.PATH_CLE_PRIVEE, 'rb') as fichier:
-                cle_privee = fichier.read()
-        except OSError:
-            with open(certificat.PATH_CLE_PRIVEE + '.new', 'rb') as fichier:
-                cle_privee = fichier.read()
-                
-        await asyncio.sleep_ms(10)
-        cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
-        await asyncio.sleep_ms(10)
-        cle_privee = None
-        cle_publique = multibase.encode('base64', cle_publique)
-
-    if action is not None:
-        entete['action'] = action
-    if cle_publique is not None:
-        entete['cle_publique'] = cle_publique
-    if domaine is not None:
-        entete['domaine'] = domaine
-    entete['estampille'] = time.time()
-    if fingerprint is not None:
-        entete['fingerprint_certificat'] = fingerprint
-    entete['hachage_contenu'] = hachage
-    entete['idmg'] = idmg
-    if partition is not None:
-        entete['partition'] = partition
-    entete['uuid_transaction'] = str(uuid4())
-    entete['version'] = 1
-
-    return entete
+# async def generer_entete(hachage,
+#                          domaine: str = None,
+#                          version: int = 1,
+#                          action: str = None,
+#                          partition: str = None,
+#                          fingerprint: str = None):
+#     entete = OrderedDict([])
+# 
+#     with open(certificat.PATH_CA_CERT, 'rb') as fichier:
+#         ca_der = fichier.read()
+#     await asyncio.sleep_ms(10)
+#     idmg = certificat.calculer_idmg(ca_der).decode('utf-8')
+# 
+#     cle_publique = None
+#     if fingerprint is None:
+#         try:
+#             with open(certificat.PATH_CLE_PRIVEE, 'rb') as fichier:
+#                 cle_privee = fichier.read()
+#         except OSError:
+#             with open(certificat.PATH_CLE_PRIVEE + '.new', 'rb') as fichier:
+#                 cle_privee = fichier.read()
+#                 
+#         await asyncio.sleep_ms(10)
+#         cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
+#         await asyncio.sleep_ms(10)
+#         cle_privee = None
+#         cle_publique = multibase.encode('base64', cle_publique)
+# 
+#     if action is not None:
+#         entete['action'] = action
+#     if cle_publique is not None:
+#         entete['cle_publique'] = cle_publique
+#     if domaine is not None:
+#         entete['domaine'] = domaine
+#     entete['estampille'] = time.time()
+#     if fingerprint is not None:
+#         entete['fingerprint_certificat'] = fingerprint
+#     entete['hachage_contenu'] = hachage
+#     entete['idmg'] = idmg
+#     if partition is not None:
+#         entete['partition'] = partition
+#     entete['uuid_transaction'] = str(uuid4())
+#     entete['version'] = 1
+# 
+#     return entete
 
 
 # def hacher_message(message, buffer=None):
@@ -391,6 +391,10 @@ async def signer_message_2023_5(id_message: str, cle_privee=None):
             print("Cle prive absente, utiliser .new")
             with open(certificat.PATH_CLE_PRIVEE + '.new', 'rb') as fichier:
                 cle_privee = fichier.read()
+                if len(cle_privee) == 64:
+                    # Split cle privee/publique
+                    cle_publique = cle_privee[32:]
+                    cle_privee = cle_privee[:32]
 
     ticks_debut = time.ticks_ms()
     if cle_publique is None:
@@ -451,3 +455,47 @@ def preparer_array_hachage_2023_5(message) -> list:
         raise Error('kind message non supporte' % kind)
 
     return message_array
+
+async def formatter_message(message: dict, kind: int, domaine=None, action=None, partition=None, cle_privee=None, buffer=None, ajouter_certificat=True):
+    """ Formatte un message avec estampille, hachage (id) et signature (sig) """
+    
+    if cle_privee is not None:
+        # Calculer pubkey
+        pubkey = binascii.hexlify(oryx_crypto.ed25519generatepubkey(cle_privee)).decode('utf-8')
+    else:
+        pubkey = binascii.hexlify(certificat.charger_cle_publique()).decode('utf-8')
+
+    # Serialiser le contenu en string
+    contenu = prep_message_1(message)
+    contenu = message_stringify(contenu).decode('utf-8')
+
+    enveloppe_message = {
+        'pubkey': pubkey,
+        'estampille': time.time(),
+        'kind': kind,
+        'contenu': contenu,
+    }
+    
+    if kind in [1, 2, 3, 5]:
+        routage = dict()
+        if action is not None:
+            routage['action'] = action
+        if domaine is not None:
+            routage['domaine'] = domaine
+        if partition is not None:
+            routage['partition'] = partition
+        enveloppe_message['routage'] = routage
+
+    if kind > 6:
+        raise Exception('kind %d non supporte' % kind)
+    
+    hachage_message = hacher_message_2023_5(enveloppe_message, buffer)
+    enveloppe_message['id'] = hachage_message
+    
+    signature = await signer_message_2023_5(hachage_message, cle_privee)
+    enveloppe_message['sig'] = signature
+    
+    if ajouter_certificat is True:
+        message['certificat'] = certificat.split_pem(certificat.get_certificat_local(), format_str=True)
+
+    return enveloppe_message

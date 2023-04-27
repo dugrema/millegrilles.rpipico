@@ -230,10 +230,12 @@ def sauvegarder_ca(ca_pem, idmg=None):
         fichier.write(ca_der)
 
 
-def generer_cle_secrete():
+def generer_cle_secrete(inclure_publique=False):
     cle_privee = rnd_bytes(32)
+    cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
     with open(PATH_CLE_PRIVEE + '.new', 'wb') as fichier:
-        fichier.write(cle_privee)
+        fichier.write(cle_privee)    # Premiers 32 bytes
+        fichier.write(cle_publique)  # Derniers 32 bytes
 
     # Cleanup, retirer certs/cert.pem.new si present
     try:
@@ -241,13 +243,38 @@ def generer_cle_secrete():
     except OSError:
         pass
     
-    return cle_privee
+    if inclure_publique is True:
+        return cle_privee, cle_publique
     
+    return cle_privee
+
+
+def charger_cle_privee(path_cle = PATH_CLE_PRIVEE):
+    # print('Charger cle privee %s pour conversion publique' % path_cle)
+    try:
+        with open(path_cle, 'rb') as fichier:
+            cle_privee = fichier.read()
+    except OSError:
+        with open(path_cle + '.new', 'rb') as fichier:
+            cle_privee = fichier.read()
+        
+    return cle_privee[:32]
+
 
 def charger_cle_publique(path_cle = PATH_CLE_PRIVEE):
     # print('Charger cle privee %s pour conversion publique' % path_cle)
-    with open(path_cle, 'rb') as fichier:
-        cle_privee = fichier.read()
+    try:
+        with open(path_cle, 'rb') as fichier:
+            cle_privee = fichier.read()
+    except OSError:
+        with open(path_cle + '.new', 'rb') as fichier:
+            cle_privee = fichier.read()
+        
+    if len(cle_privee) == 64:
+        # La cle publique est deja calculee
+        return cle_privee[32:]
+    
+    # Calculer la cle publique
     return oryx_crypto.ed25519generatepubkey(cle_privee)
 
 
