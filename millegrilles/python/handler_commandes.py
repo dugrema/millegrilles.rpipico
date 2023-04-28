@@ -18,12 +18,12 @@ async def traiter_commande(appareil, commande: dict, info_certificat: dict):
         await challenge_led_blink(appareil, commande)
     elif action == 'evenementMajDisplays':
         try:
-            set_configuration_display(commande['displays'])
+            set_configuration_display(json.loads(commande['contenu'])['displays'])
         except KeyError:
             print("Erreur reception maj displays")
     elif action == 'evenementMajProgrammes':
         try:
-            programmes = commande['programmes']
+            programmes = json.loads(commande['contenu'])['programmes']
             await recevoir_configuration_programmes(appareil, programmes)
         except KeyError:
             print("evenementMajProgrammes Aucuns programmes recus")
@@ -33,7 +33,7 @@ async def traiter_commande(appareil, commande: dict, info_certificat: dict):
         await recevoir_timezone_offset(appareil, commande)
     elif action == 'getAppareilProgrammesConfiguration':
         try:
-            programmes = commande['programmes']['configuration']['programmes']
+            programmes = json.loads(commande['contenu'])['programmes']['configuration']['programmes']
             await recevoir_configuration_programmes(appareil, programmes)
         except (KeyError, AttributeError):
             print("getAppareilProgrammesConfiguration Aucuns programmes recus")
@@ -47,9 +47,9 @@ async def traiter_commande(appareil, commande: dict, info_certificat: dict):
         except KeyError as e:
             print("Erreur reception certificat KeyError %s" % str(e))
     elif action == 'fichePublique':
-        await recevoir_fiche_publique(commande)
+        await recevoir_fiche_publique(json.loads(commande['contenu']))
     elif action == 'relaisWeb':
-        await recevoir_relais_web(commande)
+        await recevoir_relais_web(json.loads(commande['contenu']))
     elif action == 'commandeAppareil':
         await recevoir_commande_appareil(appareil, commande, info_certificat)
     else:
@@ -73,7 +73,7 @@ async def challenge_led_blink(appareil, commande: dict):
 
 async def recevoir_timezone_offset(appareil, commande):
     try:
-        offset = commande['timezone_offset']
+        offset = json.loads(commande['contenu'])['timezone_offset']
         print("Set offset recu : %s" % offset)
         # appareil.set_timezone_offset(offset)
         await set_timezone_offset(offset)

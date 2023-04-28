@@ -67,8 +67,8 @@ async def verifier_message(message: dict, buffer=None, err_ca_ok=False):
 
     await asyncio.sleep_ms(1)
     ticks_debut = time.ticks_ms()
-    info_certificat = await certificat.valider_certificats(message['certificat'], err_ca_ok=err_ca_ok)  #, fingerprint=message['pubkey'])
-    print("verifier_message verifier certificat duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+    info_certificat = await certificat.valider_certificats(message['certificat'], fingerprint=pubkey, err_ca_ok=err_ca_ok)  #, fingerprint=message['pubkey'])
+    print("verifier_message verifier certificat %s duree %d" % (pubkey, time.ticks_diff(time.ticks_ms(), ticks_debut)))
     del message['certificat']
     await asyncio.sleep_ms(1)
 

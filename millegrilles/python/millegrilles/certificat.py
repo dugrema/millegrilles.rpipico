@@ -122,13 +122,17 @@ async def valider_certificats(pem_certs: list, date_validation=None, is_der=Fals
     # print("valider_certificats avec time %s" % date_validation)
 
     # Verifier si le certificat est dans le cache memoire
-    if fingerprint is not None and CACHE_DICT.get(fingerprint) is not None:
-        if date_validation is not None:
-            # TODO : Valider la date - note : un certificat en cache doit etre presentement valide
-            pass
-        enveloppe = CACHE_DICT[fingerprint]
-        enveloppe[CONST_CACHE_ACCES] += 1  # Incrementer nombre d'acces, cache est most commonly used
-        return enveloppe
+    if fingerprint is not None:
+        if CACHE_DICT.get(fingerprint) is not None:
+            #print("Cert Cache HIT %s", fingerprint)
+            if date_validation is not None:
+                # TODO : Valider la date - note : un certificat en cache doit etre presentement valide
+                pass
+            enveloppe = CACHE_DICT[fingerprint]
+            enveloppe[CONST_CACHE_ACCES] += 1  # Incrementer nombre d'acces, cache est most commonly used
+            return enveloppe
+        #else:
+        #    print("Cert Cache MISS %s", fingerprint)
 
     cert = pem_certs.pop(0)
     if is_der is False:
