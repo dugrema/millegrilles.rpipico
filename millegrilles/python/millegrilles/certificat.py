@@ -3,7 +3,6 @@ import json
 import oryx_crypto
 import time
 import uasyncio as asyncio
-# from . import urequests2 as requests
 
 from os import mkdir, remove
 from math import ceil
@@ -115,7 +114,7 @@ def get_certificat_local():
         return None
 
 
-async def valider_certificats(pem_certs: list, date_validation=None, is_der=False, fingerprint=None):
+async def valider_certificats(pem_certs: list, date_validation=None, is_der=False, fingerprint=None, err_ca_ok=False):
     """ Valide la chaine de certificats, incluant le dernier avec le CA.
         @return Information du certificat leaf
         @raises Exception Si la chaine est invalide. """
@@ -144,20 +143,6 @@ async def valider_certificats(pem_certs: list, date_validation=None, is_der=Fals
     fingerprint = calculer_fingerprint(cert)
     asyncio.sleep_ms(10)  # Yield
 
-    # Parcourir la chaine. Valider le dernier certificat avec le CA
-    while len(pem_certs) > 0:
-        parent = pem_certs.pop(0)
-        if is_der is False:
-            parent = oryx_crypto.x509readpemcertificate(parent)
-        asyncio.sleep_ms(10)  # Yield
-        oryx_crypto.x509validercertificate(cert, parent, date_validation)
-        cert = parent  # Poursuivre la chaine
-    else:
-        with open(PATH_CA_CERT, 'rb') as fichier:
-            parent = fichier.read()
-        asyncio.sleep_ms(10)  # Yield
-        oryx_crypto.x509validercertificate(cert, parent, date_validation)
-
     enveloppe = {
         'fingerprint': fingerprint,
         'public_key': oryx_crypto.x509PublicKey(x509_info),
@@ -167,6 +152,30 @@ async def valider_certificats(pem_certs: list, date_validation=None, is_der=Fals
         # 'domaines': domaines,
         # 'user_id': user_id,
     }
+
+    # Parcourir la chaine. Valider le dernier certificat avec le CA
+    while len(pem_certs) > 0:
+        parent = pem_certs.pop(0)
+        if is_der is False:
+            parent = oryx_crypto.x509readpemcertificate(parent)
+        asyncio.sleep_ms(10)  # Yield
+        oryx_crypto.x509validercertificate(cert, parent, date_validation)
+        cert = parent  # Poursuivre la chaine
+    else:
+        try:
+            with open(PATH_CA_CERT, 'rb') as fichier:
+                parent = fichier.read()
+            asyncio.sleep_ms(10)  # Yield
+            oryx_crypto.x509validercertificate(cert, parent, date_validation)
+        except OSError as e:
+            if e.errno == 2:
+                if err_ca_ok is True:
+                    # Ok, CA absent
+                    enveloppe['err'] = 'CA absent'
+                else:
+                    raise e
+            else:
+                raise e
 
     exchanges = oryx_crypto.x509Extension(x509_info, OID_EXCHANGES)
     if exchanges is not None:

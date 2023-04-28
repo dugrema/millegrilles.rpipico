@@ -8,7 +8,6 @@ from mgutils import comparer_dict
 from millegrilles import urequests2 as requests
 from millegrilles import wifi
 from millegrilles.wifi import connect_wifi
-from millegrilles.mgmessages import verifier_message, signer_message
 from millegrilles.certificat import PATH_CERT, PATH_CA_CERT
 
 CONST_PATH_FICHIER_CONN = const('conn.json')
@@ -86,40 +85,6 @@ async def initialiser_wifi():
     if wifi_ok is False:
         raise RuntimeError('wifi')
             
-
-async def recuperer_ca(buffer=None):
-    from millegrilles.certificat import sauvegarder_ca
-    
-    print("Init millegrille")
-    idmg = get_idmg()
-    fiche = await charger_fiche(no_validation=True, buffer=buffer)
-    # del fiche['_millegrille']
-    
-    if fiche['idmg'] != idmg:
-        raise Exception('IDMG mismatch')
-    
-    print("IDMG OK : %s" % idmg)
-    
-    # Sauvegarder le certificat CA
-    sauvegarder_ca(fiche['ca'], idmg)
-    
-    # Valider la fiche et conserver relais
-    info_cert = await verifier_message(fiche)
-    if 'core' not in info_cert['roles']:
-        raise Exception("Fiche signee par mauvais role")
-
-    # Sauvegarder les relais dans relais.json
-    sauvegarder_relais(fiche)
-
-
-#async def init_cle_privee(force=False):
-#    from certificat import PATH_CLE_PRIVEE, generer_cle_secrete
-#    try:
-#        stat(PATH_CLE_PRIVEE)
-#    except OSError:
-#        generer_cle_secrete()
-#        print("Cle privee initialisee")
-
 
 def get_url_instance():
     with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
@@ -258,101 +223,6 @@ def set_configuration_programmes(configuration: dict):
         dump(configuration, fichier)
     
 
-async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
-    liste_urls = set()
-    try:
-        with open('relais.json') as fichier:
-            info_relais = load(fichier)
-            for relai in info_relais['relais']:
-                proto, host, _ = parse_url(relai)
-                liste_urls.add(proto + '//' + host)
-    except (OSError, KeyError):
-        print("relais.json non disponible")
-    
-    try:
-        liste_urls.add(get_url_instance())
-    except OSError:
-        print("Fichier connexion absent")
-        return
-
-    recu_ok = False
-    for url_instance in liste_urls:
-        fiche_url = url_instance + '/fiche.json'
-        print("Charger fiche via %s" % fiche_url)
-
-        # Downloader la fiche
-        # print("Recuperer fiche a %s" % fiche_url)
-        fiche_json = None
-        try:
-            reponse = await requests.get(fiche_url, lock=ui_lock)
-        except OSError as e:
-            if e.errno == -2:
-                # Connexion refusee/serveur introuvable, essayer prochain relai
-                continue
-            else:
-                raise e
-            
-        try:
-            await sleep_ms(1)  # Yield
-            if reponse.status_code != 200:
-                # raise Exception("fiche http status:%d" % reponse.status_code)
-                print("Erreur fiche %s status = %s" % (fiche_url, reponse.status_code))
-                continue
-            
-            await reponse.read_text_into(buffer)
-            recu_ok = True
-            break  # Ok
-        
-        except Exception as e:
-            print('Erreur chargement fiche')
-            print_exception(e)
-            continue
-        finally:
-            print("charger_fiche fermer reponse")
-            reponse.close()
-            reponse = None
-
-            # Cleanup memoire
-            collect()
-            await sleep_ms(1)  # Yield
-
-    if recu_ok is True:
-        fiche_json = loads(buffer.get_data())
-        
-        print("Fiche recue\n%s" % fiche_json)
-        if no_validation is True:
-            return fiche_json
-
-        info_cert = await verifier_message(fiche_json)
-        if 'core' in info_cert['roles']:
-            return fiche_json
-    
-    return None
-
-
-# Recuperer la fiche (CA, chiffrage, etc)
-async def charger_relais(ui_lock=None, refresh=False, buffer=None):
-    info_relais = None
-    try:
-        with open('relais.json') as fichier:
-            info_relais = load(fichier)
-            if refresh is False:
-                return info_relais['relais']
-    except (OSError, KeyError):
-        print("relais.json non disponible")
-    
-    try:
-        fiche_json = await charger_fiche(ui_lock, buffer=buffer)
-        if fiche_json is not None:
-            url_relais = sauvegarder_relais(fiche_json)
-            return url_relais
-    except Exception as e:
-        print("Erreur chargement fiche, utiliser relais connus : %s" % str(e))
-        
-    # Retourner les relais deja connus
-    return info_relais['relais']
-
-
 def sauvegarder_relais(fiche: dict):
     url_relais = [app['url'] for app in fiche['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
     sauvegarder_relais_liste(url_relais)
@@ -376,82 +246,3 @@ def sauvegarder_relais_liste(url_relais: list):
             print('Erreur sauvegarde relais.json')
             print_exception(e)
 
-
-async def generer_message_timeinfo(timezone_str: str):
-    # Generer message d'inscription
-    message_inscription = {
-        "timezone": timezone_str,
-    }
-    message_inscription = await signer_message(message_inscription, action='getTimezoneInfo')
-    
-    # Garbage collect
-    await sleep_ms(200)
-    collect()
-    await sleep_ms(1)
-
-    return message_inscription
-
-
-async def charger_timeinfo(url_relai: str, buffer, refresh: False):
-    
-    offset_info = None
-    try:
-        with open('tzoffset.json', 'rb') as fichier:
-            offset_info = load(fichier)
-            if refresh is False:
-                return offset_info['offset']
-    except OSError:
-        print('tzoffset.json absent')
-    except KeyError:
-        print('tzoffset.json erreur contenu')
-    
-    print("Charger information timezone %s" % url_relai)
-    timezone_str = get_timezone()
-    if timezone_str is not None:
-        buffer.set_text(dumps(await generer_message_timeinfo(timezone_str)))
-        
-        await sleep_ms(1)  # Yield
-        collect()
-        await sleep_ms(1)  # Yield
-        
-        reponse = await requests.post(
-            url_relai + '/' + CONST_PATH_TIMEINFO,
-            data=buffer.get_data(),
-            headers={'Content-Type': 'application/json'}
-        )
-
-        try:
-            await reponse.read_text_into(buffer)
-            reponse = None
-
-            await sleep_ms(1)  # Yield
-            collect()
-            await sleep_ms(1)  # Yield
-
-            # data = await reponse.json()
-            data = loads(buffer.get_data())
-            offset = data['timezone_offset']
-            print("Offset : %s" % offset)
-            
-            if offset_info is None or offset_info['offset'] != offset:
-                with open('tzoffset.json', 'wb') as fichier:
-                    dump({'offset': offset}, fichier)
-            
-            return offset
-        except KeyError:
-            return None
-        finally:
-            if reponse is not None:
-                reponse.close()
-    else:
-        if offset_info is None:
-            with open('tzoffset.json', 'wb') as fichier:
-                dump({'offset': 0}, fichier)
-        
-def parse_url(url):
-    try:
-        proto, dummy, host, path = url.split("/", 3)
-    except:
-        proto, dummy, host = url.split("/", 2)
-        path = None
-    return proto, host, path
