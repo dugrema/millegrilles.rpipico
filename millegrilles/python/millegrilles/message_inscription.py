@@ -328,7 +328,8 @@ async def recuperer_ca(buffer=None):
     
     print("Init millegrille")
     idmg = get_idmg()
-    fiche = await charger_fiche(no_validation=True, buffer=buffer)
+    # Charger et valider la fiche - (no_validation est pour le certificat seulement)
+    fiche, certificat = await charger_fiche(no_validation=True, buffer=buffer)
     # del fiche['_millegrille']
     
     if fiche['idmg'] != idmg:
@@ -339,14 +340,15 @@ async def recuperer_ca(buffer=None):
     # Sauvegarder le certificat CA
     sauvegarder_ca(fiche['ca'], idmg)
     
-    # Valider la fiche et conserver relais
+    # Valider le certificat avec le CA et conserver relais
     #info_cert = await verifier_message(fiche)
-    #if 'core' not in info_cert['roles']:
-    #    raise Exception("Fiche signee par mauvais role")
+    info_cert = await valider_certificats(certificat)
+    print("Verifier roles cert fiche : %s" % info_cert['roles'])
+    if 'core' not in info_cert['roles']:
+       raise Exception("Fiche signee par mauvais role")
 
     # Sauvegarder les relais dans relais.json
     sauvegarder_relais(fiche)
-
 
 
 async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
@@ -364,7 +366,7 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
         liste_urls.add(get_url_instance())
     except OSError:
         print("Fichier connexion absent")
-        return
+        return None, None
 
     recu_ok = False
     for url_instance in liste_urls:
@@ -413,19 +415,22 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
         message_fiche = loads(buffer.get_data())
         
         print("Fiche recue\n%s" % message_fiche)
+        certificat = message_fiche.get('certificat')
         if no_validation is False:
             info_cert = await verifier_message(fiche_json)
             if 'core' not in info_cert['roles']:
                 raise Exception('Fiche a un mauvais certificat')
+            certificat = None  # Certificat valide, cleanup
         
         # Transferer contenu dans le buffer pour faire parsing du json
         buffer.set_text(message_fiche['contenu'])
         message_fiche = None
+        await sleep_ms(1)  # Yield
         collect()
         await sleep_ms(1)  # Yield
-        return loads(buffer.get_data())
+        return loads(buffer.get_data()), certificat
     
-    return None
+    return None, None
 
 
 # Recuperer la fiche (CA, chiffrage, etc)
@@ -440,7 +445,7 @@ async def charger_relais(ui_lock=None, refresh=False, buffer=None):
         print("relais.json non disponible")
     
     try:
-        fiche_json = await charger_fiche(ui_lock, buffer=buffer)
+        fiche_json, certificat = await charger_fiche(ui_lock, buffer=buffer)
         if fiche_json is not None:
             url_relais = sauvegarder_relais(fiche_json)
             return url_relais
