@@ -6,17 +6,13 @@ import time
 import uasyncio as asyncio
 import oryx_crypto
 
-from gc import collect
 from io import IOBase
 
 from . import certificat
-##from .certificat import valider_certificats
 # -- DEV --
 #from millegrilles import certificat
-#from dev.certificat import valider_certificats
 # -- DEV --
 
-from multiformats import multibase, multihash
 from collections import OrderedDict
 
 
@@ -69,22 +65,27 @@ async def verifier_message(message: dict, buffer=None, err_ca_ok=False):
     # Valider le certificat - raise Exception si erreur
     pubkey = message['pubkey']
 
+    await asyncio.sleep_ms(1)
     ticks_debut = time.ticks_ms()
     info_certificat = await certificat.valider_certificats(message['certificat'], err_ca_ok=err_ca_ok)  #, fingerprint=message['pubkey'])
     print("verifier_message verifier certificat duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
     del message['certificat']
+    await asyncio.sleep_ms(1)
 
     # Verifier la signature du message
     signature = message['sig']
     id_message = message['id']
     # Raise une exception si la signature est invalide
     verifier_signature_2023_5(id_message, signature, pubkey)
+    await asyncio.sleep_ms(1)
 
     # Hacher le message, comparer id
-    id_calcule = hacher_message_2023_5(message, buffer=buffer)
+    id_calcule = await hacher_message_2023_5(message, buffer=buffer)
     if id_calcule != id_message:
         print('Mismatch, id_calcule : %s, id_message : %s' % (id_calcule, id_message))
         raise Exception('Mismatch id message')
+
+    await asyncio.sleep_ms(1)
 
     return info_certificat
 
@@ -268,11 +269,16 @@ def verifier_signature_2023_5(id_message: str, signature: str, cle_publique: str
     print("__verifier_signature ed25519verify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
 
 
-def hacher_message_2023_5(message: dict, buffer=None):
+async def hacher_message_2023_5(message: dict, buffer=None):
     ticks_debut = time.ticks_ms()
+    await asyncio.sleep_ms(1)
     message_array = preparer_array_hachage_2023_5(message)
+    await asyncio.sleep_ms(1)
+
     hachage = oryx_crypto.blake2s(message_stringify(message_array, buffer=buffer))
     print("hacher_message stringify+blake2s duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+    await asyncio.sleep_ms(1)
+
     return binascii.hexlify(hachage).decode('utf-8')
 
 
@@ -330,7 +336,7 @@ async def formatter_message(message: dict, kind: int, domaine=None, action=None,
     if kind > 6:
         raise Exception('kind %d non supporte' % kind)
     
-    hachage_message = hacher_message_2023_5(enveloppe_message, buffer)
+    hachage_message = await hacher_message_2023_5(enveloppe_message, buffer)
     enveloppe_message['id'] = hachage_message
     
     signature = await signer_message_2023_5(hachage_message, cle_privee)

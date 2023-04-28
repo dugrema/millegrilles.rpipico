@@ -28,7 +28,7 @@ async def traiter_commande(appareil, commande: dict, info_certificat: dict):
         except KeyError:
             print("evenementMajProgrammes Aucuns programmes recus")
     elif action == 'lectures_senseurs':
-        appareil.recevoir_lectures_externes(commande['lectures_senseurs'])
+        appareil.recevoir_lectures_externes(json.loads(commande['contenu'])['lectures_senseurs'])
     elif action == 'timezoneInfo':
         await recevoir_timezone_offset(appareil, commande)
     elif action == 'getAppareilProgrammesConfiguration':
@@ -83,7 +83,8 @@ async def recevoir_timezone_offset(appareil, commande):
 
 async def recevoir_configuration_display(reponse):
     try:
-        displays = reponse['display_configuration']['configuration']['displays']
+        commande = json.loads(reponse['contenu'])
+        displays = commande['display_configuration']['configuration']['displays']
         set_configuration_display(displays)
     except KeyError:
         print("Erreur reception displays %s" % reponse)

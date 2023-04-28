@@ -10,8 +10,7 @@ from uwebsockets.client import connect
 from millegrilles.certificat import get_expiration_certificat_local
 from millegrilles.mgmessages import formatter_message, verifier_message
 from handler_commandes import traiter_commande
-from millegrilles.config import get_http_timeout, set_configuration_display, get_timezone #, \
-#     charger_relais, generer_message_timeinfo
+from millegrilles.config import get_http_timeout, set_configuration_display, get_timezone
 
 from millegrilles.message_inscription import verifier_renouveler_certificat_ws, charger_relais, generer_message_timeinfo
 
@@ -46,8 +45,6 @@ async def __preparer_message(timeout_http, generer_etat, buffer, task_runner=Non
 
     # Signer message
     print("__preparer_message task_runner %s" % task_runner)
-    #etat = await signer_message(
-    #    etat, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil', buffer=buffer, task_runner=task_runner)
     etat = await formatter_message(etat, kind=1, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil', buffer=buffer)
     buffer.clear()
     dump(etat, buffer)
@@ -62,21 +59,6 @@ async def poll(websocket, emit_event, buffer, timeout_http=60, generer_etat=None
 
     expiration_polling = time.time() + timeout_http
     print("expiration polling dans %s" % timeout_http)
-
-    # emit_event.set()  # Forcer emission de l'etat
-
-    #buffer = await __preparer_message(timeout_http, generer_etat, buffer, task_runner)
-    #emit_event.clear()
-
-    # Cleanup memoire
-    #await asyncio.sleep_ms(1)
-    #collect()
-    #await asyncio.sleep_ms(1)
-
-    # Emettre etat
-    #print("poll Send data, taille etat: %d" % len(buffer))
-    #websocket.send(buffer.get_data())
-    #await asyncio.sleep_ms(1)  # Yield
 
     # Poll socket
     cycle = 0

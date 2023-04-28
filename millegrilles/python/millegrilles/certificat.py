@@ -1,5 +1,4 @@
 import binascii
-import json
 import oryx_crypto
 import time
 import uasyncio as asyncio
@@ -50,10 +49,6 @@ def rnd_bytes(nb_bytes):
 
 def calculer_fingerprint(contenu_der):
     """ Calculer le fingerprint d'un certificat """
-    #fingerprint = oryx_crypto.blake2s(contenu_der)
-    #fingerprint = multihash.wrap(CONST_HACHAGE_FINGERPRINT, fingerprint)
-    #fingerprint = multibase.encode('base58btc', bytes(fingerprint))
-    
     x509_info = oryx_crypto.x509certificatinfo(contenu_der)
     # Nouveau calcul 2023.5 : la cle publique ed25519 est le fingerprint
     public_key = oryx_crypto.x509PublicKey(x509_info)

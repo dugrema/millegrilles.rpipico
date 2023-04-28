@@ -148,7 +148,7 @@ class Runner:
     def recevoir_lectures(self, lectures):
         self._lectures_courantes = lectures
 
-    def recevoir_lectures_externes(self, lectures):
+    def recevoir_lectures_externes(self, lectures: dict):
         # print("recevoir_lectures: %s" % lectures)
         self._lectures_externes.update(lectures)
         print("Lectures externes maj\n%s" % self._lectures_externes)
