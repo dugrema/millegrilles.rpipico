@@ -1,6 +1,6 @@
 from millegrilles.config import set_configuration_display, update_configuration_programmes, \
-     set_timezone_offset, sauvegarder_relais, sauvegarder_relais_liste, \
-     get_user_id
+    set_timezone_offset, get_user_id, sauvegarder_relais, sauvegarder_relais_liste
+
 from millegrilles.message_inscription import recevoir_certificat
 from millegrilles.mgmessages import verifier_message
 
@@ -10,7 +10,7 @@ async def traiter_commande(appareil, commande: dict, info_certificat: dict):
         action = commande['en-tete']['action']
     except KeyError:
         action = commande['_action']  # Correlation a la reponse d'action de requete
-        
+
     if action == 'challengeAppareil':
         await challenge_led_blink(appareil, commande)
     elif action == 'evenementMajDisplays':
@@ -51,20 +51,20 @@ async def traiter_commande(appareil, commande: dict, info_certificat: dict):
         await recevoir_commande_appareil(appareil, commande, info_certificat)
     else:
         raise ValueError('Action inconnue : %s' % action)
-    
+
     print("Commande %s traitee" % action)
 
 
 async def challenge_led_blink(appareil, commande: dict):
     from ledblink import led_executer_sequence
     challenge = commande['challenge']
-    
+
     display = [
         'Activation',
         'Code: %s' % ','.join(challenge)
     ]
     appareil.set_display_override(display, duree=20)
-    
+
     await led_executer_sequence(challenge, executions=2)
 
 
@@ -85,12 +85,15 @@ async def recevoir_configuration_display(reponse):
     except KeyError:
         print("Erreur reception displays %s" % reponse)
 
+
 async def recevoir_configuration_programmes(appareil, programmes):
     print("%d programmes recus, ids %s)" % (len(programmes), programmes.keys()))
     await update_configuration_programmes(programmes, appareil)
 
+
 async def recevoir_fiche_publique(fiche):
     sauvegarder_relais(fiche)
+
 
 async def recevoir_relais_web(reponse):
     try:
@@ -100,19 +103,21 @@ async def recevoir_relais_web(reponse):
     except KeyError:
         print("Erreur reception relais web (relais manquant)")
 
+
 async def recevoir_commande_appareil(appareil, reponse, info_certificat):
     print("Info certificat : %s" % info_certificat)
     if info_certificat['user_id'] != get_user_id():
         print("Commande appareil - mauvais user_id")
         return
-    
+
     print("Commande recue, user_id OK : %s" % reponse)
     commande_action = reponse['commande_action']
-    
+
     if commande_action == 'setSwitchValue':
         await appareil_set_switch_value(appareil, reponse['senseur_id'], reponse['valeur'])
     else:
         print("recevoir_commande_appareil Commande inconnue : %s" % commande_action)
+
 
 async def appareil_set_switch_value(appareil, senseur_id, value):
     print("appareil_set_switch_value %s -> %s" % (senseur_id, value))
@@ -121,6 +126,6 @@ async def appareil_set_switch_value(appareil, senseur_id, value):
     device = appareil.get_device(device_id)
     print("Device trouve : %s" % device)
     device.value = value
-    
+
     await appareil.trigger_emit_event()
-    
+

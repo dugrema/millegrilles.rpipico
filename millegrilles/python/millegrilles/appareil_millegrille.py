@@ -21,19 +21,17 @@ from millegrilles.websocket_messages import PollingThread, CONST_DUREE_THREAD_PO
 from handler_devices import DeviceHandler
 from handler_programmes import ProgrammesHandler
 from millegrilles.certificat import entretien_certificat as __entretien_certificat, PATH_CERT
-# from millegrilles.mgthreads import TaskRunner
-from millegrilles.message_inscription import run_inscription, \
+from millegrilles.message_inscription import run_inscription, recuperer_ca, charger_relais, \
      verifier_renouveler_certificat as __verifier_renouveler_certificat
 
-from millegrilles import config
+# from dev import config
 from millegrilles.config import \
+     detecter_mode_operation, get_tz_offset, initialisation, initialiser_wifi, \
      CONST_MODE_INIT, \
      CONST_MODE_RECUPERER_CA, \
      CONST_MODE_CHARGER_URL_RELAIS, \
      CONST_MODE_SIGNER_CERTIFICAT, \
-     CONST_MODE_POLLING, \
-     detecter_mode_operation, \
-     get_tz_offset
+     CONST_MODE_POLLING
 
 CONST_INFO_SEP = const(' ---- INFO ----')
 CONST_NB_ERREURS_RESET = const(10)
@@ -337,7 +335,7 @@ class Runner:
 
                 if self.__wifi_ok is False:
                     print("Restart wifi")
-                    ip = await config.initialiser_wifi()
+                    ip = await initialiser_wifi()
                     if ip is not None:
                         wifi_ok = True
                         print("Wifi OK : ", ip)
@@ -365,7 +363,7 @@ class Runner:
             refresh = self.__prochain_refresh_fiche != 0 and self.__prochain_refresh_fiche >= time.time()
 
             collect()
-            relais = await config.charger_relais(
+            relais = await charger_relais(
                 self.__ui_lock, refresh=refresh, buffer=BUFFER_MESSAGE)
             self.set_relais(relais)
 
@@ -408,10 +406,10 @@ class Runner:
         await polling_thread.run()
 
     async def __initialisation(self):
-        await config.initialisation()
+        await initialisation()
         
     async def __recuperer_ca(self):
-        await config.recuperer_ca(buffer=BUFFER_MESSAGE)
+        await recuperer_ca(buffer=BUFFER_MESSAGE)
 
     async def __main(self):
         self._mode_operation = await detecter_mode_operation()
