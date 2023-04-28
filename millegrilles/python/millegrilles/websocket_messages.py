@@ -13,7 +13,7 @@ from handler_commandes import traiter_commande
 from millegrilles.config import get_http_timeout, set_configuration_display, get_timezone #, \
 #     charger_relais, generer_message_timeinfo
 
-from dev.message_inscription import verifier_renouveler_certificat_ws, charger_relais, generer_message_timeinfo
+from millegrilles.message_inscription import verifier_renouveler_certificat_ws, charger_relais, generer_message_timeinfo
 
 PATHNAME_POLL = const('/poll')
 PATHNAME_REQUETE = const('/requete')
@@ -117,7 +117,9 @@ async def poll(websocket, emit_event, buffer, timeout_http=60, generer_etat=None
 async def requete_configuration_displays(websocket, buffer):
     #requete = await signer_message(
     #    dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY)
-    requete = await formatter_message(dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY, buffer=buffer)
+    requete = await formatter_message(dict(), kind=1,
+                                      domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY,
+                                      buffer=buffer, ajouter_certificat=True)
     buffer.set_text(dumps(requete))
     requete = None
 
@@ -133,7 +135,9 @@ async def requete_configuration_displays(websocket, buffer):
 async def requete_configuration_programmes(websocket, buffer):
     #requete = await signer_message(
     #    dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_PROGRAMMES)
-    requete = await formatter_message(dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_PROGRAMMES, buffer=buffer)
+    requete = await formatter_message(dict(), kind=1,
+                                      domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_PROGRAMMES,
+                                      buffer=buffer, ajouter_certificat=True)
     buffer.set_text(dumps(requete))
     requete = None
 
@@ -149,7 +153,9 @@ async def requete_configuration_programmes(websocket, buffer):
 async def requete_fiche_publique(websocket, buffer):
     #requete = await signer_message(
     #    dict(), domaine='senseurspassifs_relai', action=CONST_REQUETE_FICHE_PUBLIQUE)
-    requete = await formatter_message(dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_FICHE_PUBLIQUE, buffer=buffer)
+    requete = await formatter_message(dict(), kind=1,
+                                      domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_FICHE_PUBLIQUE,
+                                      buffer=buffer, ajouter_certificat=True)
     buffer.set_text(dumps(requete))
     requete = None
 
@@ -164,7 +170,9 @@ async def requete_fiche_publique(websocket, buffer):
 async def requete_relais_web(websocket, buffer):
     #requete = await signer_message(
     #    dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_RELAIS_WEB, buffer=buffer)
-    requete = await formatter_message(dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_RELAIS_WEB, buffer=buffer)
+    requete = await formatter_message(dict(), kind=1,
+                                      domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_RELAIS_WEB,
+                                      buffer=buffer, ajouter_certificat=True)
     buffer.clear()
     dump(requete, buffer)
     requete = None

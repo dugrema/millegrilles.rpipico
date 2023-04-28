@@ -34,7 +34,7 @@ IDMG_VERSION_ACTIVE = const(2)
 
 
 # Cache pour certains certificats
-_CACHE = dict()
+CACHE_DICT = dict()
 
 
 def rnd_bytes(nb_bytes):
@@ -118,7 +118,8 @@ async def valider_certificats(pem_certs: list, date_validation=None, is_der=Fals
     """ Valide la chaine de certificats, incluant le dernier avec le CA.
         @return Information du certificat leaf
         @raises Exception Si la chaine est invalide. """
-    
+    global CACHE_DICT
+
     if date_validation is None:
         date_validation = time.time()
     elif date_validation is False:
@@ -126,11 +127,11 @@ async def valider_certificats(pem_certs: list, date_validation=None, is_der=Fals
     # print("valider_certificats avec time %s" % date_validation)
 
     # Verifier si le certificat est dans le cache memoire
-    if fingerprint is not None and _CACHE.get(fingerprint) is not None:
+    if fingerprint is not None and CACHE_DICT.get(fingerprint) is not None:
         if date_validation is not None:
             # TODO : Valider la date - note : un certificat en cache doit etre presentement valide
             pass
-        enveloppe = _CACHE[fingerprint]
+        enveloppe = CACHE_DICT[fingerprint]
         enveloppe[CONST_CACHE_ACCES] += 1  # Incrementer nombre d'acces, cache est most commonly used
         return enveloppe
 
@@ -197,7 +198,7 @@ async def valider_certificats(pem_certs: list, date_validation=None, is_der=Fals
         enveloppe['user_id'] = user_id
     
     # Verifier si on conserve le certificat dans le cache
-    if len(_CACHE) < CONST_CACHE_MAX_LEN:  # Limite d'elements concurrents dans le cache (cleanup va reduire la taille)
+    if len(CACHE_DICT) < CONST_CACHE_MAX_LEN:  # Limite d'elements concurrents dans le cache (cleanup va reduire la taille)
         if 'senseurspassifs' in roles or \
            'senseurspassifs_relai' in roles or \
            'maitredescles' in roles or \
@@ -205,7 +206,7 @@ async def valider_certificats(pem_certs: list, date_validation=None, is_der=Fals
             # Verifier si le certificat est presentement valide - requis pour mettre en cache
             if enveloppe['expiration'] > time.time():
                 enveloppe[CONST_CACHE_ACCES] = 1
-                _CACHE[fingerprint] = enveloppe
+                CACHE_DICT[fingerprint] = enveloppe
     
     return enveloppe
 
@@ -313,6 +314,8 @@ def remove_certificate():
 
 
 async def entretien_certificat():
+    global CACHE_DICT
+
     date_expiration, cle_publique = get_expiration_certificat_local()
     print("Date expiration cert : %s" % date_expiration)
 
@@ -338,11 +341,11 @@ async def entretien_certificat():
         return False
     
     # Entretien cache
-    if len(_CACHE) > CONST_CACHE_HIGH_LEN:
+    if len(CACHE_DICT) > CONST_CACHE_HIGH_LEN:
         # Trier entrees de cache
-        cache_values = sort(_CACHE.values(), reverse=True, key=cache_sort_key)
+        cache_values = sort(CACHE_DICT.values(), reverse=True, key=cache_sort_key)
         # Conserver les N premieres entrees
-        _CACHE = _CACHE[0:CONST_CACHE_HIGH_LEN]
+        CACHE_DICT = cache_values[0:CONST_CACHE_HIGH_LEN]
 
     return True
 

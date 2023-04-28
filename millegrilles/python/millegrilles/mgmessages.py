@@ -337,7 +337,7 @@ async def formatter_message(message: dict, kind: int, domaine=None, action=None,
     enveloppe_message['sig'] = signature
     
     if ajouter_certificat is True:
-        message['certificat'] = certificat.split_pem(certificat.get_certificat_local(), format_str=True)
+        enveloppe_message['certificat'] = certificat.split_pem(certificat.get_certificat_local(), format_str=True)
 
     return enveloppe_message
 
