@@ -414,21 +414,25 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
         await sleep_ms(1)  # Yield
         message_fiche = loads(buffer.get_data())
         
-        print("Fiche recue\n%s" % message_fiche)
+        print("Fiche recue id %s" % message_fiche['id'])
         certificat = message_fiche.get('certificat')
         if no_validation is False:
-            info_cert = await verifier_message(fiche_json)
+            info_cert = await verifier_message(message_fiche, buffer=buffer)
             if 'core' not in info_cert['roles']:
                 raise Exception('Fiche a un mauvais certificat')
             certificat = None  # Certificat valide, cleanup
         
         # Transferer contenu dans le buffer pour faire parsing du json
-        buffer.set_text(message_fiche['contenu'])
-        message_fiche = None
-        await sleep_ms(1)  # Yield
-        collect()
-        await sleep_ms(1)  # Yield
-        return loads(buffer.get_data()), certificat
+        try:
+            print("Parse contenu fiche %s" % message_fiche['id'])
+            buffer.set_text(message_fiche['contenu'])
+            message_fiche = None
+            await sleep_ms(1)  # Yield
+            collect()
+            await sleep_ms(1)  # Yield
+            return loads(buffer.get_data()), certificat
+        except Exception as e:
+            print("Erreur parsing fiche %s", e)
     
     return None, None
 
@@ -445,9 +449,9 @@ async def charger_relais(ui_lock=None, refresh=False, buffer=None):
         print("relais.json non disponible")
     
     try:
-        fiche_json, certificat = await charger_fiche(ui_lock, buffer=buffer)
-        if fiche_json is not None:
-            url_relais = sauvegarder_relais(fiche_json)
+        fiche, certificat = await charger_fiche(ui_lock, buffer=buffer)
+        if fiche is not None:
+            url_relais = sauvegarder_relais(fiche)
             return url_relais
     except Exception as e:
         print("Erreur chargement fiche, utiliser relais connus : %s" % str(e))
