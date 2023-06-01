@@ -2,6 +2,7 @@ MPYCROSS = ../../micropython/mpy-cross/build/mpy-cross
 
 SRC_PYTHON = \
     baseconv.mpy \
+    barometre.mpy \
     bmp180_rpi.mpy \
     lcd_api.mpy \
     logging.mpy \

@@ -1,5 +1,4 @@
-import uasyncio as asyncio
-
+from barometre import TendanceBarometrique
 from handler_devices import Driver
 
 
@@ -9,6 +8,7 @@ class DriverBmp180(Driver):
         super().__init__(appareil, params, busses, ui_lock)
         self.__instance = None
         self.__busses = busses
+        self.__calcul = TendanceBarometrique()
 
     async def load(self):
         from bmp180_rpi import BMP180
@@ -19,18 +19,32 @@ class DriverBmp180(Driver):
         self.__instance = BMP180(i2c)
 
     async def lire(self):
-        (temperature,pressure,altitude) = await self.__instance.readBmp180()
+        (temperature, pressure, altitude) = await self.__instance.readBmp180()
+
+        pressure_hecto = int(pressure / 100.0)
+
+        # print("bmp180 temperature %s, pressure: %s, altitude: %s" % (temperature, pressure, altitude))
+
+        # Conserver la lecture de pression courante pour calculer la tendance
+        self.__calcul.ajouter(pressure)
+
         device_id = self.device_id
-        return {
+
+        valeurs = self.__calcul.get_lectures(device_id)
+
+        # Ajouter lectures au calcul de tendance
+        valeurs.update({
             '%s/temperature' % device_id: {
                 'valeur': temperature,
                 'type': 'temperature',
             },
             '%s/pression' % device_id: {
-                'valeur': pressure,
+                'valeur': pressure_hecto,
                 'type': 'pression',
             }
-        }
+        })
+
+        return valeurs
 
     @property
     def device_id(self):

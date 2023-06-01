@@ -83,11 +83,12 @@ class BMP180:
       X1 = (X1 * 3038) >> 16
       X2 = int(-7357 * P) >> 16
       pressure = int(P + ((X1 + X2 + 3791) >> 4))
-      pressure = float(pressure / 1000.0)  # kPa
 
       # Altitude
       altitude = 44330.0 * (1.0 - pow(pressure / 101325.0, (1.0/5.255)))
-      altitude = round(altitude,2)
+      altitude = round(altitude, 2)
+
+      # pressure_hecto = int(pressure / 100.0)  # convertir en int hectopascal (hPa)
 
       return (temperature,pressure,altitude)
 
