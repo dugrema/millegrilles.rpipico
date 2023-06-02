@@ -75,6 +75,22 @@ class ProgrammesHandler:
             # programme_instance = programme_class(self._appareil, programme_id, args)
             await self.ajouter_programme(programme)
 
+    async def get_notifications(self):
+        notifications = list()
+        for programme_id, programme in self._programmes.items():
+            try:
+                notification = await programme.generer_message()
+                if notification is not None:
+                    print("!handler_programmes! notification %s" % notification)
+                    notifications.append(notification)
+            except Exception as e:
+                print("get_notifications Error %s" % e)
+                pass  # Programme sans support de notification
+        if len(notifications) == 0:
+            return None
+        print("!handler_programmes! %d notifications" % len(notifications))
+        return notifications
+
 
 class ProgrammeActif:
     """ Classe abstraite pour un programme """

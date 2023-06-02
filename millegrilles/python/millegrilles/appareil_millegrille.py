@@ -233,11 +233,20 @@ class Runner:
             print("get_etat Error %s" % e)
             senseurs = None
 
-        return {
+        etat = {
             'lectures_senseurs': self._lectures_courantes,
             'displays': self._device_handler.get_output_devices(),
             'senseurs': senseurs,
         }
+
+        try:
+            notifications = await self._programmes_handler.get_notifications()
+            if notifications is not None:
+                etat['notifications'] = notifications
+        except Exception as e:
+            print("get_etat Error notifications : %s" % e)
+
+        return etat
 
     async def _signature_certificat(self):
         """
