@@ -32,9 +32,6 @@ class ProgrammeNotification(ProgrammeActif):
         # Intervalle (secondes) entre re-emission de la meme notification si l'etat ne change pas (ON ... ON)
         self.__intervalle_reemission = INTERVALLE_REEMISSION_DEFAUT
 
-        # Init apres, appelle charger_args() dans super
-        super().__init__(appareil, programme_id, args, intervalle=15_000)
-
         # True si on doit presentement emettre des notifications
         self.__etat_notifier = False
 
@@ -43,6 +40,12 @@ class ProgrammeNotification(ProgrammeActif):
 
         # Conserver la date de re-emission de la notification si etat le justifie
         self.__prochaine_reemission_notification = None
+
+        self.__message_notification = None
+        self.__valeur_courante = None
+
+        # Init apres, appelle charger_args() dans super
+        super().__init__(appareil, programme_id, args, intervalle=15_000)
 
     def get_senseurs(self):
         """ @return Liste des senseurs. Utilise pour identifier deps externe. """
@@ -82,11 +85,15 @@ class ProgrammeNotification(ProgrammeActif):
         self.__prochaine_emission_notification = now + self.__intervalle_emission
         self.__prochaine_reemission_notification = now + self.__intervalle_reemission
 
-        print('!notif! message genere')
+        print('!notif! message genere, valeur courante %s, message notif %s' % (self.__valeur_courante, self.__message_notification))
+        if self.__message_notification is not None:
+            message = self.__message_notification.format(**{'valeur': self.__valeur_courante})
+        else:
+            message = 'Notification'
 
         return {
             'programme_id': self.programme_id,
-            'message': 'Notification'
+            'message': message
         }
 
     def reverse_state(self):
@@ -95,6 +102,8 @@ class ProgrammeNotification(ProgrammeActif):
 
     def charger_args(self, args: dict):
         super().charger_args(args)
+        self.__message_notification = args.get('message') or self.__message_notification
+        print("Message notification : %s" % self.__message_notification)
         self._senseurs = args.get('senseurs') or self._senseurs
         self._valeur_cible = args.get('valeur') or self._valeur_cible
         self._precision = args.get('precision') or self._precision
@@ -159,6 +168,7 @@ class ProgrammeNotification(ProgrammeActif):
         if nombre_valeurs > 0:
             moyenne_valeur = valeur_totale / nombre_valeurs
             print("Moyenne valeur courante : %s" % moyenne_valeur)
+            self.__valeur_courante = moyenne_valeur
             return moyenne_valeur
 
     def _verifier_etat_desire(self):
@@ -166,7 +176,7 @@ class ProgrammeNotification(ProgrammeActif):
 
         valeur_courante = self._calculer_valeur_courante()
 
-        print('!notif! valeur courante %s' % valeur_courante)
+        print('!notif! prog_id %s valeur courante %s' % (self.programme_id, valeur_courante))
 
         if valeur_courante is not None:
             if valeur_courante < (self._valeur_cible - self._precision):
@@ -191,7 +201,7 @@ class ProgrammeNotification(ProgrammeActif):
         """
         Emettre la notification.
         """
-        print('!notif! action_notifier_on')
+        print('!notif! %s action_notifier_on' % self.programme_id)
         if self.__etat_notifier is False:
             self.__prochaine_reemission_notification = None
             self.__etat_notifier = True
@@ -201,7 +211,7 @@ class ProgrammeNotification(ProgrammeActif):
         """
         Arreter d'emettre la notification (etat OK)
         """
-        print('!notif! action_notifier_off')
+        print('!notif! %s action_notifier_off' % self.programme_id)
         self.__etat_notifier = False
         self.__prochaine_reemission_notification = None
         return 0  # Aucunes notifications a envoyer
@@ -210,6 +220,7 @@ class ProgrammeNotification(ProgrammeActif):
         """
         Arreter thread et mettre toutes les switch a OFF.
         """
+        print("!notif! stop %s" % self.programme_id)
         self.__etat_notifier = False
         self.__prochaine_emission_notification = None
         self.__prochaine_reemission_notification = None
@@ -231,8 +242,8 @@ class NotificationHumidite(ProgrammeNotification):
     def charger_args(self, args: dict):
         super().charger_args(args)
         self._senseurs = args['senseurs_humidite']
-        self._valeur_cible = args.get('humidite') or 45.0
-        self.__reverse_state = args.get('reverse') == 'true' or False
+        self._valeur_cible = args.get('valeur') or 45.0
+        self.__reverse_state = args.get('reverse') is True or False
 
     def get_type_senseur(self):
         return TYPE_SENSEUR_HUMIDITE
@@ -255,8 +266,8 @@ class NotificationTemperature(ProgrammeNotification):
 
     def charger_args(self, args: dict):
         super().charger_args(args)
-        self._valeur_cible = args['temperature']
-        self.__reverse_state = args.get('reverse') == 'true' or False
+        self._valeur_cible = args['valeur']
+        self.__reverse_state = args.get('reverse') is True or False
 
     def get_type_senseur(self):
         return TYPE_SENSEUR_TEMPERATURE
@@ -281,7 +292,7 @@ class NotificationPressionTendance(ProgrammeNotification):
     def charger_args(self, args: dict):
         super().charger_args(args)
         self._valeur_cible = args['valeur']
-        self.__reverse_state = args.get('reverse') == 'true' or False
+        self.__reverse_state = args.get('reverse') is True or False
 
     def get_type_senseur(self):
         return TYPE_SENSEUR_PRESSION_TENDANCE
