@@ -28,6 +28,12 @@ class ProgrammesHandler:
         return list(senseurs)
     
     async def ajouter_programme(self, configuration: dict):
+        actif = configuration.get('actif') or False
+
+        if actif is False:
+            # On ne configure / charge pas un programme inactif
+            return None
+
         try:
             existant = self._programmes[configuration['programme_id']]
             # Le programme existe, on le met a jour
@@ -43,6 +49,8 @@ class ProgrammesHandler:
 
             # Ajouter programme et demarrer thread
             self._programmes[programme_instance.programme_id] = programme_instance
+
+            # Demarrer l'execution du programme
             asyncio.create_task(programme_instance.run_task())
             print("Programme %s demarre" % programme_id)
 

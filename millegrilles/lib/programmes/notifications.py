@@ -6,7 +6,7 @@ TYPE_SENSEUR_HUMIDITE = const('humidite')
 TYPE_SENSEUR_TEMPERATURE = const('temperature')
 TYPE_SENSEUR_PRESSION_TENDANCE = const('pression_tendance')
 
-INTERVALLE_EMISSION_DEFAUT = const(600)
+INTERVALLE_EMISSION_DEFAUT = const(120)
 INTERVALLE_REEMISSION_DEFAUT = const(3600)
 
 class ProgrammeNotification(ProgrammeActif):
@@ -33,7 +33,7 @@ class ProgrammeNotification(ProgrammeActif):
         self.__intervalle_reemission = INTERVALLE_REEMISSION_DEFAUT
 
         # Init apres, appelle charger_args() dans super
-        super().__init__(appareil, programme_id, args, intervalle=60_000)
+        super().__init__(appareil, programme_id, args, intervalle=15_000)
 
         # True si on doit presentement emettre des notifications
         self.__etat_notifier = False
@@ -58,13 +58,22 @@ class ProgrammeNotification(ProgrammeActif):
         Methode invoquee regulierement.
         :returns: Un message (dict) si approprie, sinon None.
         """
+        if self.actif is False:
+            return None
+
         print('!notif! generer_message')
+
+        now = int(time.time())
 
         if self.__etat_notifier is False:
             # Aucune notification a emettre
             return None
-
-        now = int(time.time())
+        elif self.__prochaine_reemission_notification is not None:
+            if self.__prochaine_reemission_notification > time.time():
+                return None  # Aucune notification permise pour le moment
+            else:
+                # Expiration hold
+                self.__prochaine_reemission_notification = None
 
         if self.__prochaine_emission_notification is not None and self.__prochaine_emission_notification > now:
             # Abort, ne pas emettre la notification
@@ -154,13 +163,6 @@ class ProgrammeNotification(ProgrammeActif):
 
     def _verifier_etat_desire(self):
         """ Determine si la valeur des senseurs justifie etat ON (emettre notification) ou OFF (ne pas emettre). """
-
-        if self.__prochaine_reemission_notification is not None:
-            if self.__prochaine_reemission_notification > time.time():
-                return None  # Aucun changement permis pour le moment
-            else:
-                # Expiration hold
-                self.__prochaine_reemission_notification = None
 
         valeur_courante = self._calculer_valeur_courante()
 
