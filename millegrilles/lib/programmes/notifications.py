@@ -192,8 +192,9 @@ class ProgrammeNotification(ProgrammeActif):
         Emettre la notification.
         """
         print('!notif! action_notifier_on')
-        self.__prochaine_reemission_notification = None
-        self.__etat_notifier = True
+        if self.__etat_notifier is False:
+            self.__prochaine_reemission_notification = None
+            self.__etat_notifier = True
         return 1  # Notification doit etre envoyee
 
     def action_notifier_off(self):
