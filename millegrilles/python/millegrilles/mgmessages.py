@@ -18,6 +18,7 @@ from collections import OrderedDict
 
 VERSION_SIGNATURE = 2
 
+
 def prep_message_1(message, conserver_entete=True):
     message_prep = OrderedDict([])
 
@@ -302,6 +303,7 @@ def preparer_array_hachage_2023_5(message) -> list:
         raise Error('kind message non supporte' % kind)
 
     return message_array
+
 
 async def formatter_message(message: dict, kind: int, domaine=None, action=None, partition=None, cle_privee=None, buffer=None, ajouter_certificat=True):
     """ Formatte un message avec estampille, hachage (id) et signature (sig) """

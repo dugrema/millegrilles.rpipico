@@ -1,10 +1,13 @@
 // Include MicroPython API.
 #include "py/obj.h"
 #include "py/runtime.h"
-#include "../../oryx-embedded/cyclone_crypto/hash/blake2s.h"
-#include "../../oryx-embedded/cyclone_crypto/hash/blake2b.h"
+#include "../../oryx-embedded/cyclone_crypto/hash/hash_algorithms.h"
 #include "../../oryx-embedded/cyclone_crypto/ecc/ed25519.h"
 #include "../../oryx-embedded/cyclone_crypto/pkix/x509_common.h"
+#include "../../oryx-embedded/cyclone_crypto/pkix/x509_cert_parse.h"
+#include "../../oryx-embedded/cyclone_crypto/pkix/x509_cert_validate.h"
+#include "../../oryx-embedded/cyclone_crypto/pkix/x509_csr_create.h"
+#include "../../oryx-embedded/cyclone_crypto/pkix/pem_import.h"
 
 #define DIGEST_BLAKE2S_LEN 32
 #define DIGEST_BLAKE2B_LEN 64
@@ -19,15 +22,13 @@ const mp_rom_error_text_t ERREUR_PAS_X509 = "pas x509CertInfo";
 
 // Blake2s
 STATIC mp_obj_t python_blake2sCompute(mp_obj_t message_data_obj) {
-
     // Prep message
     mp_buffer_info_t message_bufinfo;
     mp_get_buffer_raise(message_data_obj, &message_bufinfo, MP_BUFFER_READ);
 
     // Calcul digest
     uint8_t digest_out[DIGEST_BLAKE2S_LEN];
-    int res = blake2sCompute(0, 0, message_bufinfo.buf, message_bufinfo.len, digest_out, DIGEST_BLAKE2S_LEN);
-
+    int res = blake2s256Compute(message_bufinfo.buf, message_bufinfo.len, (uint8_t *)&digest_out);
     if(res != 0) {
         nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
     }
@@ -45,10 +46,10 @@ STATIC mp_obj_t python_blake2bCompute(mp_obj_t message_data_obj) {
     mp_get_buffer_raise(message_data_obj, &message_bufinfo, MP_BUFFER_READ);
 
     uint8_t digest_out[DIGEST_BLAKE2B_LEN];
-    int res = blake2bCompute(0, 0, message_bufinfo.buf, message_bufinfo.len, digest_out, DIGEST_BLAKE2B_LEN);
+    int res = blake2b512Compute(message_bufinfo.buf, message_bufinfo.len, (uint8_t *)&digest_out);
 
     if(res != 0) {
-        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, DIGEST_BLAKE2B_LEN));
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
     }
 
     // Return bytes obj
@@ -183,7 +184,7 @@ STATIC mp_obj_t python_x509_read_pem_certificate(mp_obj_t pem_obj) {
     size_t output_len = 4096;
     size_t consumed;
 
-    error_t res_import = pemImportCertificate(pem_bufinfo.buf, pem_bufinfo.len, &der, &output_len, &consumed);
+    error_t res_import = pemImportCertificate((char*)pem_bufinfo.buf, pem_bufinfo.len, der, &output_len, &consumed);
 
     if(res_import != 0) {
         // Erreur de signature
@@ -333,7 +334,7 @@ STATIC mp_obj_t x509CertInfo_extension(mp_obj_t o_in, mp_obj_t oid_extension) {
         // return mp_obj_new_bytes(ext->oid, ext->oidLen);
         if(ext->oidLen != oid_bufinfo.len) continue;  // Skip, mismatch len
         if(memcmp(ext->oid, oid_bufinfo.buf, ext->oidLen) == 0) {
-            return mp_obj_new_str(ext->value, ext->valueLen);
+            return mp_obj_new_str((const char *)ext->value, ext->valueLen);
         }
     }
 
@@ -361,7 +362,8 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(python_x509_certificat_info_obj, python_x509_ce
 
 STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
     // Vars
-    const char namedCurve = "Ed22519";
+    const char *namedCurve = "Ed22519";
+    // const uint8_t *namedCurve = "Ed22519";
     mp_buffer_info_t cleprivee_bufinfo;
     mp_buffer_info_t cn_bufinfo;
     uint8_t cle_publique[ED25519_PUBLIC_KEY_LEN];
@@ -386,7 +388,7 @@ STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
     }
 
     // uint8_t oidSignatureEd25519[4];
-    signatureAlgoId.oid = &ED25519_OID;
+    signatureAlgoId.oid = ED25519_OID;
     signatureAlgoId.oidLen = sizeof(ED25519_OID);
 
     // oidFromString(const char_t *str, uint8_t *oid, size_t maxOidLen, size_t *oidLen)
@@ -422,16 +424,16 @@ STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
     // size_t rawDataLen;
     certReqInfo.subjectPublicKeyInfo.rawDataLen = 0;
     // const uint8_t *oid;
-    certReqInfo.subjectPublicKeyInfo.oid = &ED25519_OID;
+    certReqInfo.subjectPublicKeyInfo.oid = ED25519_OID;
     // size_t oidLen;
     certReqInfo.subjectPublicKeyInfo.oidLen = sizeof(ED25519_OID);
     // X509EcParameters ecParams;
     // const uint8_t *namedCurve;
-    certReqInfo.subjectPublicKeyInfo.ecParams.namedCurve = &namedCurve;
+    certReqInfo.subjectPublicKeyInfo.ecParams.namedCurve = (const uint8_t *)namedCurve;
     // size_t namedCurveLen;
-    certReqInfo.subjectPublicKeyInfo.ecParams.namedCurveLen = sizeof(namedCurve);
+    certReqInfo.subjectPublicKeyInfo.ecParams.namedCurveLen = sizeof(*namedCurve);
     // X509EcPublicKey ecPublicKey;
-    certReqInfo.subjectPublicKeyInfo.ecPublicKey.q = &cle_publique;
+    certReqInfo.subjectPublicKeyInfo.ecPublicKey.q = (uint8_t *) &cle_publique;
     certReqInfo.subjectPublicKeyInfo.ecPublicKey.qLen = sizeof(ED25519_PUBLIC_KEY_LEN);
 
     // X509Attributes attributes;
@@ -518,7 +520,7 @@ STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
 
     // Preparer cles publiques et privees
     eddsaInitPublicKey(&publicKey);
-    error = mpiImport(&publicKey.q, &cle_publique, ED25519_PUBLIC_KEY_LEN, MPI_FORMAT_LITTLE_ENDIAN);
+    error = mpiImport(&publicKey.q, (uint8_t *)&cle_publique, ED25519_PUBLIC_KEY_LEN, MPI_FORMAT_LITTLE_ENDIAN);
     if(error != 0) {
         // Free mem
         eddsaFreePublicKey(&publicKey);
@@ -526,7 +528,7 @@ STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
     }
 
     eddsaInitPrivateKey(&privateKey);
-    error = mpiImport(&privateKey.d, cleprivee_bufinfo.buf, ED25519_PRIVATE_KEY_LEN, MPI_FORMAT_LITTLE_ENDIAN);
+    error = mpiImport(&privateKey.d, (uint8_t *) cleprivee_bufinfo.buf, ED25519_PRIVATE_KEY_LEN, MPI_FORMAT_LITTLE_ENDIAN);
     if(error != 0) {
         // Free mem
         eddsaFreePrivateKey(&privateKey);
@@ -538,7 +540,7 @@ STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
     error = x509CreateCsr(NULL, NULL,
        &certReqInfo, &publicKey,
        &signatureAlgoId, &privateKey,
-       &output, &outputLen);
+       (uint8_t *) &output, &outputLen);
 
     // Free mem
     eddsaFreePrivateKey(&privateKey);

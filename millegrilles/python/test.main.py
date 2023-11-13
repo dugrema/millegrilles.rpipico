@@ -1,9 +1,20 @@
 import binascii
 import oryx_crypto
 import time
+import machine
+from gc import collect
+from micropython import mem_info
 
-from dev.certificat import split_pem, calculer_fingerprint, valider_certificats, entretien_certificat, charger_cle_privee, charger_cle_publique, generer_cle_secrete
-from dev.mgmessages import BufferMessage, signer_message_2023_5, verifier_signature_2023_5, hacher_message_2023_5, verifier_message, formatter_message
+from millegrilles.certificat import split_pem, calculer_fingerprint, valider_certificats, entretien_certificat, charger_cle_privee, charger_cle_publique, generer_cle_secrete
+from millegrilles.mgmessages import BufferMessage, signer_message_2023_5, verifier_signature_2023_5, hacher_message_2023_5, verifier_message, formatter_message
+
+def afficher_info():
+    print('---')
+    print("Heure %s" % str(time.gmtime()))
+    print("CPU freq %d" % machine.freq())
+    print("Memoire")
+    mem_info()
+    print('---\n')
 
 # DEV Tests
 def test_charger_cles():
@@ -82,9 +93,9 @@ async def hacher_message():
         'routage': routage,
     }
     
-    id_message = hacher_message_2023_5(message_dict)
+    id_message = await hacher_message_2023_5(message_dict)
     print("id message (hachage) : %s" % id_message)
-    id_message_buffer = hacher_message_2023_5(message_dict, buffer=buffer)
+    id_message_buffer = await hacher_message_2023_5(message_dict, buffer=buffer)
     print("id message avec buffer (hachage) : %s" % id_message_buffer)
     
 
@@ -105,13 +116,17 @@ async def test_formatter_message():
 
 
 async def run_tests():
-    print("Running certificats")
+    print("Delai demarrage - 3 secs")
+    afficher_info()
+    time.sleep(3)
+    print("Running tests")
+    await hacher_message()
+
     test_charger_cles()
     certificat_fingerprint()
     # await test_valider_certificat()
-    # await signer_message()
-    await hacher_message()
-    await test_verifier_message()
+    await signer_message()
+    # await test_verifier_message()
     await test_formatter_message()
 
 
@@ -168,3 +183,7 @@ MESSAGE_TEST = {
 from uasyncio import run
 
 run(run_tests())
+
+
+
+

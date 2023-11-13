@@ -94,7 +94,7 @@
 //BLAKE2b-384 hash support
 #define BLAKE2B384_SUPPORT DISABLED
 //BLAKE2b-512 hash support
-#define BLAKE2B512_SUPPORT DISABLED
+#define BLAKE2B512_SUPPORT ENABLED
 //BLAKE2s support
 #define BLAKE2S_SUPPORT ENABLED
 //BLAKE2s-128 hash support
@@ -104,7 +104,7 @@
 //BLAKE2s-224 hash support
 #define BLAKE2S224_SUPPORT DISABLED
 //BLAKE2s-256 hash support
-#define BLAKE2S256_SUPPORT DISABLED
+#define BLAKE2S256_SUPPORT ENABLED
 //Tiger hash support
 #define TIGER_SUPPORT DISABLED
 //Whirlpool hash support

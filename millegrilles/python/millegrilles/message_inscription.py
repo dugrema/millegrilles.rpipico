@@ -358,12 +358,17 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
             info_relais = load(fichier)
             for relai in info_relais['relais']:
                 proto, host, _ = parse_url(relai)
+                proto = 'http:'
                 liste_urls.add(proto + '//' + host)
     except (OSError, KeyError):
         print("relais.json non disponible")
     
     try:
-        liste_urls.add(get_url_instance())
+        url_instance = get_url_instance()
+        proto, host, _ = parse_url(url_instance)
+        proto = 'http:'
+        liste_urls.add(proto + '//' + host)
+        # liste_urls.add(get_url_instance())
     except OSError:
         print("Fichier connexion absent")
         return None, None
@@ -371,7 +376,7 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
     recu_ok = False
     for url_instance in liste_urls:
         fiche_url = url_instance + '/fiche.json'
-        print("Charger fiche via %s" % fiche_url)
+        print("charger_fiche url %s" % fiche_url)
 
         # Downloader la fiche
         # print("Recuperer fiche a %s" % fiche_url)

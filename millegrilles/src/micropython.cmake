@@ -7,12 +7,15 @@ add_library(usermod_oryx_lib STATIC)
 target_sources(usermod_oryx_lib PUBLIC
     ${ORYX_LIB}/common/cpu_endian.c
     ${ORYX_LIB}/common/debug.c
-    ${ORYX_LIB}/common/os_port_none.c
+    # ${ORYX_LIB}/common/os_port_none.c
+    ${CMAKE_CURRENT_LIST_DIR}/os_port_rpipico.c
     ${ORYX_LIB}/common/date_time.c
 
     # hash
     ${ORYX_LIB}/cyclone_crypto/hash/blake2s.c
+    ${ORYX_LIB}/cyclone_crypto/hash/blake2s256.c
     ${ORYX_LIB}/cyclone_crypto/hash/blake2b.c
+    ${ORYX_LIB}/cyclone_crypto/hash/blake2b512.c
     ${ORYX_LIB}/cyclone_crypto/hash/sha1.c
     ${ORYX_LIB}/cyclone_crypto/hash/sha512.c
 
@@ -65,7 +68,6 @@ add_library(usermod_oryx_crypto INTERFACE)
 target_sources(usermod_oryx_crypto INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/crypto_config.h
     ${CMAKE_CURRENT_LIST_DIR}/oryx_crypto.c
-    ${ORYX_LIB}/common/os_port_none.h
 )
 
 target_include_directories(usermod_oryx_crypto INTERFACE
