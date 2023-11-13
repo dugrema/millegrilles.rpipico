@@ -6,7 +6,7 @@ REP_MG_SRC="${REP_BASE}/millegrilles/src"
 REP_MILLEGRILLES_PYTHON="${REP_BASE}/millegrilles/python"
 REP_MILLEGRILLES_LIB="${REP_BASE}/millegrilles/lib"
 
-export BOARD=PICO_W
+export BOARD=RPI_PICO_W
 export USER_C_MODULES="${REP_MG_SRC}/micropython.cmake"
 
 rm "${REP_BASE}/firmware.uf2"
