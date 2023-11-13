@@ -30,4 +30,4 @@ if [ -z $NOCLEAN ]; then
 fi
 make
 
-cp "${REP_BASE}/micropython/ports/rp2/build-PICO_W/firmware.uf2" "${REP_BASE}"
+cp "${REP_BASE}/micropython/ports/rp2/build-${BOARD}/firmware.uf2" "${REP_BASE}"
