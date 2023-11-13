@@ -1,3 +1,5 @@
 *.uf2
 *.mpy
 **/.idea
+pico-sdk/
+
