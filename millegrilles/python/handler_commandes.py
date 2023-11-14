@@ -117,8 +117,10 @@ async def recevoir_commande_appareil(appareil, reponse, info_certificat):
     # if info_certificat['user_id'] != get_user_id():
     #     print("Commande appareil - mauvais user_id")
     #     return
-    
-    commande = json.loads(reponse['contenu'])
+
+    commande = reponse['contenu']
+    if isinstance(commande, str):
+        commande = json.loads(commande)
     
     print("Commande recue, user_id OK : %s" % commande)
     commande_action = commande['commande_action']

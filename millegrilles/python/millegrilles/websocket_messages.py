@@ -409,7 +409,7 @@ class PollingThread:
                 self.__appareil.task_runner
             )
             
-            await asyncio.sleep_ms(10)  # Yield
+            await asyncio.sleep_ms(1)  # Yield
 
             if reponse is not None and len(reponse) > 0:
                 # Remettre memoryview dans buffer - ajuste len
@@ -417,9 +417,9 @@ class PollingThread:
                 reponse = None
 
                 # Cleanup memoire - tout est copie dans le buffer
-                await asyncio.sleep_ms(20)  # Yield
+                await asyncio.sleep_ms(1)  # Yield
                 collect()
-                await asyncio.sleep_ms(30)  # Yield
+                await asyncio.sleep_ms(3)  # Yield
 
                 try:
                     reponse = loads(self.__buffer.get_data())
@@ -429,17 +429,27 @@ class PollingThread:
                     #with open('err.txt', 'wb') as fichiers:
                     #    fichiers.write(self.__buffer.get_data()[:len_buffer])
                 else:
-                    await asyncio.sleep_ms(50)  # Yield
+                    await asyncio.sleep_ms(5)  # Yield
+                    len_buffer = len(self.__buffer.get_data())
+                    print("Message websocket recu (len %d)" % len_buffer)
                     try:
-                        len_buffer = len(self.__buffer.get_data())
-                        info_certificat = await verifier_signature(reponse, self.__buffer, self.__appareil.task_runner)
-                        #info_certificat = None
-                        print("Message websocket recu (len %d)" % len_buffer)
+                        try:
+                            routage = reponse['routage']
+                            message_chiffre = reponse['attachements']['relai_chiffre'].encode('utf-8')
+                            self.__buffer.set_bytes(message_chiffre)
+                            # todo: dechiffrer message
+                            reponse = loads(self.__buffer.get_data())
 
-                        # Cleanup
-                        # info_certificat = None
-                        await asyncio.sleep_ms(20)  # Yield
-                
+                            # On peut se fier au message dechiffre sans valider le reste du contenu
+                            info_certificat = reponse['enveloppe']
+                            reponse = {'routage': routage, 'contenu': reponse['contenu']}
+                        except KeyError:
+                            # On n'a pas de message chiffre. Valider le message au complet.
+                            info_certificat = await verifier_signature(reponse, self.__buffer, self.__appareil.task_runner)
+
+                            # Cleanup
+                            await asyncio.sleep_ms(2)  # Yield
+
                         await traiter_commande(self.__appareil, reponse, info_certificat)
                     except KeyError as e:
                         print("Erreur reception KeyError %s" % str(e))
@@ -447,9 +457,9 @@ class PollingThread:
 
             # Cleanup
             reponse = None
-            await asyncio.sleep_ms(50)  # Yield
-            collect()
-            await asyncio.sleep_ms(50)  # Yield
+            # await asyncio.sleep_ms(5)  # Yield
+            # collect()
+            await asyncio.sleep_ms(5)  # Yield
             
             # Run polling completee, reset erreurs
             self.__errnumber = 0
