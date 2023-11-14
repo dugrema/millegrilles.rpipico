@@ -13,6 +13,7 @@ SRC_MILLEGRILLES = \
     millegrilles/feed_display.mpy \
     millegrilles/ledblink.mpy \
     millegrilles/message_inscription.mpy \
+    millegrilles/chiffrage.mpy \
     millegrilles/mgmessages.mpy \
     millegrilles/mgthreads.mpy \
     millegrilles/uping.mpy \

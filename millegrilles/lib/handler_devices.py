@@ -140,7 +140,6 @@ class DeviceHandler:
                 self.__appareil.emit_event.set()
 
             try:
-                #await asyncio.sleep_ms(intervalle_ms)
                 await asyncio.wait_for_ms(self.__appareil.stale_event.wait(), intervalle_ms)
                 print('DeviceHandler.run stale wait jump')
             except asyncio.TimeoutError:

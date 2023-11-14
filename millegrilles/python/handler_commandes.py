@@ -1,5 +1,7 @@
 import json
 
+from binascii import unhexlify
+
 from millegrilles.config import set_configuration_display, update_configuration_programmes, \
      set_timezone_offset, get_user_id, sauvegarder_relais, sauvegarder_relais_liste
      
@@ -52,6 +54,8 @@ async def traiter_commande(appareil, commande: dict, info_certificat: dict):
         await recevoir_relais_web(json.loads(commande['contenu']))
     elif action == 'commandeAppareil':
         await recevoir_commande_appareil(appareil, commande, info_certificat)
+    elif action == 'echangerSecret':
+        await recevoir_echanger_secret(appareil, commande, info_certificat)
     else:
         raise ValueError('Action inconnue : %s' % action)
     
@@ -89,12 +93,15 @@ async def recevoir_configuration_display(reponse):
     except KeyError:
         print("Erreur reception displays %s" % reponse)
 
+
 async def recevoir_configuration_programmes(appareil, programmes):
     print("%d programmes recus, ids %s)" % (len(programmes), programmes.keys()))
     await update_configuration_programmes(programmes, appareil)
 
+
 async def recevoir_fiche_publique(fiche):
     sauvegarder_relais(fiche)
+
 
 async def recevoir_relais_web(reponse):
     try:
@@ -104,11 +111,12 @@ async def recevoir_relais_web(reponse):
     except KeyError:
         print("Erreur reception relais web (relais manquant)")
 
+
 async def recevoir_commande_appareil(appareil, reponse, info_certificat):
     print("Info certificat : %s" % info_certificat)
-    if info_certificat['user_id'] != get_user_id():
-        print("Commande appareil - mauvais user_id")
-        return
+    # if info_certificat['user_id'] != get_user_id():
+    #     print("Commande appareil - mauvais user_id")
+    #     return
     
     commande = json.loads(reponse['contenu'])
     
@@ -120,6 +128,7 @@ async def recevoir_commande_appareil(appareil, reponse, info_certificat):
     else:
         print("recevoir_commande_appareil Commande inconnue : %s" % commande_action)
 
+
 async def appareil_set_switch_value(appareil, senseur_id, value):
     print("appareil_set_switch_value %s -> %s" % (senseur_id, value))
 
@@ -127,6 +136,13 @@ async def appareil_set_switch_value(appareil, senseur_id, value):
     device = appareil.get_device(device_id)
     print("Device trouve : %s" % device)
     device.value = value
-    
-    await appareil.trigger_emit_event()
-    
+
+
+async def recevoir_echanger_secret(appareil, reponse, info_certificat):
+    print("recevoir_echanger_secret Info certificat : %s" % info_certificat)
+    print("recevoir_echanger_secret reponse : %s" % reponse)
+
+    contenu = json.loads(reponse['contenu'])
+
+    chiffrage_messages = appareil.chiffrage_messages
+    chiffrage_messages.calculer_secret_exchange(contenu['peer'])

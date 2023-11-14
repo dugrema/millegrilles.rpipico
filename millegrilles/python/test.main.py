@@ -5,8 +5,11 @@ import machine
 from gc import collect
 from micropython import mem_info
 
-from millegrilles.certificat import split_pem, calculer_fingerprint, valider_certificats, entretien_certificat, charger_cle_privee, charger_cle_publique, generer_cle_secrete
-from millegrilles.mgmessages import BufferMessage, signer_message_2023_5, verifier_signature_2023_5, hacher_message_2023_5, verifier_message, formatter_message
+from millegrilles.certificat import split_pem, calculer_fingerprint, valider_certificats, \
+     entretien_certificat, charger_cle_privee, charger_cle_publique, generer_cle_secrete, rnd_bytes
+from millegrilles.mgmessages import BufferMessage, signer_message_2023_5, verifier_signature_2023_5, \
+     hacher_message_2023_5, verifier_message, formatter_message
+
 
 def afficher_info():
     print('---')
@@ -115,19 +118,38 @@ async def test_formatter_message():
     print("Message signe\n%s" % message_signe)
 
 
-async def run_tests():
-    print("Delai demarrage - 3 secs")
-    afficher_info()
-    time.sleep(3)
-    print("Running tests")
-    await hacher_message()
+async def generer_cles_exchange():
+    buf_privee_a = b"01234567890123456789012345678901"
+    print("generer_cles_exchange cle privee a %s" % binascii.hexlify(buf_privee_a).decode('utf-8'))
+    buf_public_a = oryx_crypto.x25519generatepubkey(buf_privee_a)
+    print("generer_cles_exchange cle publique A %s" % binascii.hexlify(buf_public_a).decode('utf-8'))
 
-    test_charger_cles()
-    certificat_fingerprint()
+    # buf_privee_b = b"01234567890123456789012345678902"
+    buf_privee_b = rnd_bytes(32)
+    print("generer_cles_exchange cle privee b %s" % binascii.hexlify(buf_privee_b).decode('utf-8'))
+    buf_public_b = oryx_crypto.x25519generatepubkey(buf_privee_b)
+    print("generer_cles_exchange cle publique B %s" % binascii.hexlify(buf_public_b).decode('utf-8'))
+    
+    secret_a = oryx_crypto.x25519computesharedsecret(buf_privee_a, buf_public_b)
+    secret_b = oryx_crypto.x25519computesharedsecret(buf_privee_b, buf_public_a)
+    print("generer_cles_exchange output secret A %s" % binascii.hexlify(secret_a).decode('utf-8'))
+    print("generer_cles_exchange output secret B %s" % binascii.hexlify(secret_b).decode('utf-8'))
+
+
+async def run_tests():
+    # print("Delai demarrage - 3 secs")
+    afficher_info()
+    # time.sleep(3)
+    print("Running tests")
+    
+    #await hacher_message()
+    #test_charger_cles()
+    #certificat_fingerprint()
+    #await signer_message()
+    #await test_formatter_message()
+    await generer_cles_exchange()
     # await test_valider_certificat()
-    await signer_message()
     # await test_verifier_message()
-    await test_formatter_message()
 
 
 IDMG = "zeYncRqEqZ6eTEmUZ8whJFuHG796eSvCTWE4M432izXrp22bAtwGm7Jf"

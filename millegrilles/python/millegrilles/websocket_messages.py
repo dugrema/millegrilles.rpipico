@@ -1,6 +1,7 @@
 import time
 import uasyncio as asyncio
 
+from binascii import hexlify
 from json import dumps, loads, load, dump
 from gc import collect
 from sys import print_exception
@@ -24,6 +25,7 @@ CONST_REQUETE_DISPLAY = const('getAppareilDisplayConfiguration')
 CONST_REQUETE_PROGRAMMES = const('getAppareilProgrammesConfiguration')
 CONST_REQUETE_FICHE_PUBLIQUE = const('getFichePublique')
 CONST_REQUETE_RELAIS_WEB = const('getRelaisWeb')
+CONST_COMMANDE_ECHANGE_CLES = const('echangerClesChiffrage')
 
 CONST_DUREE_THREAD_POLLING = const(6 * 60 * 60)
 CONST_EXPIRATION_CONFIG = const(10 * 60)
@@ -62,6 +64,9 @@ async def poll(websocket, emit_event, buffer, timeout_http=60, generer_etat=None
 
     # Poll socket
     cycle = 0
+    deja_emis = False
+    emettre = False
+
     while expiration_polling > time.time():
         cycle += 1
         
@@ -75,25 +80,23 @@ async def poll(websocket, emit_event, buffer, timeout_http=60, generer_etat=None
                 pass  # Socket timeout (OK)
             else:
                 raise e
-        
-        if cycle == 30:
-            buffer = await __preparer_message(timeout_http, generer_etat, buffer, task_runner)
 
-            # Cleanup memoire
-            await asyncio.sleep_ms(1)
-            collect()
-            await asyncio.sleep_ms(1)
-
-            # Emettre etat
-            print("poll Send data, taille etat: %d" % len(buffer))
-            websocket.send(buffer.get_data())
-            await asyncio.sleep_ms(1)  # Yield
-        elif cycle > 60 and emit_event.is_set():
-            print("Emit event set, break poll")
-            break
+        if cycle > 3 and emit_event.is_set():
+            print("Emit event set, emettre")
+            emettre = True
+        elif cycle == 30 and deja_emis is False:
+            emettre = True
         else:
             # Intervalle polling socket
             await asyncio.sleep_ms(100)
+
+        if emettre is True:
+            emettre = False
+            deja_emis = True
+            buffer = await __preparer_message(timeout_http, generer_etat, buffer, task_runner)
+            print("poll Send data, taille etat: %d" % len(buffer))
+            websocket.send(buffer.get_data())
+            await asyncio.sleep_ms(1)  # Yield
 
 
 async def requete_configuration_displays(websocket, buffer):
@@ -238,7 +241,10 @@ class PollingThread:
         
         # Assigner un URL
         self.entretien_url_relai()
-        
+
+        chiffrage_messages = self.__appareil.chiffrage_messages
+        chiffrage_messages.clear()
+
         print("PRE CONNECT")
         mem_info()
 
@@ -262,15 +268,20 @@ class PollingThread:
     def _refresh_config(self):
         # Forcer un refresh de la liste de relais (via fiche MilleGrille)
         print("Refresh config %d" % self.__refresh_step)
-        
+
         if self.__refresh_step <= 1:
             self.__refresh_step = 2
-            # Recharger la configuration des displays
-            await requete_configuration_displays(self.__websocket, buffer=self.__buffer)
+            await self.echanger_secret()
             return
 
         if self.__refresh_step <= 2:
             self.__refresh_step = 3
+            # Recharger la configuration des displays
+            await requete_configuration_displays(self.__websocket, buffer=self.__buffer)
+            return
+
+        if self.__refresh_step <= 3:
+            self.__refresh_step = 4
             offset = await charger_timeinfo(
                 self.__websocket,
                 buffer=self.__buffer,
@@ -279,20 +290,20 @@ class PollingThread:
             # self.__appareil.set_timezone_offset(offset)
             return
         
-        if self.__refresh_step <= 3:
-            self.__refresh_step = 4
+        if self.__refresh_step <= 4:
+            self.__refresh_step = 5
             # Recharger la configuration des programmes
             await requete_configuration_programmes(self.__websocket, buffer=self.__buffer)
             return
         
-        if self.__refresh_step <= 4:
-            self.__refresh_step = 5
+        if self.__refresh_step <= 5:
+            self.__refresh_step = 6
             # Verifier si le certificat doit etre renouvelle
             await verifier_renouveler_certificat_ws(self.__websocket, buffer=self.__buffer)
             return
 
-        if self.__refresh_step <= 5:
-            self.__refresh_step = 6
+        if self.__refresh_step <= 6:
+            self.__refresh_step = 7
             # Verifier si le certificat doit etre renouvelle
             await requete_relais_web(self.__websocket, buffer=self.__buffer)
             return
@@ -422,7 +433,8 @@ class PollingThread:
                     try:
                         len_buffer = len(self.__buffer.get_data())
                         info_certificat = await verifier_signature(reponse, self.__buffer, self.__appareil.task_runner)
-                        print("Message websocket recu (valide, len %d)" % len_buffer)
+                        #info_certificat = None
+                        print("Message websocket recu (len %d)" % len_buffer)
 
                         # Cleanup
                         # info_certificat = None
@@ -446,3 +458,25 @@ class PollingThread:
         # TODO Fix erreurs, detecter deconnexion websocket
         except HttpErrorException as e:
             raise e  # Retour pour recharger fiche/changer relai
+
+    async def echanger_secret(self):
+        """ Genere une cle publique ed25519 pour obtenir un secret avec le serveur """
+        chiffrage_messages = self.__appareil.chiffrage_messages
+        if chiffrage_messages.doit_renouveler_secret() is False:
+            return
+
+        cle_publique = chiffrage_messages.generer_cle()
+        message = {'peer': cle_publique}
+
+        print('echanger_secret public %s' % message)
+
+        requete = await formatter_message(message, kind=2,
+                                          domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI,
+                                          action=CONST_COMMANDE_ECHANGE_CLES,
+                                          buffer=self.__buffer, ajouter_certificat=True)
+        self.__buffer.clear()
+        dump(requete, self.__buffer)
+        requete = None
+        await asyncio.sleep_ms(1)  # Yield
+
+        self.__websocket.send(self.__buffer.get_data())

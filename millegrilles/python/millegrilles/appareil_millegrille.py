@@ -23,6 +23,7 @@ from handler_programmes import ProgrammesHandler
 from millegrilles.certificat import entretien_certificat as __entretien_certificat, PATH_CERT
 from millegrilles.message_inscription import run_inscription, recuperer_ca, charger_relais, \
      verifier_renouveler_certificat as __verifier_renouveler_certificat
+from millegrilles.chiffrage import ChiffrageMessages
 
 # from dev import config
 from millegrilles.config import \
@@ -113,6 +114,7 @@ class Runner:
         self._lectures_externes = dict()
         self.__emit_event = asyncio.Event()    # Indique que l'etat a ete modifie, doit etre emis
         self.__stale_event = asyncio.Event()   # Indique que l'etat interne doit etre mis a jour
+        self.__lectures_event = asyncio.Event()  # Utilise pour attendre une maj de lectures
         self.__url_relais = None
         self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
         
@@ -126,17 +128,25 @@ class Runner:
         self.__override_display = None
         self.__override_display_expiration = None
         self.__display_actif = False
-    
+
+        # Information de chiffrage
+        self.__chiffrage_messages = ChiffrageMessages()
+
     @property
     def emit_event(self):
         return self.__emit_event
     
     @property
     def stale_event(self):
+        self.__lectures_event.clear()
         return self.__stale_event
     
     async def trigger_emit_event(self):
         self.__emit_event.set()
+
+    @property
+    def chiffrage_messages(self) -> ChiffrageMessages:
+        return self.__chiffrage_messages
     
     async def configurer_devices(self):
         self.__ui_lock = asyncio.Lock()
@@ -147,6 +157,7 @@ class Runner:
     
     def recevoir_lectures(self, lectures):
         self._lectures_courantes = lectures
+        self.__lectures_event.set()
 
     def recevoir_lectures_externes(self, lectures: dict):
         # print("recevoir_lectures: %s" % lectures)
@@ -200,12 +211,12 @@ class Runner:
         await self._programmes_handler.arreter_programme(programme_id)
     
     async def get_etat(self):
+        senseurs = set()
+
+        # Clear evenement emit - les changements subsequents ne sont pas captures
+        self.emit_event.clear()
+
         try:
-            # Clear evenement emit - les changements subsequents ne sont pas captures
-            self.emit_event.clear()
-            
-            senseurs = set()
-            
             # Extraire liste de senseurs utilises pour l'affichage
             for display in self.get_configuration_display().values():
                 try:
@@ -218,7 +229,11 @@ class Runner:
                             pass  # Pas de variable configuree
                 except KeyError:
                     pass  # Pas de lignes configurees
+        except (OSError, AttributeError) as e:
+            print("get_etat Error displays : %s" % e)
+            # senseurs = None
 
+        try:
             # Extraire liste de senseurs utilises par les programmes
             for senseur_id in self._programmes_handler.get_senseurs():
                 try:
@@ -230,8 +245,15 @@ class Runner:
             senseurs = list(senseurs)
             print("Senseurs externes : %s" % senseurs)
         except (OSError, AttributeError) as e:
-            print("get_etat Error %s" % e)
+            print("get_etat Error senseurs : %s" % e)
+
+        if len(senseurs) == 0:
             senseurs = None
+
+        try:
+            await asyncio.wait_for(self.__lectures_event.wait(), 5)
+        except TimeoutError:
+            pass
 
         etat = {
             'lectures_senseurs': self._lectures_courantes,

@@ -31,6 +31,3 @@ except Exception as e:
     e = None
     flash_led(120)
     reset()
-
-
-
