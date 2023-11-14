@@ -22,6 +22,7 @@ target_sources(usermod_oryx_lib PUBLIC
     # ecc
     ${ORYX_LIB}/cyclone_crypto/ecc/curve25519.c
     ${ORYX_LIB}/cyclone_crypto/ecc/ec.c
+    ${ORYX_LIB}/cyclone_crypto/ecc/ecdh.c
     ${ORYX_LIB}/cyclone_crypto/ecc/ec_curves.c
     ${ORYX_LIB}/cyclone_crypto/ecc/ed25519.c
     ${ORYX_LIB}/cyclone_crypto/ecc/eddsa.c

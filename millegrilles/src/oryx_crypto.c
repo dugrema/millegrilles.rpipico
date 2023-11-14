@@ -3,6 +3,8 @@
 #include "py/runtime.h"
 #include "../../oryx-embedded/cyclone_crypto/hash/hash_algorithms.h"
 #include "../../oryx-embedded/cyclone_crypto/ecc/ed25519.h"
+#include "../../oryx-embedded/cyclone_crypto/ecc/x25519.h"
+#include "../../oryx-embedded/cyclone_crypto/ecc/ecdh.h"
 #include "../../oryx-embedded/cyclone_crypto/pkix/x509_common.h"
 #include "../../oryx-embedded/cyclone_crypto/pkix/x509_cert_parse.h"
 #include "../../oryx-embedded/cyclone_crypto/pkix/x509_cert_validate.h"
@@ -11,6 +13,7 @@
 
 #define DIGEST_BLAKE2S_LEN 32
 #define DIGEST_BLAKE2B_LEN 64
+#define X25519_OUTPUT_LEN 32
 
 const mp_rom_error_text_t LEN_INVALIDE = "len invalide";
 const mp_rom_error_text_t OPERATION_INVALIDE = "oper invalide";
@@ -172,6 +175,131 @@ STATIC mp_obj_t python_ed25519Verify(mp_obj_t publicKey_obj, mp_obj_t signature_
     return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(python_ed25519Verify_obj, python_ed25519Verify);
+
+// x25519 (chiffrage)
+
+STATIC mp_obj_t python_x25519GeneratePublickey(mp_obj_t privateKey_obj) {
+    mp_obj_t result;
+
+    EcdhContext context;
+    mp_buffer_info_t private_key_bufinfo;
+
+    //uint8_t da[CURVE25519_BYTE_LEN];  -> private_key_bufinfo.buf
+    uint8_t qa[CURVE25519_BYTE_LEN];
+    uint8_t g[CURVE25519_BYTE_LEN];
+
+    // Initialiser contexte
+    ecdhInit(&context);
+    ecLoadDomainParameters(&context.params, &x25519Curve);
+
+    mp_get_buffer_raise(privateKey_obj, &private_key_bufinfo, MP_BUFFER_READ);
+    if(private_key_bufinfo.len != CURVE25519_BYTE_LEN) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_ValueError, LEN_INVALIDE));
+    }
+
+    //Get the u-coordinate of the base point, put in g
+    int error = mpiExport(&context.params.g.x, g, CURVE25519_BYTE_LEN, MPI_FORMAT_LITTLE_ENDIAN);
+    if(error != 0) {
+        ecdhFree(&context);
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
+
+    // Utiliser private key (da) et point g, calculer public-key (qa)
+    error = x25519(qa, (uint8_t*) private_key_bufinfo.buf, g);
+    if(error != 0) {
+        ecdhFree(&context);
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
+
+    // result = mp_obj_new_bytes(context.qa.q.x, CURVE25519_BYTE_LEN);
+    // Retourner qa (public key)
+    result = mp_obj_new_bytes(qa, CURVE25519_BYTE_LEN);
+
+    ecdhFree(&context);
+    return result;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(python_x25519GeneratePublickey_obj, python_x25519GeneratePublickey);
+
+STATIC mp_obj_t python_x25519ComputeSharedSecret(mp_obj_t privateKey_obj, mp_obj_t peerKey_obj) {
+    mp_obj_t result;
+    uint8_t output[CURVE25519_BYTE_LEN];
+    size_t outputLen;
+    mp_buffer_info_t private_key_bufinfo;
+    mp_buffer_info_t peer_key_bufinfo;
+    EcdhContext context;
+    int error;
+
+    // Valider input
+    mp_get_buffer_raise(privateKey_obj, &private_key_bufinfo, MP_BUFFER_READ);
+    if(private_key_bufinfo.len != CURVE25519_BYTE_LEN) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_ValueError, LEN_INVALIDE));
+    }
+
+    mp_get_buffer_raise(peerKey_obj, &peer_key_bufinfo, MP_BUFFER_READ);
+    if(peer_key_bufinfo.len != CURVE25519_BYTE_LEN) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_ValueError, LEN_INVALIDE));
+    }
+
+    ecdhInit(&context);
+    ecLoadDomainParameters(&context.params, &x25519Curve);
+
+    // Importer cles private et peer dans context
+    error = mpiImport(&context.da.d, private_key_bufinfo.buf, CURVE25519_BYTE_LEN, MPI_FORMAT_LITTLE_ENDIAN);
+    if(error != 0) {
+        ecdhFree(&context);
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, ERREUR_PAS_X509));
+    }
+
+    error = mpiImport(&context.qb.q.x, peer_key_bufinfo.buf, CURVE25519_BYTE_LEN, MPI_FORMAT_LITTLE_ENDIAN);
+    if(error != 0) {
+        ecdhFree(&context);
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, DATE_INVALIDE));
+    }
+
+    error = ecdhComputeSharedSecret(&context, (uint8_t *) &output, CURVE25519_BYTE_LEN, &outputLen);
+
+    if(error != 0) {
+        ecdhFree(&context);
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
+
+    result = mp_obj_new_bytes(output, outputLen);
+    ecdhFree(&context);
+
+    return result;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(python_x25519ComputeSharedSecret_obj, python_x25519ComputeSharedSecret);
+
+
+//STATIC mp_obj_t python_x25519(mp_obj_t scalar_obj, mp_obj_t u_cord_obj) {
+//    mp_buffer_info_t scalar_bufinfo;
+//    mp_buffer_info_t u_cord_bufinfo;
+//
+//    // Lire buffers input
+//    mp_get_buffer_raise(scalar_obj, &scalar_bufinfo, MP_BUFFER_READ);
+//    mp_get_buffer_raise(u_cord_obj, &u_cord_bufinfo, MP_BUFFER_READ);
+//
+//    // Verifier taille des buffers en input
+//    if(scalar_bufinfo.len != X25519_OUTPUT_LEN) {
+//        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, LEN_INVALIDE));
+//    }
+//    if(u_cord_bufinfo.len != X25519_OUTPUT_LEN) {
+//        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, LEN_INVALIDE));
+//    }
+//
+//    // Effectuer la conversion x25519
+//    uint8_t output[X25519_OUTPUT_LEN];
+//    int res = x25519((uint8_t *) &output, scalar_bufinfo.buf, u_cord_bufinfo.buf);
+//
+//    if(res != 0) {
+//        // Erreur de signature
+//        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+//    }
+//
+//    // Generer buffer en reponse
+//    return mp_obj_new_bytes(output, X25519_OUTPUT_LEN);
+//}
+//STATIC MP_DEFINE_CONST_FUN_OBJ_2(python_x25519_obj, python_x25519);
 
 // x509
 
@@ -567,6 +695,9 @@ STATIC const mp_rom_map_elem_t oryxcrypto_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_ed25519sign), MP_ROM_PTR(&python_ed25519Sign_obj) },
     { MP_ROM_QSTR(MP_QSTR_ed25519verify), MP_ROM_PTR(&python_ed25519Verify_obj) },
     { MP_ROM_QSTR(MP_QSTR_ed25519generatepubkey), MP_ROM_PTR(&python_ed25519GeneratePublickey_obj) },
+    { MP_ROM_QSTR(MP_QSTR_x25519generatepubkey), MP_ROM_PTR(&python_x25519GeneratePublickey_obj) },
+    { MP_ROM_QSTR(MP_QSTR_x25519computesharedsecret), MP_ROM_PTR(&python_x25519ComputeSharedSecret_obj) },
+
     { MP_ROM_QSTR(MP_QSTR_x509readpemcertificate), MP_ROM_PTR(&python_x509_read_pem_certificate_obj) },
     { MP_ROM_QSTR(MP_QSTR_x509validercertificate), MP_ROM_PTR(&python_x509_valider_der_certificate_obj) },
 

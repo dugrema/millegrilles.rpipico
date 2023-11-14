@@ -188,7 +188,7 @@
 //Elliptic curve cryptography support
 #define EC_SUPPORT ENABLED
 //ECDH support
-#define ECDH_SUPPORT DISABLED
+#define ECDH_SUPPORT ENABLED
 //ECDSA support
 #define ECDSA_SUPPORT DISABLED
 
