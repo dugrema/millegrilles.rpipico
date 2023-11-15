@@ -35,26 +35,32 @@ class HttpErrorException(Exception):
     pass
 
 
-async def __preparer_message(timeout_http, generer_etat, buffer, task_runner=None):
+async def __preparer_message(chiffrage_messages, timeout_http, generer_etat, buffer, refresh=True):
     # Genrer etat
     if generer_etat is not None:
-        etat = await generer_etat()
+        etat = await generer_etat(refresh=refresh)
     else:
         etat = {'lectures_senseurs': {}}
         
     # Ajouter timeout pour limite polling
     etat[CONST_CHAMP_TIMEOUT] = timeout_http
 
-    # Signer message
-    print("__preparer_message task_runner %s" % task_runner)
-    etat = await formatter_message(etat, kind=1, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil', buffer=buffer)
+    if chiffrage_messages.pret is True:
+        # Chiffrer le message
+        print('preparer_message chiffrer')
+        etat = await chiffrage_messages.chiffrer(etat)
+        etat['routage'] = {'action': 'etatAppareilRelai'}
+    else:
+        # Signer message
+        etat = await formatter_message(etat, kind=2, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil', buffer=buffer)
+
     buffer.clear()
     dump(etat, buffer)
 
     return buffer
 
 
-async def poll(websocket, emit_event, buffer, timeout_http=60, generer_etat=None, ui_lock=None, task_runner=None):
+async def poll(appareil, websocket, emit_event, buffer, timeout_http=60, generer_etat=None):
     # Calculer limite de la periode de polling
     if timeout_http is None or timeout_http < 1:
         timeout_http = 1  # Min pour executer entretien websocket
@@ -66,6 +72,7 @@ async def poll(websocket, emit_event, buffer, timeout_http=60, generer_etat=None
     cycle = 0
     deja_emis = False
     emettre = False
+    refresh = True
 
     while expiration_polling > time.time():
         cycle += 1
@@ -84,6 +91,7 @@ async def poll(websocket, emit_event, buffer, timeout_http=60, generer_etat=None
         if cycle > 3 and emit_event.is_set():
             print("Emit event set, emettre")
             emettre = True
+            refresh = False
         elif cycle == 30 and deja_emis is False:
             emettre = True
         else:
@@ -93,7 +101,8 @@ async def poll(websocket, emit_event, buffer, timeout_http=60, generer_etat=None
         if emettre is True:
             emettre = False
             deja_emis = True
-            buffer = await __preparer_message(timeout_http, generer_etat, buffer, task_runner)
+            chiffrage_messages = appareil.chiffrage_messages
+            buffer = await __preparer_message(chiffrage_messages, timeout_http, generer_etat, buffer, refresh=refresh)
             print("poll Send data, taille etat: %d" % len(buffer))
             websocket.send(buffer.get_data())
             await asyncio.sleep_ms(1)  # Yield
@@ -400,13 +409,12 @@ class PollingThread:
     async def _poll(self):
         try:
             reponse = await poll(
+                self.__appareil,
                 self.__websocket,
                 self.emit_event,
                 self.__buffer,
                 self.__timeout_http,
                 self.__appareil.get_etat,
-                self.__appareil.ui_lock,
-                self.__appareil.task_runner
             )
             
             await asyncio.sleep_ms(1)  # Yield
@@ -450,7 +458,7 @@ class PollingThread:
                             # Cleanup
                             await asyncio.sleep_ms(2)  # Yield
 
-                        await traiter_commande(self.__appareil, reponse, info_certificat)
+                        await traiter_commande(self.__buffer, self.__websocket, self.__appareil, reponse, info_certificat)
                     except KeyError as e:
                         print("Erreur reception KeyError %s" % str(e))
                         print("ERR Message\n%s" % reponse)

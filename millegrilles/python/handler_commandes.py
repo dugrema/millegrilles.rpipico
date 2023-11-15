@@ -1,15 +1,17 @@
+import asyncio
 import json
 
 from binascii import unhexlify
 
 from millegrilles.config import set_configuration_display, update_configuration_programmes, \
-     set_timezone_offset, get_user_id, sauvegarder_relais, sauvegarder_relais_liste
-     
+     set_timezone_offset, sauvegarder_relais, sauvegarder_relais_liste
+
+from millegrilles.certificat import get_userid_local
 from millegrilles.message_inscription import recevoir_certificat
-from millegrilles.mgmessages import verifier_message
+from millegrilles.mgmessages import formatter_message
 
 
-async def traiter_commande(appareil, commande: dict, info_certificat: dict):
+async def traiter_commande(buffer, websocket, appareil, commande: dict, info_certificat: dict):
     try:
         routage = commande['routage']
         action = routage['action']
@@ -55,7 +57,9 @@ async def traiter_commande(appareil, commande: dict, info_certificat: dict):
     elif action == 'commandeAppareil':
         await recevoir_commande_appareil(appareil, commande, info_certificat)
     elif action == 'echangerSecret':
-        await recevoir_echanger_secret(appareil, commande, info_certificat)
+        await recevoir_echanger_secret(buffer, websocket, appareil, commande, info_certificat)
+    elif action == 'resetSecret':
+        await recevoir_reset_secret(appareil)
     else:
         raise ValueError('Action inconnue : %s' % action)
     
@@ -140,11 +144,30 @@ async def appareil_set_switch_value(appareil, senseur_id, value):
     device.value = value
 
 
-async def recevoir_echanger_secret(appareil, reponse, info_certificat):
+async def recevoir_echanger_secret(buffer, websocket, appareil, reponse, info_certificat):
     print("recevoir_echanger_secret Info certificat : %s" % info_certificat)
     print("recevoir_echanger_secret reponse : %s" % reponse)
 
     contenu = json.loads(reponse['contenu'])
+    fingerprint = info_certificat['fingerprint']
 
     chiffrage_messages = appareil.chiffrage_messages
     chiffrage_messages.calculer_secret_exchange(contenu['peer'])
+
+    # Emettre un message de confirmation - sert de permission pour relayer l'etat non signe de l'appareil
+    conf = {'fingerprint': fingerprint}
+    message_inscription = await formatter_message(
+        conf, kind=2, action='confirmerRelai', domaine='SenseursPassifs',
+        buffer=buffer, ajouter_certificat=True)
+
+    buffer.clear()
+    json.dump(message_inscription, buffer)
+    message_inscription = None
+    await asyncio.sleep_ms(1)  # Yield
+
+    websocket.send(buffer.get_data())
+
+
+async def recevoir_reset_secret(appareil):
+    chiffrage_messages = appareil.chiffrage_messages
+    chiffrage_messages.clear()

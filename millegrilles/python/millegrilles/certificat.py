@@ -104,7 +104,7 @@ def get_certificat_local():
     try:
         with open(PATH_CERT, 'r') as fichier:
             return fichier.read()
-        return load_pem_certificat(PATH_CERT)
+        #return load_pem_certificat(PATH_CERT)
     except OSError:
         return None
 
@@ -285,6 +285,17 @@ def charger_cle_publique(path_cle = PATH_CLE_PRIVEE):
     
     # Calculer la cle publique
     return oryx_crypto.ed25519generatepubkey(cle_privee)
+
+
+def get_fingerprint_local():
+    cle_publique = charger_cle_publique()
+    return binascii.hexlify(cle_publique).decode('utf-8')
+
+
+def get_userid_local():
+    cert_local = split_pem(get_certificat_local())[0]
+    x509_info = oryx_crypto.x509certificatinfo(cert_local)
+    return oryx_crypto.x509Extension(x509_info, OID_USER_ID)
 
 
 def get_expiration_certificat_local():

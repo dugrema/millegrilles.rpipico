@@ -209,13 +209,9 @@ class Runner:
     
     async def supprimer_programme(self, programme_id: str):
         await self._programmes_handler.arreter_programme(programme_id)
-    
-    async def get_etat(self):
-        senseurs = set()
 
-        # Clear evenement emit - les changements subsequents ne sont pas captures
-        self.emit_event.clear()
-
+    async def rafraichir_etat(self):
+        liste_senseurs_programmes = set()
         try:
             # Extraire liste de senseurs utilises pour l'affichage
             for display in self.get_configuration_display().values():
@@ -224,7 +220,7 @@ class Runner:
                         # print("Config appareils ligne : %s" % ligne)
                         try:
                             if ligne['variable'] is not None and len(ligne['variable'].split(':')) > 1:
-                                senseurs.add(ligne['variable'])
+                                liste_senseurs_programmes.add(ligne['variable'])
                         except KeyError:
                             pass  # Pas de variable configuree
                 except KeyError:
@@ -238,27 +234,39 @@ class Runner:
             for senseur_id in self._programmes_handler.get_senseurs():
                 try:
                     if len(senseur_id.split(':')) > 1:
-                        senseurs.add(senseur_id)
+                        liste_senseurs_programmes.add(senseur_id)
                 except KeyError:
                     pass  # Pas un senseur externe
-                
-            senseurs = list(senseurs)
-            print("Senseurs externes : %s" % senseurs)
+
+            liste_senseurs_programmes = list(liste_senseurs_programmes)
+            print("Senseurs externes : %s" % liste_senseurs_programmes)
         except (OSError, AttributeError) as e:
             print("get_etat Error senseurs : %s" % e)
 
-        if len(senseurs) == 0:
-            senseurs = None
+        if len(liste_senseurs_programmes) == 0:
+            liste_senseurs_programmes = None
 
         try:
             await asyncio.wait_for(self.__lectures_event.wait(), 5)
         except TimeoutError:
             pass
 
+        return liste_senseurs_programmes
+
+    async def get_etat(self, refresh=True):
+        # Clear evenement emit - les changements subsequents ne sont pas captures
+        self.emit_event.clear()
+
+        if refresh is True:
+            liste_senseurs_programmes = await self.rafraichir_etat()
+        else:
+            print('get_etat Skip refresh')
+            liste_senseurs_programmes = None
+
         etat = {
             'lectures_senseurs': self._lectures_courantes,
             'displays': self._device_handler.get_output_devices(),
-            'senseurs': senseurs,
+            'senseurs': liste_senseurs_programmes,
         }
 
         try:

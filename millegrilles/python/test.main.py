@@ -18,6 +18,11 @@ def afficher_info():
     print("Memoire")
     mem_info()
     print('---\n')
+    
+
+def charger_userid_local():
+    print("User id du certificat local : %s" % get_userid_local())
+
 
 # DEV Tests
 def test_charger_cles():
@@ -147,9 +152,10 @@ async def run_tests():
     #certificat_fingerprint()
     #await signer_message()
     #await test_formatter_message()
-    await generer_cles_exchange()
+    # await generer_cles_exchange()
     # await test_valider_certificat()
     # await test_verifier_message()
+    charger_userid_local()
 
 
 IDMG = "zeYncRqEqZ6eTEmUZ8whJFuHG796eSvCTWE4M432izXrp22bAtwGm7Jf"
