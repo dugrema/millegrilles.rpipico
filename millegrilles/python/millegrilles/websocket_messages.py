@@ -108,10 +108,17 @@ async def poll(appareil, websocket, emit_event, buffer, timeout_http=60, generer
             await asyncio.sleep_ms(1)  # Yield
 
 
-async def requete_configuration_displays(websocket, buffer):
+async def requete_configuration_displays(chiffrage_messages, websocket, buffer):
     #requete = await signer_message(
     #    dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY)
-    requete = await formatter_message(dict(), kind=1,
+    message = dict()
+
+    # if chiffrage_messages.pret is True:
+    #     # Chiffrer le message
+    #     requete = await chiffrage_messages.chiffrer(message)
+    #     requete['routage'] = {'action': CONST_REQUETE_DISPLAY}
+    # else:
+    requete = await formatter_message(message, kind=1,
                                       domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY,
                                       buffer=buffer, ajouter_certificat=True)
     buffer.set_text(dumps(requete))
@@ -126,7 +133,7 @@ async def requete_configuration_displays(websocket, buffer):
     websocket.send(buffer.get_data())
 
 
-async def requete_configuration_programmes(websocket, buffer):
+async def requete_configuration_programmes(chiffrage_messages, websocket, buffer):
     #requete = await signer_message(
     #    dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_PROGRAMMES)
     requete = await formatter_message(dict(), kind=1,
@@ -161,12 +168,18 @@ async def requete_fiche_publique(websocket, buffer):
     websocket.send(buffer.get_data())
 
 
-async def requete_relais_web(websocket, buffer):
+async def requete_relais_web(chiffrage_messages, websocket, buffer):
     #requete = await signer_message(
     #    dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_RELAIS_WEB, buffer=buffer)
-    requete = await formatter_message(dict(), kind=1,
-                                      domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_RELAIS_WEB,
-                                      buffer=buffer, ajouter_certificat=True)
+
+    if chiffrage_messages.pret is True:
+        # Chiffrer le message
+        requete = await chiffrage_messages.chiffrer(dict())
+        requete['routage'] = {'action': CONST_REQUETE_RELAIS_WEB}
+    else:
+        requete = await formatter_message(dict(), kind=1,
+                                          domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_RELAIS_WEB,
+                                          buffer=buffer, ajouter_certificat=True)
     buffer.clear()
     dump(requete, buffer)
     requete = None
@@ -179,7 +192,7 @@ async def requete_relais_web(websocket, buffer):
     websocket.send(buffer.get_data())
 
 
-async def charger_timeinfo(websocket, buffer, refresh: False):
+async def charger_timeinfo(chiffrage_messages, websocket, buffer, refresh: False):
     
     offset_info = None
     try:
@@ -278,6 +291,8 @@ class PollingThread:
         # Forcer un refresh de la liste de relais (via fiche MilleGrille)
         print("Refresh config %d" % self.__refresh_step)
 
+        chiffrage_messages = self.__appareil.chiffrage_messages
+
         if self.__refresh_step <= 1:
             self.__refresh_step = 2
             await self.echanger_secret()
@@ -286,12 +301,13 @@ class PollingThread:
         if self.__refresh_step <= 2:
             self.__refresh_step = 3
             # Recharger la configuration des displays
-            await requete_configuration_displays(self.__websocket, buffer=self.__buffer)
+            await requete_configuration_displays(chiffrage_messages, self.__websocket, buffer=self.__buffer)
             return
 
         if self.__refresh_step <= 3:
             self.__refresh_step = 4
             offset = await charger_timeinfo(
+                chiffrage_messages,
                 self.__websocket,
                 buffer=self.__buffer,
                 refresh=not self.__load_initial)
@@ -302,7 +318,7 @@ class PollingThread:
         if self.__refresh_step <= 4:
             self.__refresh_step = 5
             # Recharger la configuration des programmes
-            await requete_configuration_programmes(self.__websocket, buffer=self.__buffer)
+            await requete_configuration_programmes(chiffrage_messages, self.__websocket, buffer=self.__buffer)
             return
         
         if self.__refresh_step <= 5:
@@ -314,7 +330,7 @@ class PollingThread:
         if self.__refresh_step <= 6:
             self.__refresh_step = 7
             # Verifier si le certificat doit etre renouvelle
-            await requete_relais_web(self.__websocket, buffer=self.__buffer)
+            await requete_relais_web(chiffrage_messages, self.__websocket, buffer=self.__buffer)
             return
 
         # Succes - ajuster prochain refresh
@@ -444,11 +460,10 @@ class PollingThread:
                         try:
                             routage = reponse['routage']
                             message_chiffre = reponse['attachements']['relai_chiffre']
-                            # self.__buffer.set_bytes(message_chiffre)
 
                             # Dechiffrer le message
-                            # reponse = loads(self.__buffer.get_data())
                             reponse = self.__appareil.chiffrage_messages.dechiffrer(message_chiffre)
+                            print("message websocket dechiffre OK")
                             # Le message dechiffre est en bytes, charger avec json
                             reponse = loads(reponse)
 
