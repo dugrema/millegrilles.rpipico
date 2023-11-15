@@ -2,7 +2,7 @@ import time
 
 import oryx_crypto
 
-from ubinascii import b2a_base64, hexlify, unhexlify
+from ubinascii import a2b_base64, b2a_base64, hexlify, unhexlify
 
 from json import dumps
 
@@ -65,7 +65,7 @@ class ChiffrageMessages:
     def pret(self):
         return self.__secret_echange is not None
 
-    async def chiffrer(self, message: dict):
+    async def chiffrer(self, message: dict) -> dict:
         message = dumps(message)
 
         nonce = rnd_bytes(12)
@@ -80,3 +80,12 @@ class ChiffrageMessages:
             'tag': tag,
             'ciphertext': b2a_base64(message).decode('utf-8')[:-1],
         }
+
+    def dechiffrer(self, message: dict) -> bytes:
+        nonce_tag = a2b_base64(message['nonce']) + a2b_base64(message['tag'])
+        ciphertext = a2b_base64(message['ciphertext'])
+
+        # Le contenu est dechiffre _en-place_ dans ciphertext
+        oryx_crypto.cipherchacha20poly1305decrypt(self.__secret_echange, nonce_tag, ciphertext)
+
+        return ciphertext  # Contient le plaintext

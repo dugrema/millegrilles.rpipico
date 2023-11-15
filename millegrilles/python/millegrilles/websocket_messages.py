@@ -443,10 +443,14 @@ class PollingThread:
                     try:
                         try:
                             routage = reponse['routage']
-                            message_chiffre = reponse['attachements']['relai_chiffre'].encode('utf-8')
-                            self.__buffer.set_bytes(message_chiffre)
-                            # todo: dechiffrer message
-                            reponse = loads(self.__buffer.get_data())
+                            message_chiffre = reponse['attachements']['relai_chiffre']
+                            # self.__buffer.set_bytes(message_chiffre)
+
+                            # Dechiffrer le message
+                            # reponse = loads(self.__buffer.get_data())
+                            reponse = self.__appareil.chiffrage_messages.dechiffrer(message_chiffre)
+                            # Le message dechiffre est en bytes, charger avec json
+                            reponse = loads(reponse)
 
                             # On peut se fier au message dechiffre sans valider le reste du contenu
                             info_certificat = reponse['enveloppe']
