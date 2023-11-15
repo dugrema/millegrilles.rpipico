@@ -11,6 +11,15 @@ target_sources(usermod_oryx_lib PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/os_port_rpipico.c
     ${ORYX_LIB}/common/date_time.c
 
+    # cipher
+    ${ORYX_LIB}/cyclone_crypto/cipher/chacha.c
+
+    # mac
+    ${ORYX_LIB}/cyclone_crypto/mac/poly1305.c
+
+    # aead
+    ${ORYX_LIB}/cyclone_crypto/aead/chacha20_poly1305.c
+
     # hash
     ${ORYX_LIB}/cyclone_crypto/hash/blake2s.c
     ${ORYX_LIB}/cyclone_crypto/hash/blake2s256.c
@@ -80,6 +89,9 @@ target_include_directories(usermod_oryx_crypto INTERFACE
     ${ORYX_LIB}/cyclone_crypto/mpi
     ${ORYX_LIB}/cyclone_crypto/pkc
     ${ORYX_LIB}/cyclone_crypto/pkix
+    ${ORYX_LIB}/cyclone_crypto/mac
+    ${ORYX_LIB}/cyclone_crypto/cipher
+    ${ORYX_LIB}/cyclone_crypto/aead
 )
 
 # Link our INTERFACE library to the usermod target.

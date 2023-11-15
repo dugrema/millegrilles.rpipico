@@ -10,6 +10,9 @@
 #include "../../oryx-embedded/cyclone_crypto/pkix/x509_cert_validate.h"
 #include "../../oryx-embedded/cyclone_crypto/pkix/x509_csr_create.h"
 #include "../../oryx-embedded/cyclone_crypto/pkix/pem_import.h"
+#include "../../oryx-embedded/cyclone_crypto/mac/mac_algorithms.h"
+#include "../../oryx-embedded/cyclone_crypto/cipher/cipher_algorithms.h"
+#include "../../oryx-embedded/cyclone_crypto/aead/chacha20_poly1305.h"
 
 #define DIGEST_BLAKE2S_LEN 32
 #define DIGEST_BLAKE2B_LEN 64
@@ -683,6 +686,94 @@ STATIC mp_obj_t python_x509_csr_new(mp_obj_t cleprivee_obj, mp_obj_t cn_obj) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(python_x509_csr_new_obj, python_x509_csr_new);
 
+// ChaCha20
+
+// /**
+// * @brief Authenticated encryption using ChaCha20Poly1305
+// * @param[in] k key
+// * @param[in] kLen Length of the key
+// * @param[in] n Nonce
+// * @param[in] nLen Length of the nonce
+// * @param[in] a Additional authenticated data
+// * @param[in] aLen Length of the additional data
+// * @param[in] p Plaintext to be encrypted
+// * @param[out] c Ciphertext resulting from the encryption
+// * @param[in] length Total number of data bytes to be encrypted
+// * @param[out] t MAC resulting from the encryption process
+// * @param[in] tLen Length of the MAC
+// * @return Error code
+// **/
+//error_t chacha20Poly1305Encrypt(const uint8_t *k, size_t kLen,
+//   const uint8_t *n, size_t nLen, const uint8_t *a, size_t aLen,
+//   const uint8_t *p, uint8_t *c, size_t length, uint8_t *t, size_t tLen)
+
+STATIC mp_obj_t python_chacha20poly1305_encrypt(mp_obj_t key_obj, mp_obj_t nonce_obj, mp_obj_t plaintext_obj) {
+    uint8_t tag[16];  // output tag (MAC)
+    mp_buffer_info_t key_bufinfo;
+    mp_buffer_info_t nonce_bufinfo;
+    mp_buffer_info_t plaintext_bufinfo;
+    error_t result;
+
+    mp_get_buffer_raise(key_obj, &key_bufinfo, MP_BUFFER_READ);
+    if(key_bufinfo.len != 32) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, LEN_INVALIDE));
+    }
+    mp_get_buffer_raise(nonce_obj, &nonce_bufinfo, MP_BUFFER_READ);
+    if(nonce_bufinfo.len != 12) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, LEN_INVALIDE));
+    }
+    mp_get_buffer_raise(plaintext_obj, &plaintext_bufinfo, MP_BUFFER_READ);
+
+    result = chacha20Poly1305Encrypt(
+        key_bufinfo.buf, key_bufinfo.len,
+        nonce_bufinfo.buf, nonce_bufinfo.len,
+        NULL, 0,  // no authenticated data
+        // Reuse plaintext buffer as output (ciphertext has same length)
+        plaintext_bufinfo.buf, plaintext_bufinfo.buf, plaintext_bufinfo.len,
+        (uint8_t *)&tag, 16
+    );
+
+    if(result != 0) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
+
+    return mp_obj_new_bytes(tag, 16);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(python_chacha20poly1305_encrypt_obj, python_chacha20poly1305_encrypt);
+
+STATIC mp_obj_t python_chacha20poly1305_decrypt(mp_obj_t key_obj, mp_obj_t nonce_tag_obj, mp_obj_t plaintext_obj) {
+    mp_buffer_info_t key_bufinfo;
+    mp_buffer_info_t nonce_tag_obj_bufinfo;
+    mp_buffer_info_t plaintext_bufinfo;
+    error_t result;
+
+    mp_get_buffer_raise(key_obj, &key_bufinfo, MP_BUFFER_READ);
+    if(key_bufinfo.len != 32) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, LEN_INVALIDE));
+    }
+    mp_get_buffer_raise(nonce_tag_obj, &nonce_tag_obj_bufinfo, MP_BUFFER_READ);
+    if(nonce_tag_obj_bufinfo.len != 28) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, LEN_INVALIDE));
+    }
+    mp_get_buffer_raise(plaintext_obj, &plaintext_bufinfo, MP_BUFFER_READ);
+
+    result = chacha20Poly1305Decrypt(
+        key_bufinfo.buf, key_bufinfo.len,
+        nonce_tag_obj_bufinfo.buf, 12,
+        NULL, 0,  // no authenticated data
+        // Reuse plaintext buffer as output (ciphertext has same length)
+        plaintext_bufinfo.buf, plaintext_bufinfo.buf, plaintext_bufinfo.len,
+        nonce_tag_obj_bufinfo.buf+12, 16
+    );
+
+    if(result != 0) {
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_Exception, OPERATION_INVALIDE));
+    }
+
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(python_chacha20poly1305_decrypt_obj, python_chacha20poly1305_decrypt);
+
 // Define all properties of the module.
 // Table entries are key/value pairs of the attribute name (a string)
 // and the MicroPython object reference.
@@ -700,6 +791,9 @@ STATIC const mp_rom_map_elem_t oryxcrypto_module_globals_table[] = {
 
     { MP_ROM_QSTR(MP_QSTR_x509readpemcertificate), MP_ROM_PTR(&python_x509_read_pem_certificate_obj) },
     { MP_ROM_QSTR(MP_QSTR_x509validercertificate), MP_ROM_PTR(&python_x509_valider_der_certificate_obj) },
+
+    { MP_ROM_QSTR(MP_QSTR_cipherchacha20poly1305encrypt), MP_ROM_PTR(&python_chacha20poly1305_encrypt_obj) },
+    { MP_ROM_QSTR(MP_QSTR_cipherchacha20poly1305decrypt), MP_ROM_PTR(&python_chacha20poly1305_decrypt_obj) },
 
     { MP_OBJ_NEW_QSTR(MP_QSTR_x509CertInfo), (mp_obj_t)&x509CertInfo_type },
     { MP_ROM_QSTR(MP_QSTR_x509certificatinfo), MP_ROM_PTR(&python_x509_certificat_info_obj) },

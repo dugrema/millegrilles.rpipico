@@ -140,6 +140,22 @@ async def generer_cles_exchange():
     print("generer_cles_exchange output secret A %s" % binascii.hexlify(secret_a).decode('utf-8'))
     print("generer_cles_exchange output secret B %s" % binascii.hexlify(secret_b).decode('utf-8'))
 
+def chiffrage_chacha20poly1305():
+    buf_secret = b"01234567890123456789012345678901"  # 32 bytes
+    buf_nonce = b"0123456789ad"  # 12 bytes
+    buf_message = b"ABCD12345678EFGHABRAdada"
+    debut = time.ticks_us()
+    tag = oryx_crypto.cipherchacha20poly1305encrypt(buf_secret, buf_nonce, buf_message)
+    print("duree chiffrage : %s" % (time.ticks_us()-debut))
+    print("resultat chiffrage ciphertext : %s" % binascii.hexlify(buf_message).decode('utf-8'))
+    print("resultat chiffrage tag : %s" % binascii.hexlify(tag).decode('utf-8'))
+    
+    buf_nonce_tag = buf_nonce + tag
+    debut = time.ticks_us()
+    oryx_crypto.cipherchacha20poly1305decrypt(buf_secret, buf_nonce_tag, buf_message)
+    print("duree dechiffrage : %s" % (time.ticks_us()-debut))
+    print("resultat dechiffrage plaintext : %s" % buf_message.decode('utf-8'))
+    
 
 async def run_tests():
     # print("Delai demarrage - 3 secs")
@@ -155,7 +171,8 @@ async def run_tests():
     # await generer_cles_exchange()
     # await test_valider_certificat()
     # await test_verifier_message()
-    charger_userid_local()
+    # charger_userid_local()
+    chiffrage_chacha20poly1305()
 
 
 IDMG = "zeYncRqEqZ6eTEmUZ8whJFuHG796eSvCTWE4M432izXrp22bAtwGm7Jf"
