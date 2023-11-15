@@ -11,7 +11,7 @@ from uwebsockets.client import connect
 from millegrilles.certificat import get_expiration_certificat_local
 from millegrilles.mgmessages import formatter_message, verifier_message
 from handler_commandes import traiter_commande
-from millegrilles.config import get_http_timeout, set_configuration_display, get_timezone
+from millegrilles.config import get_http_timeout, set_configuration_display, get_timezone, set_timezone_offset
 
 from millegrilles.message_inscription import verifier_renouveler_certificat_ws, charger_relais, generer_message_timeinfo
 
@@ -28,7 +28,7 @@ CONST_REQUETE_RELAIS_WEB = const('getRelaisWeb')
 CONST_COMMANDE_ECHANGE_CLES = const('echangerClesChiffrage')
 
 CONST_DUREE_THREAD_POLLING = const(6 * 60 * 60)
-CONST_EXPIRATION_CONFIG = const(10 * 60)
+CONST_EXPIRATION_CONFIG = const(20 * 60)
 
 
 class HttpErrorException(Exception):
@@ -214,8 +214,16 @@ async def charger_timeinfo(chiffrage_messages, websocket, buffer, refresh: False
     timezone_str = get_timezone()
     if timezone_str is not None:
         print("Charger information timezone %s" % timezone_str)
-        buffer.set_text(dumps(await generer_message_timeinfo(timezone_str)))
-        
+
+        if chiffrage_messages.pret is True:
+            # Chiffrer le message
+            requete = await chiffrage_messages.chiffrer({'timezone': timezone_str})
+            requete['routage'] = {'action': 'getTimezoneInfo'}
+        else:
+            requete = await generer_message_timeinfo(timezone_str)
+
+        buffer.set_text(dumps(requete))
+
         await asyncio.sleep_ms(1)  # Yield
         collect()
         await asyncio.sleep_ms(1)  # Yield
@@ -260,12 +268,13 @@ class PollingThread:
         self.__load_initial = True
         self.__refresh_step = 0
         self.__errnumber = 0
-        
+
         # Assigner un URL
         self.entretien_url_relai()
 
         chiffrage_messages = self.__appareil.chiffrage_messages
         chiffrage_messages.clear()
+        self.__prochain_refresh_config = 0  # Forcer recharger config sur connexion. Permet aussi chiffrage.
 
         print("PRE CONNECT")
         mem_info()
@@ -311,8 +320,9 @@ class PollingThread:
                 self.__websocket,
                 buffer=self.__buffer,
                 refresh=not self.__load_initial)
-            print("Set offset %s" % offset)
-            # self.__appareil.set_timezone_offset(offset)
+            if offset is not None:
+                print("Set offset %s" % offset)
+                set_timezone_offset(offset)
             return
         
         if self.__refresh_step <= 4:
@@ -462,7 +472,13 @@ class PollingThread:
                             message_chiffre = reponse['attachements']['relai_chiffre']
 
                             # Dechiffrer le message
-                            reponse = self.__appareil.chiffrage_messages.dechiffrer(message_chiffre)
+                            try:
+                                reponse = self.__appareil.chiffrage_messages.dechiffrer(message_chiffre)
+                            except Exception as e:
+                                print('err Desactiver chiffrage : %s' % e)
+                                self.__appareil.chiffrage_messages.clear()
+                                raise e  # Fallback sur message signe
+
                             print("message websocket dechiffre OK")
                             # Le message dechiffre est en bytes, charger avec json
                             reponse = loads(reponse)
@@ -470,12 +486,12 @@ class PollingThread:
                             # On peut se fier au message dechiffre sans valider le reste du contenu
                             info_certificat = reponse['enveloppe']
                             reponse = {'routage': routage, 'contenu': reponse['contenu']}
-                        except KeyError:
-                            # On n'a pas de message chiffre. Valider le message au complet.
+                        except Exception:
+                            # On n'a pas de message chiffre ou echec dechiffrage. Valider le message au complet.
                             info_certificat = await verifier_signature(reponse, self.__buffer, self.__appareil.task_runner)
 
-                            # Cleanup
-                            await asyncio.sleep_ms(2)  # Yield
+                        # Cleanup
+                        await asyncio.sleep_ms(2)  # Yield
 
                         await traiter_commande(self.__buffer, self.__websocket, self.__appareil, reponse, info_certificat)
                     except KeyError as e:

@@ -169,5 +169,6 @@ async def recevoir_echanger_secret(buffer, websocket, appareil, reponse, info_ce
 
 
 async def recevoir_reset_secret(appareil):
+    print('reset secret')
     chiffrage_messages = appareil.chiffrage_messages
     chiffrage_messages.clear()
