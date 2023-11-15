@@ -146,6 +146,8 @@ def chiffrage_chacha20poly1305():
     buf_message = b"ABCD12345678EFGHABRAdada"
     debut = time.ticks_us()
     tag = oryx_crypto.cipherchacha20poly1305encrypt(buf_secret, buf_nonce, buf_message)
+    tag_b64 = binascii.b2a_base64(tag).decode('utf-8')[:-1]
+    print("-- Tag b64: '%s' --" % tag_b64)
     print("duree chiffrage : %s" % (time.ticks_us()-debut))
     print("resultat chiffrage ciphertext : %s" % binascii.hexlify(buf_message).decode('utf-8'))
     print("resultat chiffrage tag : %s" % binascii.hexlify(tag).decode('utf-8'))

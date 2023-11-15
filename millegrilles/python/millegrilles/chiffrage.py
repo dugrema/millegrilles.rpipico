@@ -2,7 +2,8 @@ import time
 
 import oryx_crypto
 
-from binascii import hexlify, unhexlify
+from ubinascii import b2a_base64, hexlify, unhexlify
+
 from json import dumps
 
 from millegrilles.certificat import rnd_bytes, get_fingerprint_local
@@ -66,10 +67,16 @@ class ChiffrageMessages:
 
     async def chiffrer(self, message: dict):
         message = dumps(message)
+
+        nonce = rnd_bytes(12)
+        tag = oryx_crypto.cipherchacha20poly1305encrypt(self.__secret_echange, nonce, message)
+        tag = b2a_base64(tag).decode('utf-8')[:-1]
+        nonce = b2a_base64(nonce).decode('utf-8')[:-1]
+
         return {
             'uuid_appareil': self.__uuid_appareil,
             'fingerprint': self.__fingerprint_local,
-            'nonce': '--nonce--',
-            'tag': '--tag--',
-            'message_chiffre': message,
+            'nonce': nonce,
+            'tag': tag,
+            'ciphertext': b2a_base64(message).decode('utf-8')[:-1],
         }
