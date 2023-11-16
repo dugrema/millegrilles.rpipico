@@ -5,8 +5,8 @@ from sys import print_exception
 from gc import collect
 
 from mgutils import comparer_dict
-from millegrilles import urequests2 as requests
-from millegrilles import wifi
+from millegrilles.const_leds import CODE_CONFIG_INITIALISATION
+from millegrilles.ledblink import led_executer_sequence
 from millegrilles.wifi import connect_wifi
 from millegrilles.certificat import PATH_CERT, PATH_CA_CERT
 
@@ -20,6 +20,8 @@ CONST_MODE_RECUPERER_CA = const(2)
 CONST_MODE_CHARGER_URL_RELAIS = const(3)
 CONST_MODE_SIGNER_CERTIFICAT = const(4)
 CONST_MODE_POLLING = const(99)
+
+CONST_HTTP_TIMEOUT_DEFAULT = const(60)
 
 CONST_CHAMP_HTTP_INSTANCE = const('http_instance')
 
@@ -128,16 +130,16 @@ def get_tz_offset():
         return None
 
 
-async def get_timezone_offset(self):
-    try:
-        if self.__timezone_offset is None:
-            self.__timezone_offset = await charger_timeinfo(self.__url_relai_courant)
-            if self.__timezone_offset is None:
-                self.__timezone_offset = False  # Desactiver chargement
-    except Exception as e:
-        print("Erreur chargement timezone")
-        sys.print_exception(e)
-        e = None
+# async def get_timezone_offset(self):
+#     try:
+#         if self.__timezone_offset is None:
+#             self.__timezone_offset = await charger_timeinfo(self.__url_relai_courant)
+#             if self.__timezone_offset is None:
+#                 self.__timezone_offset = False  # Desactiver chargement
+#     except Exception as e:
+#         print("Erreur chargement timezone")
+#         sys.print_exception(e)
+#         e = None
 
 
 async def set_timezone_offset(offset):

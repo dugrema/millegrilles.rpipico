@@ -3,6 +3,7 @@ import machine
 
 LED_ONBOARD = machine.Pin('WL_GPIO0', machine.Pin.OUT)
 
+
 async def __executer_sequence(led, codes: list):
     for code in codes:
         await __executer_valeur(led, code)
@@ -17,7 +18,8 @@ async def __executer_valeur(led, valeur):
         await uasyncio.sleep_ms(225)
         led.on()
         await uasyncio.sleep_ms(125)
-        
+
+
 async def led_executer_sequence(codes: list, executions=1, ui_lock: asyncio.Lock = None, led=LED_ONBOARD):
     led.on()
     
