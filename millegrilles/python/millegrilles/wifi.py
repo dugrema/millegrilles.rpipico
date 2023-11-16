@@ -10,11 +10,10 @@ PATH_CONFIGURATION = const('conn.json')
 async def connect_wifi(liste_wifi: list):
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    status = wlan.ifconfig()
 
     # Cleanup
     wlan.disconnect()
-    asyncio.sleep_ms(200)
+    await asyncio.sleep_ms(200)
 
     tentatives = 3
     for t in range(0, tentatives):
@@ -36,7 +35,7 @@ async def connect_wifi(liste_wifi: list):
 
             # Wait for connect or fail
             print("Attendre connexion WIFI a %s" % ssid)
-            max_wait = 7
+            max_wait = 20  # 20 secondes, si echec la connexion retry immediatement
             status = network.STAT_CONNECTING
             while max_wait > 0 and status == network.STAT_CONNECTING:
                 print("%s : attendre - reste %d secs" % (ssid, max_wait))
