@@ -82,24 +82,12 @@ async def entretien_certificat():
     return False
 
 
-#async def charger_timeinfo(url_relai: str):
-#    print("charger_timeinfo")
-#    offset = await __charger_timeinfo(url_relai)
-#    print("Offset recu : %s" % offset)
-#    return offset
-
-
 async def verifier_renouveler_certificat(url_relai: str):
     try:
         return await __verifier_renouveler_certificat(url_relai)
     except Exception as e:
         print("Erreur verif renouveler certificat")
         sys.print_exception(e)
-
-
-#async def initialiser_wifi():
-#    from config import initialiser_wifi as __initialiser_wifi
-#    return await __initialiser_wifi()
 
 
 class Runner:
@@ -138,9 +126,12 @@ class Runner:
     
     @property
     def stale_event(self):
-        self.__lectures_event.clear()
         return self.__stale_event
-    
+
+    def trigger_stale_event(self):
+        self.__lectures_event.clear()
+        self.__stale_event.set()
+
     async def trigger_emit_event(self):
         self.__emit_event.set()
 
@@ -257,6 +248,8 @@ class Runner:
         # Clear evenement emit - les changements subsequents ne sont pas captures
         self.emit_event.clear()
 
+        ticks_debut = time.ticks_ms()
+
         if refresh is True:
             liste_senseurs_programmes = await self.rafraichir_etat()
         else:
@@ -275,6 +268,8 @@ class Runner:
                 etat['notifications'] = notifications
         except Exception as e:
             print("get_etat Error notifications : %s" % e)
+
+        print("get_etat duree %d ms (refresh:%s)" % (time.ticks_diff(time.ticks_ms(), ticks_debut), refresh))
 
         return etat
 
@@ -548,7 +543,7 @@ class Runner:
 
         # Task devices
         asyncio.create_task(self._device_handler.run(
-            self.__ui_lock, self.recevoir_lectures, self.get_feeds, 2000))
+            self.__ui_lock, self.recevoir_lectures, self.get_feeds, 20_000))
 
         # Executer main loop
         await self.__main()

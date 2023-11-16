@@ -18,7 +18,10 @@ class DriverBmp180(Driver):
             raise Exception('Bus %d non configure' % bus_no)
         self.__instance = BMP180(i2c)
 
-    async def lire(self):
+    async def lire(self, rapide=False):
+        if rapide is True:
+            return None  # La lecture de cet appareil est lente
+
         (temperature, pressure, altitude) = await self.__instance.readBmp180()
 
         pressure_hecto = int(pressure / 100.0)

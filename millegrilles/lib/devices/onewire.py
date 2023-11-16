@@ -26,7 +26,10 @@ class DriverOnewire(Driver):
             self.__ds18s20_driver = ds18x20.DS18X20(self.__bus)
             print("1W ds18x20 active")
 
-    async def lire(self):
+    async def lire(self, rapide=False):
+        if rapide is True:
+            return None  # La lecture de cet appareil est lente
+
         if self.__ds18s20_driver is not None:
             return await self.lire_temperatures()
         
@@ -34,11 +37,11 @@ class DriverOnewire(Driver):
 
     async def lire_temperatures(self):
         roms = self.__bus.scan()
-        asyncio.sleep_ms(1)  # Yield
+        await asyncio.sleep_ms(1)  # Yield
 
         self.__ds18s20_driver.convert_temp()
         # Donner le temps de faire la preparation de temperature (non-blocking)
-        asyncio.sleep_ms(750)
+        await asyncio.sleep_ms(750)
         
         lectures = dict()
         for rom in roms:
@@ -48,6 +51,6 @@ class DriverOnewire(Driver):
                 'valeur': temp,
                 'type': 'temperature'
             }
-            asyncio.sleep_ms(1)  # Yield
+            await asyncio.sleep_ms(1)  # Yield
 
         return lectures

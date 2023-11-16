@@ -1,4 +1,6 @@
 # Module de gestions des drivers/devices
+import time
+
 import ubinascii as binascii
 import uasyncio as asyncio
 
@@ -77,18 +79,20 @@ class DeviceHandler:
                 print("Erreur load device ", dev)
                 print_exception(e)
     
-    async def _lire_devices(self, sink_method):
+    async def _lire_devices(self, sink_method, rapide=False):
         import time
         
         lectures = dict()
         ts_courant = time.time()
         for dev in self.__devices.values():
             try:
-                lectures_dev = await dev.lire()
-                for l in lectures_dev.values():
-                    l['timestamp'] = ts_courant
-                lectures.update(lectures_dev)  # Transferer lectures
-                await asyncio.sleep_ms(10)  # Liberer
+                lectures_dev = await dev.lire(rapide=rapide)
+                if lectures_dev is not None:
+                    for l in lectures_dev.values():
+                        l['timestamp'] = ts_courant
+                    lectures.update(lectures_dev)  # Transferer lectures
+                if rapide is False:
+                    await asyncio.sleep_ms(1)  # Liberer
             except AttributeError:
                 pass  # Pas d'attribut .lire
             except Exception as e:
@@ -124,26 +128,33 @@ class DeviceHandler:
     def get_device(self, device_id: str):
         return self.__devices[device_id]
 
-    async def run(self, ui_lock: asyncio.Event, sink_method, feeds=None, intervalle_ms=5000):
+    async def run(self, ui_lock: asyncio.Event, sink_method, feeds=None, intervalle_ms=20_000):
         if feeds is not None:
             asyncio.create_task(self._output_devices(feeds, ui_lock))
 
+        rapide = False
         while True:
-            await self._lire_devices(sink_method)
+            ticks_debut = time.ticks_ms()
 
-            if self.__appareil.stale_event.is_set():
+            # Conserver etat stale
+            # permet de capturer un changement survenu apres le debut des lectures (long)
+            stale = self.__appareil.stale_event.is_set()
+            self.__appareil.stale_event.clear()
+
+            await self._lire_devices(sink_method, rapide=rapide)
+            print("lire_devices duree %d ms (rapide:%s)" % (time.ticks_diff(time.ticks_ms(), ticks_debut), rapide))
+
+            if stale:
                 print('DeviceHandler.run stale detecte')
-                # Indiquer que l'etat est maintenant a jour
-                self.__appareil.stale_event.clear()
-
                 # Indiquer que l'etat a ete mis a jour et doit etre emis des que possible
                 self.__appareil.emit_event.set()
 
             try:
                 await asyncio.wait_for_ms(self.__appareil.stale_event.wait(), intervalle_ms)
                 print('DeviceHandler.run stale wait jump')
+                rapide = True
             except asyncio.TimeoutError:
-                pass  # OK
+                rapide = False
 
 
 def import_driver(path_driver):

@@ -17,10 +17,12 @@ def flash_led(cycles=6):
         LED_ONBOARD.off()
         sleep_ms(250)
 
+
 def root():
     from millegrilles.appareil_millegrille import main
     # from appareil_millegrille import main
     run(main())
+
 
 try:
     flash_led()

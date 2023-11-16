@@ -1,7 +1,5 @@
 import uasyncio as asyncio
 
-from handler_devices import Driver
-
 from .display import OutputLignes
 
 
@@ -36,10 +34,6 @@ class LCD1602(OutputLignes):
             ligne_data = '{:<16}'.format(data)
             if flag is not None:
                 ligne_data = ligne_data[:15] + flag
-            #if self._appareil.task_runner is not None:
-            #    await self._appareil.task_runner.run_task(self._instance.putstr, ligne_data)
-            #else:
-            #    await self._instance.putstr_async(ligne_data)
             self._instance.putstr(ligne_data)
             await asyncio.sleep_ms(5)
         finally:
@@ -49,3 +43,6 @@ class LCD1602(OutputLignes):
     async def show(self, attente=5.0):
         self.__ligne = 0
         await asyncio.sleep(attente)
+
+    def set_ligne(self, ligne):
+        self.__ligne = ligne

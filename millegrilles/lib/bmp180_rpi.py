@@ -1,6 +1,4 @@
 import uasyncio as asyncio
-import ubinascii as binascii
-from machine import I2C, Pin
 from struct import unpack
 
 

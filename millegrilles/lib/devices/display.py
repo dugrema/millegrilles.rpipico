@@ -131,13 +131,13 @@ class OutputLignes(Driver):
             for noligne in range(0, self._nb_lignes):
                 await self._preparer_ligne_datetime(timenow, noligne, index_loop)
 
-            # nouv_sec = (time.ticks_ms() % 1000) / 1000
-            await self.show(0.1)
+            nouv_sec = (time.ticks_ms() % 1000) / 1000
+            # Attendre jusqu'a la nouvelle sec -50ms
+            await self.show(nouv_sec-0.05)
             index_loop += 1
 
             # Boucler tant qu'on ne change pas de seconde
-            dernier_affichage = now
-            while dernier_affichage == time.time():
+            while now == time.time():
                 await asyncio.sleep_ms(100)
 
     async def _preparer_ligne_datetime(self, timenow, ligne: int, index_loop: int):

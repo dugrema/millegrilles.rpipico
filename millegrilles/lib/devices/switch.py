@@ -14,7 +14,7 @@ class DriverSwitchPin(Driver):
         pin_no = self._params['pin']
         self.__pin = machine.Pin(pin_no, machine.Pin.OUT)
 
-    async def lire(self):
+    async def lire(self, rapide=False):
         return {
             '%s/etat' % self.device_id: {
                 'valeur': self.value,

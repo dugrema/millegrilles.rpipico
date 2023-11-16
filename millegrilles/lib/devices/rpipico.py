@@ -14,15 +14,23 @@ class RPiPicoW(Driver):
     async def load(self):
         self.__instance = machine.ADC(4)
 
-    async def lire(self):
+    async def lire(self, rapide=False):
         temperature = 0.0
-        conversion_factor = 3.3 / (65535)
-        for _ in range(0, self.__nb_lectures):
+        conversion_factor = 3.3 / 65535
+        if rapide is True:
+            nb_lectures = 1
+        else:
+            nb_lectures = self.__nb_lectures
+
+        for _ in range(0, nb_lectures):
             reading = self.__instance.read_u16() * conversion_factor
             temperature += 27 - (reading - 0.706)/0.001721
+            nb_lectures += 1
+            if rapide is True:
+                break   # Une seule lecture en mode rapide
             await asyncio.sleep_ms(50)
 
-        temperature = round(temperature / self.__nb_lectures, 1)
+        temperature = round(temperature / nb_lectures, 1)
         
         device_id = self.device_id
         return {

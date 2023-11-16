@@ -142,6 +142,7 @@ async def appareil_set_switch_value(appareil, senseur_id, value):
     device = appareil.get_device(device_id)
     print("Device trouve : %s" % device)
     device.value = value
+    appareil.trigger_stale_event()
 
 
 async def recevoir_echanger_secret(buffer, websocket, appareil, reponse, info_certificat):

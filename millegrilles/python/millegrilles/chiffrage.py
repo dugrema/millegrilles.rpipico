@@ -68,10 +68,12 @@ class ChiffrageMessages:
     async def chiffrer(self, message: dict) -> dict:
         message = dumps(message)
 
+        ticks_debut = time.ticks_ms()
         nonce = rnd_bytes(12)
         tag = oryx_crypto.cipherchacha20poly1305encrypt(self.__secret_echange, nonce, message)
         tag = b2a_base64(tag).decode('utf-8')[:-1]
         nonce = b2a_base64(nonce).decode('utf-8')[:-1]
+        print("chiffrer duree %d ms" % time.ticks_diff(time.ticks_ms(), ticks_debut))
 
         return {
             'uuid_appareil': self.__uuid_appareil,

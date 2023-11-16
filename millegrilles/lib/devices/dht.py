@@ -23,7 +23,10 @@ class DriverDHT(Driver):
         else:
             raise ValueError('DHT inconnu : %s' % modele_str)
 
-    async def lire(self):
+    async def lire(self, rapide=False):
+        if rapide is True:
+            return None  # La lecture de cet appareil est lente
+
         self.__instance.measure()
         await asyncio.sleep_ms(1)  # Yield
         device_id = self.device_id
