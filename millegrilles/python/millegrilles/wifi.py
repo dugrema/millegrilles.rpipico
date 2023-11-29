@@ -7,7 +7,7 @@ from . import uping
 PATH_CONFIGURATION = const('conn.json')
 
 
-async def connect_wifi(liste_wifi: list):
+async def connect_wifi(liste_wifi: list, tentatives=3):
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
 
@@ -15,9 +15,8 @@ async def connect_wifi(liste_wifi: list):
     wlan.disconnect()
     await asyncio.sleep_ms(200)
 
-    tentatives = 3
-    for t in range(0, tentatives):
-        for config in liste_wifi:
+    for config in liste_wifi:
+        for t in range(0, tentatives):
             try:
                 ssid = config['wifi_ssid']
                 print("WiFI connect to %s" % ssid)

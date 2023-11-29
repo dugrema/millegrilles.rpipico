@@ -73,7 +73,7 @@ async def initialiser_wifi():
             # Aucune configuration wifi
             raise RuntimeError('wifi')
 
-    for _ in range(0, 5):
+    for _ in range(0, 3):
         try:
             status = await connect_wifi(wifis)
             return status

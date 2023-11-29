@@ -320,7 +320,7 @@ class PollingThread:
                 chiffrage_messages,
                 self.__websocket,
                 buffer=self.__buffer,
-                refresh=not self.__load_initial)
+                refresh=True)
             if offset is not None:
                 print("Set offset %s" % offset)
                 set_timezone_offset(offset)
