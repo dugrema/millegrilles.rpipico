@@ -206,30 +206,31 @@ async def charger_timeinfo(chiffrage_messages, websocket, buffer, refresh: False
         print('tzoffset.json erreur contenu')
 
     if offset_info is None:
+        timezone_str = None
         # Generer fichier dummy
         offset_info = {'offset': 0}
         with open('tzoffset.json', 'wb') as fichier:
             dump(offset_info, fichier)
+    else:
+        timezone_str = offset_info.get('timezone')
 
-    timezone_str = get_timezone()
-    if timezone_str is not None:
-        print("Charger information timezone %s" % timezone_str)
+    print("Charger information timezone %s" % timezone_str)
 
-        if chiffrage_messages.pret is True:
-            # Chiffrer le message
-            requete = await chiffrage_messages.chiffrer({'timezone': timezone_str})
-            requete['routage'] = {'action': 'getTimezoneInfo'}
-        else:
-            requete = await generer_message_timeinfo(timezone_str)
+    if chiffrage_messages.pret is True:
+        # Chiffrer le message
+        requete = await chiffrage_messages.chiffrer({'timezone': timezone_str})
+        requete['routage'] = {'action': 'getTimezoneInfo'}
+    else:
+        requete = await generer_message_timeinfo(timezone_str)
 
-        buffer.set_text(dumps(requete))
+    buffer.set_text(dumps(requete))
 
-        await asyncio.sleep_ms(1)  # Yield
-        collect()
-        await asyncio.sleep_ms(1)  # Yield
+    await asyncio.sleep_ms(1)  # Yield
+    collect()
+    await asyncio.sleep_ms(1)  # Yield
 
-        # Emettre requete
-        websocket.send(buffer.get_data())
+    # Emettre requete
+    websocket.send(buffer.get_data())
 
     return offset_info
 

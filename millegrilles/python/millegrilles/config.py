@@ -142,7 +142,7 @@ def get_tz_offset():
 #         e = None
 
 
-async def set_timezone_offset(offset):
+async def set_timezone_offset(offset, timezone=None):
     print("Offset : %s" % offset)
 
     # Charger info, aucun write si information non changee
@@ -150,12 +150,17 @@ async def set_timezone_offset(offset):
     try:
         with open('tzoffset.json', 'rb') as fichier:
             offset_info = load(fichier)
+        timezone_courant = offset_info.get('timezone')
     except OSError:
         print('tzoffset.json absent')
+        timezone_courant = None
 
     if offset_info is None or offset_info['offset'] != offset:
+        params = {'offset': offset, 'timezone': timezone_courant}
+        if timezone is not None:  # Override timezone
+            params['timezone'] = timezone
         with open('tzoffset.json', 'wb') as fichier:
-            dump({'offset': offset}, fichier)
+            dump(params, fichier)
 
 
 def set_configuration_display(configuration: dict):
