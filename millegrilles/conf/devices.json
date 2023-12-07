@@ -9,6 +9,7 @@
         {"driver": "devices.bmp.DriverBmp180", "bus": 0},
         {"driver": "devices.display.DummyOutput"},
         {"driver": "devices.lcd1602.LCD1602", "model": "i2c", "bus": 0},
-        {"driver": "devices.ssd1306.Ssd1306", "model": "i2c", "bus": 0}
+        {"driver": "devices.ssd1306.Ssd1306", "model": "i2c", "bus": 0},
+        {"driver": "devices.switch.DriverSwitchPin", "pin": 18}
     ]
 }

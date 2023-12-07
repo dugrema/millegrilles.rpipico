@@ -1,5 +1,6 @@
 import json
 import time
+import urequests
 
 from binascii import hexlify
 from machine import unique_id
@@ -380,9 +381,11 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
 
         # Downloader la fiche
         # print("Recuperer fiche a %s" % fiche_url)
+        await sleep_ms(1)  # Yield
         fiche_json = None
         try:
-            reponse = await requests.get(fiche_url, lock=ui_lock)
+            # reponse = await requests.get(fiche_url, lock=ui_lock)
+            reponse = urequests.get(fiche_url)
         except OSError as e:
             if e.errno == -2:
                 # Connexion refusee/serveur introuvable, essayer prochain relai
@@ -397,28 +400,43 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
                 print("Erreur fiche %s status = %s" % (fiche_url, reponse.status_code))
                 continue
             
-            await reponse.read_text_into(buffer)
+            # await reponse.read_text_into(buffer)
+            buffer.set_bytes(reponse.content)
+            reponse = None
             recu_ok = True
             break  # Ok
-        
+        except AttributeError:
+            # Verifier si on a eu un redirect sur https (generateur)
+            try:
+                reponse.__next__()
+                print('Erreur fiche https')
+            except Exception:
+                print('Erreur chargement fiche (1)')
+                continue
         except Exception as e:
-            print('Erreur chargement fiche')
+            print('Erreur chargement fiche (2)')
             print_exception(e)
             continue
         finally:
-            print("charger_fiche fermer reponse")
-            reponse.close()
-            reponse = None
+            # print("charger_fiche fermer reponse")
+            # reponse.close()
+            # reponse = None
 
             # Cleanup memoire
             collect()
             await sleep_ms(1)  # Yield
 
     if recu_ok is True:
-        collect()
-        await sleep_ms(1)  # Yield
-        message_fiche = loads(buffer.get_data())
-        
+        # collect()
+        # await sleep_ms(1)  # Yield
+        try:
+            message_fiche = loads(buffer.get_data())
+        except Exception as e:
+            print('Erreur parse fiche')
+            with open('fiche.err', 'wb') as fiche:
+                fiche.write(buffer.get_data())
+            raise e
+
         print("Fiche recue id %s" % message_fiche['id'])
         certificat = message_fiche.get('certificat')
         if no_validation is False:

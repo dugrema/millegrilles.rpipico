@@ -107,24 +107,24 @@ async def request(
         try:
             await sleep_ms(1)  # Yield
             s.connect(ai[-1])
-            print("Socket connect")
+            # print("Socket connect")
             await sleep_ms(1)  # Yield
         except OSError as er:
             if er.errno != EINPROGRESS:
                 raise er        
         
         if proto == "https:":
-            print("https init")
+            # print("https init")
             try:
                 if lock is not None:
                     await lock.acquire()
-                    print("https lock acquired")
+                    # print("https lock acquired")
                 s = ussl.wrap_socket(s, server_hostname=host)
             finally:
                 if lock is not None:
-                    print("https release lock")
+                    # print("https release lock")
                     lock.release()
-            print("https init done")
+            # print("https init done")
             await sleep_ms(1)  # Yield
         
         s.write(b"%s /%s HTTP/1.0\r\n" % (method, path))
