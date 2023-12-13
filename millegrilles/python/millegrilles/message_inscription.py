@@ -1,6 +1,7 @@
 import json
 import time
 import urequests
+import sys
 
 from binascii import hexlify
 from machine import unique_id
@@ -358,7 +359,7 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
         with open('relais.json') as fichier:
             info_relais = load(fichier)
             for relai in info_relais['relais']:
-                proto, host, _ = parse_url(relai)
+                proto, host, port, pathname = parse_url(relai)
                 proto = 'http:'
                 liste_urls.add(proto + '//' + host)
     except (OSError, KeyError):
@@ -366,7 +367,7 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
     
     try:
         url_instance = get_url_instance()
-        proto, host, _ = parse_url(url_instance)
+        proto, host, port, pathname = parse_url(url_instance)
         proto = 'http:'
         liste_urls.add(proto + '//' + host)
         # liste_urls.add(get_url_instance())
@@ -389,6 +390,7 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
         except OSError as e:
             if e.errno in (103, 104, -2):
                 # ECONNABORTED ou connexion refusee/serveur introuvable, essayer prochain relai
+                print("errno %s connexion %s" % (e.errno, fiche_url))
                 continue
             else:
                 raise e
@@ -456,7 +458,7 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
             return loads(buffer.get_data()), certificat
         except Exception as e:
             print("Erreur parsing fiche %s", e)
-    
+
     return None, None
 
 
@@ -478,7 +480,8 @@ async def charger_relais(ui_lock=None, refresh=False, buffer=None):
             return url_relais
     except Exception as e:
         print("Erreur chargement fiche, utiliser relais connus : %s" % str(e))
-        
+        sys.print_exception(e)
+
     # Retourner les relais deja connus
     return info_relais['relais']
 
@@ -554,12 +557,19 @@ async def charger_timeinfo(url_relai: str, buffer, refresh: False):
         if offset_info is None:
             with open('tzoffset.json', 'wb') as fichier:
                 dump({'offset': 0}, fichier)
-        
+
+
 def parse_url(url):
     try:
         proto, dummy, host, path = url.split("/", 3)
     except:
         proto, dummy, host = url.split("/", 2)
         path = None
-    return proto, host, path
+
+    try:
+        host, port = host.split(":", 2)
+    except:
+        port = None
+
+    return proto, host, port, path
 

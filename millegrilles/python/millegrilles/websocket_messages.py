@@ -364,6 +364,11 @@ class PollingThread:
                 # Connecter
                 try:
                     await self.connecter()
+                except AssertionError:
+                    # Erreur connexion (e.g. status code 502)
+                    self.__url_relai = None
+                    self.entretien_url_relai()
+                    continue
                 except OSError as e:
                     if e.errno == 104:
                         # ECONNRESET
