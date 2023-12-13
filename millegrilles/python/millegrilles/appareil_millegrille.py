@@ -2,7 +2,7 @@
 import json
 import time
 import machine
-import micropython
+import os
 import sys
 import uasyncio as asyncio
 
@@ -282,7 +282,7 @@ class Runner:
         certificat_recu = False
         while certificat_recu is False:
             try:
-                stat(PATH_CERT)
+                os.stat(PATH_CERT)
                 certificat_recu = True
                 break  # Certificat existe
             except:
@@ -298,7 +298,8 @@ class Runner:
                     if ose.errno == 12:
                         raise ose
                     else:
-                        print("OS Error " % str(ose))
+                        print("OS Error %s" % str(ose))
+                        sys.print_exception(ose)
                 except (AttributeError, IndexError):
                     print("Aucun url relais")
                 except Exception as e:
