@@ -231,8 +231,39 @@ def set_configuration_programmes(configuration: dict):
     
 
 def sauvegarder_relais(fiche: dict):
-    url_relais = [app['url'] for app in fiche['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
-    sauvegarder_relais_liste(url_relais)
+    # url_relais = [app['url'] for app in fiche['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
+
+    app_instance_pathname = dict()
+    for instance_id, app_params in fiche['applicationsV2']['senseurspassifs_relai']['instances'].items():
+        try:
+            app_instance_pathname[instance_id] = app_params['pathname']
+            print("instance_id %s pathname %s" % (instance_id, app_params['pathname']))
+        except KeyError:
+            pass
+
+    print("relais %d instances" % len(app_instance_pathname))
+
+    url_relais = list()
+    for instance_id, instance_params in fiche['instances'].items():
+        try:
+            pathname = app_instance_pathname[instance_id]
+        except KeyError:
+            continue  # Pas de path
+
+        try:
+            port = instance_params['ports']['https']
+        except KeyError:
+            port = 443
+
+        try:
+            for domaine in instance_params['domaines']:
+                url_relais.append(f'https://{domaine}:{port}{pathname}')
+        except KeyError:
+            pass
+
+    if len(url_relais) > 0:
+        sauvegarder_relais_liste(url_relais)
+
     return url_relais
 
 
@@ -244,7 +275,18 @@ def sauvegarder_relais_liste(url_relais: list):
     except (OSError, KeyError):
         print("relais.json non disponible")
 
-    if info_relais is None or info_relais['relais'] != url_relais:
+    # Verifier si le contenu a change
+    change = False
+    if info_relais is None:
+        change = True
+    elif len(info_relais['relais']) != len(url_relais):
+        change = True
+    else:
+        for relai in url_relais:
+            if relai not in info_relais['relais']:
+                change = True
+
+    if change:
         print('Sauvegarder relais.json maj')
         try:
             with open('relais.json', 'wb') as fichier:
@@ -252,4 +294,6 @@ def sauvegarder_relais_liste(url_relais: list):
         except Exception as e:
             print('Erreur sauvegarde relais.json')
             print_exception(e)
+    else:
+        print("Relais non changes")
 

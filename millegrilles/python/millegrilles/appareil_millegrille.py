@@ -395,6 +395,7 @@ class Runner:
     async def charger_urls(self):
         if self.__wifi_ok is True:
             refresh = self.__prochain_refresh_fiche != 0 and self.__prochain_refresh_fiche >= time.time()
+            # refresh = self.__prochain_refresh_fiche >= time.time()
 
             collect()
             relais = await charger_relais(
@@ -456,9 +457,10 @@ class Runner:
                 print("Mode operation: %s" % self._mode_operation)
 
                 if self._mode_operation >= CONST_MODE_CHARGER_URL_RELAIS:
-                    if self.__url_relais is None or len(self.__url_relais) == 0:
-                        # Recharger les relais
-                        await self.charger_urls()
+                    await self.charger_urls()
+                    # if self.__url_relais is None or len(self.__url_relais) == 0:
+                    #     # Recharger les relais
+                    #     await self.charger_urls()
 
                 # Cleanup memoire
                 await asyncio.sleep_ms(1)  # Yield

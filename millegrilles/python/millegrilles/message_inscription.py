@@ -387,8 +387,8 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
             # reponse = await requests.get(fiche_url, lock=ui_lock)
             reponse = urequests.get(fiche_url)
         except OSError as e:
-            if e.errno == -2:
-                # Connexion refusee/serveur introuvable, essayer prochain relai
+            if e.errno in (103, 104, -2):
+                # ECONNABORTED ou connexion refusee/serveur introuvable, essayer prochain relai
                 continue
             else:
                 raise e
