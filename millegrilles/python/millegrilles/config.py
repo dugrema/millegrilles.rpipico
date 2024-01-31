@@ -25,6 +25,9 @@ CONST_HTTP_TIMEOUT_DEFAULT = const(60)
 
 CONST_CHAMP_HTTP_INSTANCE = const('http_instance')
 
+CONST_CHAMPS_SOLAIRE = const(('dawn', 'sunrise', 'noon', 'sunset', 'dusk'))
+CONST_SOLAIRE_CHANGEMENT = const(120)
+
 async def detecter_mode_operation():
     # Si wifi.txt/idmg.txt manquants, on est en mode initial.
     try:
@@ -161,6 +164,51 @@ async def set_timezone_offset(offset, timezone=None):
             params['timezone'] = timezone
         with open('tzoffset.json', 'wb') as fichier:
             dump(params, fichier)
+
+
+def temps_liste_to_secs(temps_list: list):
+    temps = temps_list[0] * 3600
+    try:
+        temps += temps_list[1] * 60
+    except IndexError:
+        pass
+    try:
+        temps += temps_list[2]
+    except IndexError:
+        pass
+    return temps
+
+
+async def set_horaire_solaire(solaire: dict):
+    print("set solaire %s" % solaire)
+    try:
+        with open('solaire.json', 'rb') as fichier:
+            solaire_courant = load(fichier)
+    except OSError:
+        # sauvegarder information directement
+        with open('solaire.json', 'wb') as fichier:
+            print("maj solaire(1)")
+            dump(solaire, fichier)
+        return
+
+    # Comparer valeurs recues, eviter write IO si les changements sont mineurs pour reduire usure de la memoire flash
+    val_max = 0
+    for champ in CONST_CHAMPS_SOLAIRE:
+        try:
+            # Comparer la valeur courant a la valeur recue, obtenir difference absolue
+            val = temps_liste_to_secs(solaire[champ]) + 86400
+            val_courant = temps_liste_to_secs(solaire_courant[champ]) + 86400
+            val = abs(val_courant - val)
+        except KeyError:
+            # Valeur manquante, forcer sauvegarde
+            val_max = CONST_SOLAIRE_CHANGEMENT + 1
+        else:
+            val_max = max(val, val_max)
+
+    if val_max > CONST_SOLAIRE_CHANGEMENT:  # Limite de 2 minutes pour changer le contenu
+        with open('solaire.json', 'wb') as fichier:
+            print("maj solaire(2) diff %d secs" % val_max)
+            dump(solaire, fichier)
 
 
 def set_configuration_display(configuration: dict):

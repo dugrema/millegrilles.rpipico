@@ -4,7 +4,7 @@ import json
 from binascii import unhexlify
 
 from millegrilles.config import set_configuration_display, update_configuration_programmes, \
-     set_timezone_offset, sauvegarder_relais, sauvegarder_relais_liste
+     set_timezone_offset, sauvegarder_relais, sauvegarder_relais_liste, set_horaire_solaire
 
 from millegrilles.certificat import get_userid_local
 from millegrilles.message_inscription import recevoir_certificat
@@ -82,13 +82,23 @@ async def challenge_led_blink(appareil, commande: dict):
 async def recevoir_timezone_offset(appareil, commande):
     try:
         reponse = json.loads(commande['contenu'])
+    except KeyError:
+        print("offset contenu absent")
+        return
+
+    try:
         offset = reponse['timezone_offset']
         timezone = reponse.get('timezone')
         print("Set offset recu : %s, timezone: %s" % (offset, timezone))
-        # appareil.set_timezone_offset(offset)
         await set_timezone_offset(offset, timezone)
     except KeyError:
         print("offset absent du message")
+
+    try:
+        solaire = reponse['solaire_utc']
+        await set_horaire_solaire(solaire)
+    except KeyError:
+        print("solaire absent du message tz")
 
 
 async def recevoir_configuration_display(reponse):

@@ -214,11 +214,27 @@ async def charger_timeinfo(chiffrage_messages, websocket, buffer, refresh: False
     else:
         timezone_str = offset_info.get('timezone')
 
+    latitude = None
+    longitude = None
+    try:
+        with open('geoposition.json', 'rb') as fichier:
+            geoposition = load(fichier)
+        latitude = geoposition['latitude']
+        longitude = geoposition['longitude']
+    except OSError:
+        print('geoposition.json absent')
+    except KeyError:
+        print('geoposition.json erreur contenu')
+
     print("Charger information timezone %s" % timezone_str)
 
     if chiffrage_messages.pret is True:
         # Chiffrer le message
-        requete = await chiffrage_messages.chiffrer({'timezone': timezone_str})
+        requete = {'timezone': timezone_str}
+        if latitude and longitude:
+            requete['latitude'] = latitude
+            requete['longitude'] = longitude
+        requete = await chiffrage_messages.chiffrer(requete)
         requete['routage'] = {'action': 'getTimezoneInfo'}
     else:
         requete = await generer_message_timeinfo(timezone_str)
