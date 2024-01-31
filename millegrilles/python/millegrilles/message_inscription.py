@@ -9,7 +9,7 @@ from os import rename, remove
 from sys import print_exception
 from uasyncio import sleep, sleep_ms
 from gc import collect
-from json import load, loads
+from json import load, loads, dump, dumps
 
 from millegrilles import urequests2 as requests
 from millegrilles.certificat import valider_certificats, \
@@ -17,7 +17,7 @@ from millegrilles.certificat import valider_certificats, \
      get_expiration_certificat_local, generer_cle_secrete, sauvegarder_ca, \
      PATH_CERT, PATH_CLE_PRIVEE, PATHNAME_RENOUVELER
 from millegrilles.mgmessages import formatter_message, verifier_message
-from millegrilles.config import get_user_id, get_timezone, get_idmg, sauvegarder_relais, get_url_instance
+from millegrilles.config import get_user_id, get_timezone, get_idmg, sauvegarder_relais, get_url_instance, set_timezone_offset
 
 
 # Generer le nom d'appareil avec le machine unique_id du RPi PICO
@@ -502,61 +502,64 @@ async def generer_message_timeinfo(timezone_str: str):
     return message_inscription
 
 
-async def charger_timeinfo(url_relai: str, buffer, refresh: False):
-    
-    offset_info = None
-    try:
-        with open('tzoffset.json', 'rb') as fichier:
-            offset_info = load(fichier)
-            if refresh is False:
-                return offset_info['offset']
-    except OSError:
-        print('tzoffset.json absent')
-    except KeyError:
-        print('tzoffset.json erreur contenu')
-    
-    print("Charger information timezone %s" % url_relai)
-    timezone_str = get_timezone()
-    if timezone_str is not None:
-        buffer.set_text(dumps(await generer_message_timeinfo(timezone_str)))
-        
-        await sleep_ms(1)  # Yield
-        collect()
-        await sleep_ms(1)  # Yield
-        
-        reponse = await requests.post(
-            url_relai + '/' + CONST_PATH_TIMEINFO,
-            data=buffer.get_data(),
-            headers={'Content-Type': 'application/json'}
-        )
-
-        try:
-            await reponse.read_text_into(buffer)
-            reponse = None
-
-            await sleep_ms(1)  # Yield
-            collect()
-            await sleep_ms(1)  # Yield
-
-            # data = await reponse.json()
-            data = loads(buffer.get_data())
-            offset = data['timezone_offset']
-            print("Offset : %s" % offset)
-            
-            if offset_info is None or offset_info['offset'] != offset:
-                with open('tzoffset.json', 'wb') as fichier:
-                    dump({'offset': offset}, fichier)
-            
-            return offset
-        except KeyError:
-            return None
-        finally:
-            if reponse is not None:
-                reponse.close()
-    else:
-        if offset_info is None:
-            with open('tzoffset.json', 'wb') as fichier:
-                dump({'offset': 0}, fichier)
+# async def charger_timeinfo(url_relai: str, buffer, refresh: False):
+#
+#     offset_info = None
+#     try:
+#         with open('tzoffset.json', 'rb') as fichier:
+#             offset_info = load(fichier)
+#             if refresh is False:
+#                 return offset_info['offset']
+#     except OSError:
+#         print('tzoffset.json absent')
+#     except KeyError:
+#         print('tzoffset.json erreur contenu')
+#
+#     print("Charger information timezone %s" % url_relai)
+#     timezone_str = get_timezone()
+#     if timezone_str is not None:
+#         buffer.set_text(dumps(await generer_message_timeinfo(timezone_str)))
+#
+#         await sleep_ms(1)  # Yield
+#         collect()
+#         await sleep_ms(1)  # Yield
+#
+#         reponse = await requests.post(
+#             url_relai + '/' + CONST_PATH_TIMEINFO,
+#             data=buffer.get_data(),
+#             headers={'Content-Type': 'application/json'}
+#         )
+#
+#         try:
+#             await reponse.read_text_into(buffer)
+#             reponse = None
+#
+#             await sleep_ms(1)  # Yield
+#             collect()
+#             await sleep_ms(1)  # Yield
+#
+#             # data = await reponse.json()
+#             data = loads(buffer.get_data())
+#             print("TZ info : %s" % data)
+#             offset = data['timezone_offset']
+#             timezone_str = data.get('timezone') or timezone_str
+#
+#             if offset_info is None or offset_info['offset'] != offset:
+#                 # with open('tzoffset.json', 'wb') as fichier:
+#                 #     dump({'offset': offset, 'timezone': timezone_str}, fichier)
+#                 set_timezone_offset(offset, timezone=timezone_str)
+#
+#             return offset
+#         except KeyError:
+#             return None
+#         finally:
+#             if reponse is not None:
+#                 reponse.close()
+#     else:
+#         if offset_info is None:
+#             set_timezone_offset(0, timezone='UTC')
+#             # with open('tzoffset.json', 'wb') as fichier:
+#             #     dump({'offset': 0}, fichier)
 
 
 def parse_url(url):

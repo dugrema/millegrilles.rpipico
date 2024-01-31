@@ -82,6 +82,7 @@ async def challenge_led_blink(appareil, commande: dict):
 async def recevoir_timezone_offset(appareil, commande):
     try:
         reponse = json.loads(commande['contenu'])
+        print("tz reponse %s" % reponse)
     except KeyError:
         print("offset contenu absent")
         return
@@ -89,8 +90,10 @@ async def recevoir_timezone_offset(appareil, commande):
     try:
         offset = reponse['timezone_offset']
         timezone = reponse.get('timezone')
-        print("Set offset recu : %s, timezone: %s" % (offset, timezone))
-        await set_timezone_offset(offset, timezone)
+        transition_time = reponse.get('transition_time')
+        transition_offset = reponse.get('transition_offset')
+        print("Set offset recu : %s, timezone: %s, transition: %s, next offset: %s" % (offset, timezone, transition_time, transition_offset))
+        await set_timezone_offset(offset, timezone, transition_time, transition_offset)
     except KeyError:
         print("offset absent du message")
 

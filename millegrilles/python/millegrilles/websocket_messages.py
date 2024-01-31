@@ -11,9 +11,11 @@ from uwebsockets.client import connect
 from millegrilles.certificat import get_expiration_certificat_local
 from millegrilles.mgmessages import formatter_message, verifier_message
 from handler_commandes import traiter_commande
-from millegrilles.config import get_http_timeout, set_configuration_display, get_timezone, set_timezone_offset
+from millegrilles.config import get_http_timeout, set_configuration_display, get_timezone, set_timezone_offset, CONST_PATH_TZOFFSET, get_tz_offset
 
 from millegrilles.message_inscription import verifier_renouveler_certificat_ws, charger_relais, generer_message_timeinfo
+
+CONST_VERSION = const('2024.0.1')
 
 PATHNAME_POLL = const('/poll')
 PATHNAME_REQUETE = const('/requete')
@@ -193,26 +195,22 @@ async def requete_relais_web(chiffrage_messages, websocket, buffer):
 
 
 async def charger_timeinfo(chiffrage_messages, websocket, buffer, refresh: False):
-    
-    offset_info = None
+
+    offset = None
     try:
-        with open('tzoffset.json', 'rb') as fichier:
-            offset_info = load(fichier)
-            if refresh is False:
-                return offset_info['offset']
+        offset = get_tz_offset()
+        if refresh is False:
+            return offset
     except OSError:
         print('tzoffset.json absent')
     except KeyError:
         print('tzoffset.json erreur contenu')
 
-    if offset_info is None:
+    timezone_str = get_timezone()
+    if offset is None and timezone_str is None:
         timezone_str = None
         # Generer fichier dummy
-        offset_info = {'offset': 0}
-        with open('tzoffset.json', 'wb') as fichier:
-            dump(offset_info, fichier)
-    else:
-        timezone_str = offset_info.get('timezone')
+        set_timezone_offset(0, timezone='UTC')
 
     latitude = None
     longitude = None
@@ -247,8 +245,6 @@ async def charger_timeinfo(chiffrage_messages, websocket, buffer, refresh: False
 
     # Emettre requete
     websocket.send(buffer.get_data())
-
-    return offset_info
 
 
 async def verifier_signature(reponse, buffer, task_runner):
@@ -332,14 +328,11 @@ class PollingThread:
 
         if self.__refresh_step <= 3:
             self.__refresh_step = 4
-            offset = await charger_timeinfo(
+            await charger_timeinfo(
                 chiffrage_messages,
                 self.__websocket,
                 buffer=self.__buffer,
                 refresh=True)
-            if offset is not None:
-                print("Set offset %s" % offset)
-                set_timezone_offset(offset)
             return
         
         if self.__refresh_step <= 4:
@@ -541,7 +534,7 @@ class PollingThread:
             return
 
         cle_publique = chiffrage_messages.generer_cle()
-        message = {'peer': cle_publique}
+        message = {'peer': cle_publique, 'version': CONST_VERSION}
 
         print('echanger_secret public %s' % message)
 

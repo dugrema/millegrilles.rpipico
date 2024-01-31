@@ -14,6 +14,7 @@ CONST_PATH_FICHIER_CONN = const('conn.json')
 CONST_PATH_FICHIER_DISPLAY = const('displays.json')
 CONST_PATH_FICHIER_PROGRAMMES = const('programmes.json')
 CONST_PATH_TIMEINFO = const('timeinfo')
+CONST_PATH_TZOFFSET = const('tzoffset.json')
 
 CONST_MODE_INIT = const(1)
 CONST_MODE_RECUPERER_CA = const(2)
@@ -118,18 +119,17 @@ def get_user_id():
 
 def get_timezone():
     try:
-        with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
+        with open(CONST_PATH_TZOFFSET, 'rb') as fichier:
             return load(fichier)['timezone']
-    except KeyError:
+    except (KeyError, OSError, ValueError):
         return None
 
 
 def get_tz_offset():
     try:
-        with open('tzoffset.json', 'rb') as fichier:
-            offset_info = load(fichier)
-        return offset_info['offset']
-    except (KeyError, OSError):
+        with open(CONST_PATH_TZOFFSET, 'rb') as fichier:
+            return load(fichier)['offset']
+    except (KeyError, OSError, ValueError):
         return None
 
 
@@ -145,24 +145,31 @@ def get_tz_offset():
 #         e = None
 
 
-async def set_timezone_offset(offset, timezone=None):
+async def set_timezone_offset(offset, timezone=None, transition_time=None, transition_offset=None):
     print("Offset : %s" % offset)
 
     # Charger info, aucun write si information non changee
-    offset_info = None
     try:
-        with open('tzoffset.json', 'rb') as fichier:
-            offset_info = load(fichier)
-        timezone_courant = offset_info.get('timezone')
-    except OSError:
-        print('tzoffset.json absent')
-        timezone_courant = None
+        with open(CONST_PATH_TZOFFSET, 'rb') as fichier:
+            tz_courant = load(fichier)
+    except (OSError, ValueError):
+        print('tzoffset.json absent/invalide')
+        diff = True
+    else:
+        diff = offset != tz_courant.get('offset')
+        diff |= timezone and timezone != tz_courant.get('timezone')
+        diff |= transition_time and transition_time != tz_courant.get('transition_time')
+        diff |= transition_offset and transition_offset != tz_courant.get('transition_offset')
 
-    if offset_info is None or offset_info['offset'] != offset:
-        params = {'offset': offset, 'timezone': timezone_courant}
-        if timezone is not None:  # Override timezone
-            params['timezone'] = timezone
-        with open('tzoffset.json', 'wb') as fichier:
+    if diff:
+        print("overwrite %s" % CONST_PATH_TZOFFSET)
+        with open(CONST_PATH_TZOFFSET, 'wb') as fichier:
+            params = {
+                'offset': offset,
+                'timezone': timezone or tz_courant.get('timezone'),
+                'transition_time': transition_time or tz_courant.get('transition_time'),
+                'transition_offset': transition_offset or tz_courant.get('transition_offset')
+            }
             dump(params, fichier)
 
 
