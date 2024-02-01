@@ -4,7 +4,7 @@ import json
 from binascii import unhexlify
 
 from millegrilles.config import set_configuration_display, update_configuration_programmes, \
-     set_timezone_offset, sauvegarder_relais, sauvegarder_relais_liste, set_horaire_solaire
+     set_timezone_offset, sauvegarder_relais, sauvegarder_relais_liste, set_horaire_solaire, get_timezone
 
 from millegrilles.certificat import get_userid_local
 from millegrilles.message_inscription import recevoir_certificat
@@ -60,6 +60,8 @@ async def traiter_commande(buffer, websocket, appareil, commande: dict, info_cer
         await recevoir_echanger_secret(buffer, websocket, appareil, commande, info_certificat)
     elif action == 'resetSecret':
         await recevoir_reset_secret(appareil)
+    elif action == 'majConfigurationAppareil':
+        await recevoir_maj_configuration_appareil(appareil, buffer, websocket, commande)
     else:
         raise ValueError('Action inconnue : %s' % action)
     
@@ -188,3 +190,34 @@ async def recevoir_reset_secret(appareil):
     print('reset secret')
     chiffrage_messages = appareil.chiffrage_messages
     chiffrage_messages.clear()
+
+
+async def recevoir_maj_configuration_appareil(appareil, buffer, websocket, commande):
+    try:
+        reponse = json.loads(commande['contenu'])
+        print("maj appareil event %s" % reponse)
+    except KeyError:
+        print("maj appareil contenu absent")
+        return
+
+    timezone = reponse.get('timezone')
+    timezone_courant = get_timezone()
+    if timezone == timezone_courant:
+        return  # Identique, aucuns changements
+
+    chiffrage_messages = appareil.chiffrage_messages
+
+    if chiffrage_messages.pret is False:
+        return  # Skip
+
+    print("tz recu : %s, remplacer timezone courant : %s" % (timezone, timezone_courant))
+
+    # Chiffrer le message
+    requete = {'timezone': timezone}
+    requete = await chiffrage_messages.chiffrer(requete)
+    requete['routage'] = {'action': 'getTimezoneInfo'}
+
+    buffer.set_text(json.dumps(requete))
+
+    # Emettre requete
+    websocket.send(buffer.get_data())
