@@ -155,11 +155,15 @@ async def set_timezone_offset(offset, timezone=None, transition_time=None, trans
     except (OSError, ValueError):
         print('tzoffset.json absent/invalide')
         diff = True
+        tz_courant = dict()
     else:
         diff = offset != tz_courant.get('offset')
         diff |= timezone and timezone != tz_courant.get('timezone')
-        diff |= transition_time and transition_time != tz_courant.get('transition_time')
-        diff |= transition_offset and transition_offset != tz_courant.get('transition_offset')
+        try:
+            diff |= transition_time and transition_time != tz_courant.get('transition_time')
+            diff |= transition_offset and transition_offset != tz_courant.get('transition_offset')
+        except TypeError:
+            diff = True
 
     if diff:
         print("overwrite %s" % CONST_PATH_TZOFFSET)
