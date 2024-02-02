@@ -1,5 +1,9 @@
 import time
+
 import uasyncio as asyncio
+
+from sys import print_exception
+
 from ujson import load
 from handler_devices import import_driver
 
@@ -32,27 +36,38 @@ class ProgrammesHandler:
 
         if actif is False:
             # On ne configure / charge pas un programme inactif
-            return None
+            return
 
         try:
-            existant = self._programmes[configuration['programme_id']]
+            programme_id = configuration['programme_id']
+        except KeyError:
+            print("Programme id manquant")
+            return
+
+        try:
+            existant = self._programmes[programme_id]
             # Le programme existe, on le met a jour
             await existant.maj(configuration)
             print("Programme %s maj" % existant.programme_id)
         except KeyError:
             # Programme n'existe pas
-            programme_id = configuration['programme_id']
             print("Charger programme %s" % programme_id)
-            programme_class = import_driver(configuration['class'])
-            args = configuration.get('args') or dict()
-            programme_instance = programme_class(self._appareil, programme_id, args)
+            try:
+                programme_class = import_driver(configuration['class'])
+                args = configuration.get('args') or dict()
+                programme_instance = programme_class(self._appareil, programme_id, args)
 
-            # Ajouter programme et demarrer thread
-            self._programmes[programme_instance.programme_id] = programme_instance
+                # Ajouter programme et demarrer thread
+                self._programmes[programme_id] = programme_instance
 
-            # Demarrer l'execution du programme
-            asyncio.create_task(programme_instance.run_task())
-            print("Programme %s demarre" % programme_id)
+                # Demarrer l'execution du programme
+                asyncio.create_task(programme_instance.run_task())
+                print("Programme %s demarre" % programme_id)
+            except ImportError as e:
+                print("Erreur import programme %s : %s" % (programme_id, e))
+            except (KeyError, ValueError, AttributeError) as e:
+                print("Erreur config programme %s : %s" % (programme_id, e))
+                print_exception(e)
 
     async def arreter_programme(self, programme_id):
         try:
@@ -76,11 +91,6 @@ class ProgrammesHandler:
             return  # Le fichier n'existe pas, rien a faire
 
         for programme in config_programmes.values():  # config_programmes['programmes']:
-            # programme_id = programme['programme_id']
-            # print("Charger programme %s" % programme_id)
-            # programme_class = import_driver(programme['class'])
-            # args = programme.get('args') or dict()
-            # programme_instance = programme_class(self._appareil, programme_id, args)
             await self.ajouter_programme(programme)
 
     async def get_notifications(self):

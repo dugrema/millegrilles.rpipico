@@ -15,6 +15,7 @@ CONST_PATH_FICHIER_DISPLAY = const('displays.json')
 CONST_PATH_FICHIER_PROGRAMMES = const('programmes.json')
 CONST_PATH_TIMEINFO = const('timeinfo')
 CONST_PATH_TZOFFSET = const('tzoffset.json')
+CONST_PATH_SOLAIRE = const('solaire.json')
 
 CONST_MODE_INIT = const(1)
 CONST_MODE_RECUPERER_CA = const(2)
@@ -133,18 +134,6 @@ def get_tz_offset():
         return None
 
 
-# async def get_timezone_offset(self):
-#     try:
-#         if self.__timezone_offset is None:
-#             self.__timezone_offset = await charger_timeinfo(self.__url_relai_courant)
-#             if self.__timezone_offset is None:
-#                 self.__timezone_offset = False  # Desactiver chargement
-#     except Exception as e:
-#         print("Erreur chargement timezone")
-#         sys.print_exception(e)
-#         e = None
-
-
 async def set_timezone_offset(offset, timezone=None, transition_time=None, transition_offset=None):
     print("Offset : %s" % offset)
 
@@ -193,11 +182,11 @@ def temps_liste_to_secs(temps_list: list):
 async def set_horaire_solaire(solaire: dict):
     print("set solaire %s" % solaire)
     try:
-        with open('solaire.json', 'rb') as fichier:
+        with open(CONST_PATH_SOLAIRE, 'rb') as fichier:
             solaire_courant = load(fichier)
     except OSError:
         # sauvegarder information directement
-        with open('solaire.json', 'wb') as fichier:
+        with open(CONST_PATH_SOLAIRE, 'wb') as fichier:
             print("maj solaire(1)")
             dump(solaire, fichier)
         return
@@ -217,9 +206,17 @@ async def set_horaire_solaire(solaire: dict):
             val_max = max(val, val_max)
 
     if val_max > CONST_SOLAIRE_CHANGEMENT:  # Limite de 2 minutes pour changer le contenu
-        with open('solaire.json', 'wb') as fichier:
+        with open(CONST_PATH_SOLAIRE, 'wb') as fichier:
             print("maj solaire(2) diff %d secs" % val_max)
             dump(solaire, fichier)
+
+
+def get_horaire_solaire():
+    try:
+        with open(CONST_PATH_SOLAIRE, 'rb') as fichier:
+            return load(fichier)
+    except OSError:
+        return
 
 
 def set_configuration_display(configuration: dict):
