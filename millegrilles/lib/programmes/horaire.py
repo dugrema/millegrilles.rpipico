@@ -183,6 +183,9 @@ class HoraireHebdomadaire(ProgrammeActif):
         return cedule_horaire
         
     async def loop(self):
+        # Attendre que l'horloge interne soit prete (pour calculer horaire)
+        await self._appareil.rtc_pret.wait()
+
         etat_desire = self.__verifier_etat_desire()
         print("TimerHebdomadaire %s etat desire %s" % (self.programme_id, etat_desire))
 

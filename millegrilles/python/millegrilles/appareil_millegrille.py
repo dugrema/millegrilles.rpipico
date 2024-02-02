@@ -103,11 +103,13 @@ class Runner:
         self.__emit_event = asyncio.Event()    # Indique que l'etat a ete modifie, doit etre emis
         self.__stale_event = asyncio.Event()   # Indique que l'etat interne doit etre mis a jour
         self.__lectures_event = asyncio.Event()  # Utilise pour attendre une maj de lectures
+        self.__rtc_pret = asyncio.Event()       # Indique que WIFI et l'heure interne (RTC) sont prets.
+        self.__websocket_pret = asyncio.Event() # Indique que l'appareil est connecte et pret.
         self.__url_relais = None
         self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
         
         self.__wifi_ok = False
-        self.__ntp_ok = False
+        # self.__ntp_ok = False
         self.__prochain_entretien_certificat = 0
         self.__prochain_refresh_fiche = 0
         self.__timezone_offset = None
@@ -119,6 +121,25 @@ class Runner:
 
         # Information de chiffrage
         self.__chiffrage_messages = ChiffrageMessages()
+
+    def set_rtc_pret(self):
+        if self.__rtc_pret.is_set() is not True:
+            self.__rtc_pret.set()
+
+    def set_websocket_pret(self):
+        if self.__websocket_pret.is_set() is not True:
+            self.__websocket_pret.set()
+
+    def reset_websocket_pret(self):
+        self.__websocket_pret.clear()
+
+    @property
+    def rtc_pret(self) -> asyncio.Event:
+        return self.__rtc_pret
+
+    @property
+    def websocket_pret(self) -> asyncio.Event:
+        return self.__websocket_pret
 
     @property
     def emit_event(self):
@@ -169,7 +190,7 @@ class Runner:
     
     @property
     def timezone(self):
-        if self.__ntp_ok is False:
+        if self.__rtc_pret.is_set() is not True:
             return None
         return get_tz_offset()
     
@@ -179,7 +200,7 @@ class Runner:
     
     @property
     def wifi_ok(self):
-        return self.__wifi_ok
+        return self.__rtc_pret.is_set()
     
     @property
     def display_actif(self):
@@ -355,10 +376,12 @@ class Runner:
             if init is True:
                 # Premiere run a l'initialisation
                 break
-            
-            if self.__ntp_ok is False:
-                # Tenter de charger la date
-                await asyncio.sleep(15)
+
+            if self.__rtc_pret.is_set() is not True:
+                try:
+                    await asyncio.wait_for(self.__rtc_pret.wait(), 3)
+                except asyncio.TimeoutError:
+                    pass
             else:
                 await asyncio.sleep(120)
 
@@ -369,6 +392,7 @@ class Runner:
                 self.__wifi_ok = wifi.is_wifi_ok()
 
                 if self.__wifi_ok is False:
+                    self.__rtc_pret.clear()
                     print("Restart wifi")
                     ip = await initialiser_wifi()
                     if ip is not None:
@@ -380,9 +404,10 @@ class Runner:
 
             if self.__wifi_ok is True:
 
-                if self.__ntp_ok is False:
+                if self.__rtc_pret.is_set() is not True:
                     set_time()
-                    self.__ntp_ok = True
+                    self.set_rtc_pret()
+                    # self.__ntp_ok = True
 
                 if self._mode_operation == CONST_MODE_POLLING:
                     await entretien_certificat()
@@ -394,7 +419,7 @@ class Runner:
             self.__ui_lock.release()
 
     async def charger_urls(self):
-        if self.__wifi_ok is True:
+        if self.__rtc_pret.is_set() is True:
             refresh = self.__prochain_refresh_fiche != 0 and self.__prochain_refresh_fiche >= time.time()
             # refresh = self.__prochain_refresh_fiche >= time.time()
 
@@ -470,9 +495,12 @@ class Runner:
 
                 if self._mode_operation == CONST_MODE_INIT:
                     await self.__initialisation()
-                elif self.__wifi_ok is False:
+                elif self.__rtc_pret.is_set() is False:
                     await led_executer_sequence(const_leds.CODE_WIFI_NON_CONNECTE, 1, self.__ui_lock)
-                    await asyncio.sleep(30)
+                    try:
+                        await asyncio.wait_for(self.__rtc_pret.wait(), 30)
+                    except asyncio.TimeoutError:
+                        pass
                     continue
                 elif self._mode_operation == CONST_MODE_RECUPERER_CA:
                     await self.__recuperer_ca()

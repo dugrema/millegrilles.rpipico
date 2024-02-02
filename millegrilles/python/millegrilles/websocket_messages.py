@@ -366,6 +366,7 @@ class PollingThread:
         
         print("Expiration thread %s (exp cert %s)" % (expiration_thread, expiration_certificat))
 
+        self.__appareil.set_websocket_pret()
         while expiration_thread > time.time() and self.__memory_error < 10:
             try:
                 print("Expiration thread dans %s " % (expiration_thread - time.time()))
@@ -430,6 +431,7 @@ class PollingThread:
                         collect()
 
             finally:
+                self.__appareil.reset_websocket_pret()
                 print("Close websocket")
                 mem_info()
                 try:
