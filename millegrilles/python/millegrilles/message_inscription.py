@@ -468,8 +468,11 @@ async def charger_relais(ui_lock=None, refresh=False, buffer=None):
     try:
         with open('relais.json') as fichier:
             info_relais = load(fichier)
-            if refresh is False:
-                return info_relais['relais']
+
+        print('relais.json %s, refresh %s' % (info_relais, refresh))
+
+        if refresh is False:
+            return info_relais['relais']
     except (OSError, KeyError):
         print("relais.json non disponible")
     

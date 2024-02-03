@@ -15,7 +15,7 @@ from millegrilles.config import get_http_timeout, set_configuration_display, get
 
 from millegrilles.message_inscription import verifier_renouveler_certificat_ws, charger_relais, generer_message_timeinfo
 
-CONST_VERSION = const('2024.0.1')
+CONST_VERSION = const('2024.0.2')
 
 PATHNAME_POLL = const('/poll')
 PATHNAME_REQUETE = const('/requete')

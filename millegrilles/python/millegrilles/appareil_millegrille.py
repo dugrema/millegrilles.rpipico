@@ -428,14 +428,15 @@ class Runner:
             transition_time, transition_offset = get_timezone_transition()
             transition_delta = transition_time - time.time()
             print('tz transition dans %d secs' % transition_delta)
-        except:
-            transition_delta = None
 
-        if transition_delta < 180:
-            # On se met en mode d'attente de transition
-            await asyncio.sleep(transition_delta)
-            await transition_timezone()
-            return True
+            if transition_delta < 180:
+                # On se met en mode d'attente de transition
+                await asyncio.sleep(transition_delta)
+                await transition_timezone()
+                return True
+
+        except:
+            pass
 
         return False
 
@@ -503,18 +504,18 @@ class Runner:
     def pop_relais(self):
         return self.__url_relais.pop()
     
-    # def set_timezone_offset(self, offset):
-    #     self.__timezone_offset = offset
-
     async def _polling(self):
         """
         Main thread d'execution du polling/commandes
         """
         collect()
-        #if self.__prochain_refresh_fiche <= time.time():
-        #    duree_thread = 60
-        #else:
-        #    duree_thread = CONST_DUREE_THREAD_POLLING
+
+        if self.__url_relais is None or len(self.__url_relais) == 0:
+            await self.charger_urls()
+
+        if self.__url_relais is None or len(self.__url_relais) == 0:
+            raise Exception("aucuns relais, abort poll")
+
         duree_thread = CONST_DUREE_THREAD_POLLING
         polling_thread = PollingThread(self, BUFFER_MESSAGE, duree_thread=duree_thread)
         await polling_thread.preparer()
@@ -543,9 +544,9 @@ class Runner:
                     #     await self.charger_urls()
 
                 # Cleanup memoire
-                await asyncio.sleep_ms(1)  # Yield
+                await asyncio.sleep(0)  # Yield
                 collect()
-                await asyncio.sleep_ms(1)  # Yield
+                await asyncio.sleep(0)  # Yield
 
                 if self._mode_operation == CONST_MODE_INIT:
                     await self.__initialisation()
