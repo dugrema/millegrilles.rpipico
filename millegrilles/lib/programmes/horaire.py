@@ -63,7 +63,11 @@ class HoraireMinuteEffet:
         timestamp_now = time.time()
         year_now, month_now, day_now, hour_now, minute_now, second_now, dow_now, yd_now = time.gmtime(timestamp_now)
 
-        if config_solaire and config_solaire.get(self.__solaire):
+        if self.__solaire:
+            if config_solaire is None or config_solaire.get(self.__solaire) is None:
+                print('Config solaire absente, skip')
+                return None
+
             # Note : horaire solaire est exprime en heure/minute UTC
             hour, minute = config_solaire[self.__solaire]
             timestamp_horaire = time.mktime((year_now, month_now, day_now, hour, minute, 0, None, None))
@@ -288,6 +292,8 @@ class HoraireHebdomadaire(ProgrammeActif):
         if timezone_offset is not None:
             print("calculer horaire offset %s" % timezone_offset)
             cedule_appliquee = [c.appliquer(timezone_offset, horaire_solaire, inverse) for c in self.__cedule]
+            # Retirer entrees none (timezone ou solaire manquant)
+            cedule_appliquee = [c for c in cedule_appliquee if c is not None]
             cedule_appliquee.sort()
             print("calculer_horaire cedule : %s" % cedule_appliquee)
 
