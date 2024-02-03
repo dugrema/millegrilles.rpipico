@@ -135,6 +135,38 @@ def get_tz_offset():
         return None
 
 
+def get_timezone_transition():
+    try:
+        with open(CONST_PATH_TZOFFSET, 'rb') as fichier:
+            info_tz = load(fichier)
+        transition_time = info_tz['transition_time']
+        transition_offset = info_tz['transition_offset']
+        return transition_time, transition_offset
+    except (KeyError, OSError, ValueError):
+        pass
+
+    return None, None
+
+
+async def transition_timezone():
+    """ Effectuer une transition de timezone """
+    try:
+        with open(CONST_PATH_TZOFFSET, 'rb') as fichier:
+            info_tz = load(fichier)
+        await sleep(0)
+
+        # Extraire timezone et le nouvel offset a appliquer
+        timezone = info_tz['timezone']
+        transition_offset = info_tz['transition_offset']
+
+        print("tz transition a %s" % transition_offset)
+
+        # Ecraser l'information courante. Ceci supprime l'information de transition qui vient de prendre effet.
+        await set_timezone_offset(transition_offset, timezone)
+    except (KeyError, OSError, ValueError):
+        pass
+
+
 async def set_timezone_offset(offset, timezone=None, transition_time=None, transition_offset=None):
     print("Offset : %s" % offset)
 
@@ -147,13 +179,15 @@ async def set_timezone_offset(offset, timezone=None, transition_time=None, trans
         diff = True
         tz_courant = dict()
     else:
+        await sleep(0)
         diff = offset != tz_courant.get('offset')
         diff |= timezone and timezone != tz_courant.get('timezone')
-        try:
-            diff |= transition_time and transition_time != tz_courant.get('transition_time')
-            diff |= transition_offset and transition_offset != tz_courant.get('transition_offset')
-        except TypeError:
-            diff = True
+        if transition_time and transition_offset:
+            try:
+                diff |= transition_time and transition_time != tz_courant.get('transition_time')
+                diff |= transition_offset and transition_offset != tz_courant.get('transition_offset')
+            except TypeError:
+                diff = True
 
     if diff:
         print("overwrite %s" % CONST_PATH_TZOFFSET)

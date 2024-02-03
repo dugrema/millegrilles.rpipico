@@ -28,6 +28,7 @@ from millegrilles.chiffrage import ChiffrageMessages
 # from dev import config
 from millegrilles.config import \
      detecter_mode_operation, get_tz_offset, initialisation, initialiser_wifi, get_relais, \
+     get_timezone_transition, transition_timezone, \
      CONST_MODE_INIT, \
      CONST_MODE_RECUPERER_CA, \
      CONST_MODE_CHARGER_URL_RELAIS, \
@@ -415,7 +416,28 @@ class Runner:
                 except asyncio.TimeoutError:
                     pass
             else:
-                await asyncio.sleep(120)
+                # Verifier si on approche du changement d'heure (daylight savings)
+                # Va bloquer si la transition est due dans moins de 3 minutes
+                transition_faite = await self.transition_timezone()
+
+                if transition_faite is False:
+                    await asyncio.sleep(120)
+
+    async def transition_timezone(self):
+        try:
+            transition_time, transition_offset = get_timezone_transition()
+            transition_delta = transition_time - time.time()
+            print('tz transition dans %d secs' % transition_delta)
+        except:
+            transition_delta = None
+
+        if transition_delta < 180:
+            # On se met en mode d'attente de transition
+            await asyncio.sleep(transition_delta)
+            await transition_timezone()
+            return True
+
+        return False
 
     async def __entretien_cycle(self):
         try:
