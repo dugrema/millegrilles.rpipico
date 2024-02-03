@@ -16,6 +16,7 @@ CONST_PATH_FICHIER_PROGRAMMES = const('programmes.json')
 CONST_PATH_TIMEINFO = const('timeinfo')
 CONST_PATH_TZOFFSET = const('tzoffset.json')
 CONST_PATH_SOLAIRE = const('solaire.json')
+CONST_PATH_RELAIS = const('relais.json')
 
 CONST_MODE_INIT = const(1)
 CONST_MODE_RECUPERER_CA = const(2)
@@ -326,10 +327,10 @@ def sauvegarder_relais(fiche: dict):
 def sauvegarder_relais_liste(url_relais: list):
     info_relais = None
     try:
-        with open('relais.json') as fichier:
+        with open(CONST_PATH_RELAIS) as fichier:
             info_relais = load(fichier)
     except (OSError, KeyError):
-        print("relais.json non disponible")
+        print("%s non disponible" % CONST_PATH_RELAIS)
 
     # Verifier si le contenu a change
     change = False
@@ -343,13 +344,20 @@ def sauvegarder_relais_liste(url_relais: list):
                 change = True
 
     if change:
-        print('Sauvegarder relais.json maj')
+        print('Sauvegarder %s maj' % CONST_PATH_RELAIS)
         try:
-            with open('relais.json', 'wb') as fichier:
+            with open(CONST_PATH_RELAIS, 'wb') as fichier:
                 dump({'relais': url_relais}, fichier)
         except Exception as e:
-            print('Erreur sauvegarde relais.json')
+            print('Erreur sauvegarde %s' % CONST_PATH_RELAIS)
             print_exception(e)
     else:
         print("Relais non changes")
 
+
+def get_relais():
+    try:
+        with open(CONST_PATH_RELAIS, 'rb') as fichier:
+            return load(fichier)['relais']
+    except (OSError, KeyError):
+        return

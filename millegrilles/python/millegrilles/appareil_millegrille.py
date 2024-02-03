@@ -5,8 +5,8 @@ import machine
 import os
 import sys
 import uasyncio as asyncio
+import urequests
 
-from ntptime import settime
 from gc import collect
 from micropython import mem_info
 
@@ -22,12 +22,12 @@ from handler_devices import DeviceHandler
 from handler_programmes import ProgrammesHandler
 from millegrilles.certificat import entretien_certificat as __entretien_certificat, PATH_CERT
 from millegrilles.message_inscription import run_inscription, recuperer_ca, charger_relais, \
-     verifier_renouveler_certificat as __verifier_renouveler_certificat
+     verifier_renouveler_certificat as __verifier_renouveler_certificat, parse_url
 from millegrilles.chiffrage import ChiffrageMessages
 
 # from dev import config
 from millegrilles.config import \
-     detecter_mode_operation, get_tz_offset, initialisation, initialiser_wifi, \
+     detecter_mode_operation, get_tz_offset, initialisation, initialiser_wifi, get_relais, \
      CONST_MODE_INIT, \
      CONST_MODE_RECUPERER_CA, \
      CONST_MODE_CHARGER_URL_RELAIS, \
@@ -46,9 +46,41 @@ CONST_PATH_FICHIER_DISPLAY = const('displays.json')
 BUFFER_MESSAGE = mgmessages.BufferMessage(16*1024)
 
 
-def set_time():
-    settime()
-    print("NTP Time : ", time.gmtime())
+async def set_time():
+    from ntptime import settime
+    # ntptime.host = 'maple.maceroc.com'
+    try:
+        settime()
+        print("NTP Time : ", time.gmtime())
+    except OSError as e:
+        import sys
+        print('NTP erreur')
+        sys.print_exception(e)
+        await asyncio.sleep(0)
+
+        # Tenter acces via relais
+        url_relais = get_relais()
+        if url_relais:
+            for relai in url_relais:
+                print("parse relai %s" % relai)
+                proto, host, port, pathname = parse_url(relai)
+                print("relai %s:%s" % (host, port))
+                url_time = 'http://%s/%s' % (host, 'time.txt')
+                reponse = urequests.get(url_time)
+                await asyncio.sleep(0)
+                if reponse.status_code == 200:
+                    time_reponse = reponse.text
+                    print("time reponse text : %s" % time_reponse)
+                    await asyncio.sleep(0)
+                    time_reponse_int = int(time_reponse.split('.')[0])
+                    print("time reponse : %s -> %s" % (time_reponse, time_reponse_int))
+                    from machine import RTC
+                    year, month, day, hour, minute, second, dow, doy = time.gmtime(time_reponse_int)
+                    rtc = RTC()
+                    rtc.datetime((year, month, day, dow, hour, minute, second, None))
+                    return
+
+        raise e
 
 
 def reboot(e=None):
@@ -405,7 +437,7 @@ class Runner:
             if self.__wifi_ok is True:
 
                 if self.__rtc_pret.is_set() is not True:
-                    set_time()
+                    await set_time()
                     self.set_rtc_pret()
                     # self.__ntp_ok = True
 
