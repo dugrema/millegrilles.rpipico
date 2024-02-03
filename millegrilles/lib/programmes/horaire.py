@@ -245,6 +245,8 @@ class HoraireHebdomadaire(ProgrammeActif):
 
     def __verifier_etat_desire(self):
         """ Determine si la valeur des senseurs justifie etat ON ou OFF. """
+        if self.programme_actif is False:
+            return None  # inactif
 
         # Par defaut, aucun changement
         nouvel_etat = None

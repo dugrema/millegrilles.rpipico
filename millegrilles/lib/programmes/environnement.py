@@ -120,6 +120,8 @@ class ProgrammeEnvironnement(ProgrammeActif):
 
     def _verifier_etat_desire(self):
         """ Determine si la valeur des senseurs justifie etat ON ou OFF. """
+        if self.programme_actif is False:
+            return None  # inactif
 
         if self.__expiration_hold is not None:
             if self.__expiration_hold > time.time():

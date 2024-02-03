@@ -34,9 +34,9 @@ class ProgrammesHandler:
     async def ajouter_programme(self, configuration: dict):
         actif = configuration.get('actif') or False
 
-        if actif is False:
-            # On ne configure / charge pas un programme inactif
-            return
+        # if actif is False:
+        #     # On ne configure / charge pas un programme inactif
+        #     return
 
         try:
             programme_id = configuration['programme_id']
@@ -50,6 +50,10 @@ class ProgrammesHandler:
             await existant.maj(configuration)
             print("Programme %s maj" % existant.programme_id)
         except KeyError:
+            if actif is False:
+                # On ne charge pas un programme inactif
+                return
+
             # Programme n'existe pas
             print("Charger programme %s" % programme_id)
             try:
@@ -120,12 +124,17 @@ class ProgrammeActif:
         self._arreter = asyncio.Event()
         self.__reloading = False
         self.__intervalle_onetime = None  # Permet de faire un override de l'intervalle
+        self.__programme_actif = True
 
         if args is not None:
             self.charger_args(args)
 
     def charger_args(self, args):
         pass
+
+    @property
+    def programme_actif(self):
+        return self.__programme_actif
 
     @property
     def actif(self):
@@ -172,9 +181,11 @@ class ProgrammeActif:
         raise Exception('loop() Not Implemented')
 
     async def maj(self, configuration: dict):
-        self.charger_args(configuration['args'])
-
+        print("Maj programme config : %s" % configuration)
         actif = configuration.get('actif') or False
+
+        self.charger_args(configuration['args'])
+        self.__programme_actif = actif
         if actif is True and self._arreter.is_set():
             print("Redemarrer programme %s" % self._programme_id)
             self._arreter.clear()
