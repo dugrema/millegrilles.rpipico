@@ -24,12 +24,14 @@ class TransitionTimestampEffet:
     def __lt__(self, other):
         if self.timestamp < other.timestamp:
             return True
-        if self.etat < other.etat:
+
+        if self.timestamp == other.timestamp and self.etat < other.etat:
             return True
+
         return False
 
     def __str__(self):
-        return 'TransitionTimestampEffet ts:{} etat => {}'.format(self.timestamp, self.etat)
+        return 'TransitionTimestampEffet ts: {} etat => {}'.format(self.timestamp, self.etat)
 
     def __repr__(self):
         return self.__str__()
@@ -54,7 +56,7 @@ class HoraireMinuteEffet:
         self.__jour = jour
         self.__solaire = solaire
 
-    def appliquer(self, timezone_offset: int, config_solaire: dict = None) -> TransitionTimestampEffet:
+    def appliquer(self, timezone_offset: int, config_solaire: dict = None, inverse=False) -> TransitionTimestampEffet:
         if timezone_offset is None:
             raise ValueError('tz offset manquant')
 
@@ -70,11 +72,16 @@ class HoraireMinuteEffet:
                 # Appliquer offset en minutes (e.g. dawn + 15 minutes)
                 timestamp_horaire = timestamp_horaire + 60 * self.__minute
 
-            if timestamp_horaire < timestamp_now:
-                # Augmenter le timestamp de 24h (prochain evenement solaire du meme type)
-                timestamp_horaire = timestamp_horaire + JOUR_SECS
+            if inverse:
+                if timestamp_horaire > timestamp_now:
+                    # Retirer le timestamp de 24h (evenement solaire precedent du meme type)
+                    timestamp_horaire = timestamp_horaire - JOUR_SECS
+            else:
+                if timestamp_horaire < timestamp_now:
+                    # Augmenter le timestamp de 24h (prochain evenement solaire du meme type)
+                    timestamp_horaire = timestamp_horaire + JOUR_SECS
 
-            print("prochain %s -> %s" % (self.__solaire, timestamp_horaire))
+            print("evenement solaire %s -> %s" % (self.__solaire, timestamp_horaire))
         elif isinstance(self.__heure, int) and isinstance(self.__minute, int):
             # Appliquer heure et minute en fonction du timezone offset
             timestamp_horaire = time.mktime((year_now, month_now, day_now, self.__heure, self.__minute, 0, None, None))
@@ -83,27 +90,42 @@ class HoraireMinuteEffet:
             # print("offset recu %s, appliquer a %s" % (timezone_offset, timestamp_horaire))
             timestamp_horaire = timestamp_horaire - timezone_offset # + offset_local
 
-            if timestamp_horaire < timestamp_now:
-                # Augmenter le timestamp de 24h (prochaine heure identique)
-                timestamp_horaire += JOUR_SECS
+            if inverse:
+                if timestamp_horaire > timestamp_now:
+                    # Diminuer le timestamp de 24h (heure identique jour precedent)
+                    timestamp_horaire -= JOUR_SECS
+            else:
+                if timestamp_horaire < timestamp_now:
+                    # Augmenter le timestamp de 24h (prochaine heure identique)
+                    timestamp_horaire += JOUR_SECS
 
-            print("prochaine heure %s:%s => %s" % (self.__heure, self.__minute, timestamp_horaire))
+            print("evenement heure %s:%s => %s" % (self.__heure, self.__minute, timestamp_horaire))
         else:
             raise ValueError("horaire vals incompatibles : %s" % self)
 
         if isinstance(self.__jour, str):
-            jour = int(self.__jour)
+            # Jour desire
+            jour_prog = int(self.__jour)
+            # Jour courant
+            dow_now = time.gmtime(timestamp_horaire + timezone_offset)[6]
+
             # Trouver le prochain jour de la semaine correspondant
-            dow = time.gmtime(timestamp_horaire + timezone_offset)[6]
-            diff_jours = jour - dow
-            if diff_jours < 0:
+            diff_jours = jour_prog - dow_now
+            if inverse is True:
+                if diff_jours > 0:
+                    # On a le nombre de jours a retirer (e.g. vendredi(4) - mardi(1) => 3, on veut -4 jours depuis le dernier vendredi
+                    diff_jours = -1 * (7-diff_jours)
+                elif diff_jours < 0:
+                    # On a deja le nombre de jours depuis le dernier mardi : mardi(1) - vendredi(4) = -3,
+                    pass
+            elif inverse is False and diff_jours < 0:
                 # Ajouter une semaine au nombre negatif, donne le nombre de jours a ajouter
                 diff_jours += 7
 
             # print("Ajustement de %d jours" % diff_jours)
             timestamp_horaire += diff_jours * JOUR_SECS
 
-            print("prochain wkday %s -> %s" % (self.__jour, timestamp_horaire))
+            print("evenement wkday %s -> %s" % (self.__jour, timestamp_horaire))
 
         return TransitionTimestampEffet(self.__etat, timestamp_horaire)
 
@@ -151,6 +173,9 @@ class HoraireHebdomadaire(ProgrammeActif):
         # Format: [ {"etat": 1, "heure": 8, "minute": 15, "jours_semaine": [5]}, ... ] 
         self.__cedule: list[HoraireMinuteEffet] = list()
 
+        self.__activation_initiale = False
+        self.__premiere_execution_complete = False
+
         # Init apres, appelle charger_args() dans super
         super().__init__(appareil, programme_id, args, intervalle=60_000)
 
@@ -162,7 +187,9 @@ class HoraireHebdomadaire(ProgrammeActif):
         super().charger_args(args)
         self.__switches = args['switches']
         self.__cedule = self.__charger_cedule(args['horaire'])
-        print("Nouvelle cedule chargee pour %s : %s" % (self._programme_id, self.__cedule))
+        self.__activation_initiale = args.get('activationInitiale') or False
+        print("Nouvelle cedule chargee pour %s : %s (activationInitiale: %s)" % (
+            self._programme_id, self.__cedule, self.__activation_initiale))
 
     def __charger_cedule(self, cedule_args: list):
         cedule_horaire = list()
@@ -188,6 +215,7 @@ class HoraireHebdomadaire(ProgrammeActif):
 
         etat_desire = self.__verifier_etat_desire()
         print("TimerHebdomadaire %s etat desire %s" % (self.programme_id, etat_desire))
+        self.__premiere_execution_complete = True  # On a calcule le premier etat desire
 
         changement = False
         if etat_desire is not None:
@@ -227,11 +255,18 @@ class HoraireHebdomadaire(ProgrammeActif):
         else:
             # Verifier si on execute la transition
             if self.__prochaine_transition.timestamp <= time.time():
-                print("Executer transition : %s" % self.__prochaine_transition.transition)
+                print("Executer transition : %s" % self.__prochaine_transition.etat)
                 # Conserver transition
-                nouvel_etat = self.__prochaine_transition.transition.etat
+                nouvel_etat = self.__prochaine_transition.etat
                 recalculer_transitions = True
-        
+
+        if nouvel_etat is None and self.__activation_initiale and self.__premiere_execution_complete is False:
+            print("Calculer etat init horaire")
+            transition_precedente = self.__calculer_horaire(inverse=True)
+            if transition_precedente:
+                nouvel_etat = transition_precedente.etat
+                print("etat init : %s" % nouvel_etat)
+
         if recalculer_transitions:
             # Calculer prochaine transition
             prochaine_transition = self.__calculer_horaire()
@@ -245,19 +280,22 @@ class HoraireHebdomadaire(ProgrammeActif):
         
         return nouvel_etat
 
-    def __calculer_horaire(self) -> TransitionTimestampEffet:
+    def __calculer_horaire(self, inverse=False) -> TransitionTimestampEffet:
         # Charger info timezone, solaire a partir du flash
         horaire_solaire = get_horaire_solaire()
         timezone_offset = self._appareil.timezone
 
         if timezone_offset is not None:
             print("calculer horaire offset %s" % timezone_offset)
-            cedule_appliquee = [c.appliquer(timezone_offset, horaire_solaire) for c in self.__cedule]
+            cedule_appliquee = [c.appliquer(timezone_offset, horaire_solaire, inverse) for c in self.__cedule]
             cedule_appliquee.sort()
             print("calculer_horaire cedule : %s" % cedule_appliquee)
 
             try:
-                return cedule_appliquee.pop(0)
+                if inverse:
+                    return cedule_appliquee.pop()  # Derniere valeur (plus recente transition)
+                else:
+                    return cedule_appliquee.pop(0)  # Premiere valeur (prochaine transition)
             except IndexError:
                 return
         else:

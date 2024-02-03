@@ -14,6 +14,9 @@ def comparer_dict(d1, d2):
     if not isinstance(d1, dict) or not isinstance(d2, dict):
         raise Exception('Mauvais type')
 
+    if len(d1) != len(d2):
+        return False
+
     try:
         for k, v1 in d1.items():
             v2 = d2[k]
