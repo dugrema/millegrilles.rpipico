@@ -6,6 +6,7 @@ SRC_PYTHON = \
 
 SRC_MILLEGRILLES = \
     millegrilles/appareil_millegrille.mpy \
+    millegrilles/bluetooth.mpy \
     millegrilles/certificat.mpy \
     millegrilles/config.mpy \
     millegrilles/const_leds.mpy \
@@ -19,6 +20,7 @@ SRC_MILLEGRILLES = \
     millegrilles/uping.mpy \
     millegrilles/urequests2.mpy \
     millegrilles/websocket_messages.mpy \
+    millegrilles/version.mpy \
     millegrilles/wifi.mpy
 
 %.mpy: %.py
