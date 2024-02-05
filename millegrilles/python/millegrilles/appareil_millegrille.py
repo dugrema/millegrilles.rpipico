@@ -17,6 +17,8 @@ from millegrilles.ledblink import led_executer_sequence
 
 from millegrilles import feed_display
 
+from mgbluetooth import BluetoothHandler
+
 from millegrilles.websocket_messages import PollingThread, CONST_DUREE_THREAD_POLLING
 from handler_devices import DeviceHandler
 from handler_programmes import ProgrammesHandler
@@ -130,6 +132,7 @@ class Runner:
         self._device_handler = DeviceHandler(self)
         self._programmes_handler = ProgrammesHandler(self)
         self.task_runner = None  # TaskRunner()
+        self._bluetooth_handler = BluetoothHandler(self)
 
         self._lectures_courantes = dict()
         self._lectures_externes = dict()
@@ -625,14 +628,30 @@ class Runner:
 
         # Demarrer thread entretien (wifi, date, configuration)
         await self.entretien(init=True)
-        asyncio.create_task(self.entretien())
+        entretien_task = asyncio.create_task(self.entretien())
 
         # Task devices
-        asyncio.create_task(self._device_handler.run(
+        devices_task = asyncio.create_task(self._device_handler.run(
             self.__ui_lock, self.recevoir_lectures, self.get_feeds, 20_000))
 
+        # Task bluetooth
+        bluetooth_task = asyncio.create_task(self._bluetooth_handler.run())
+
         # Executer main loop
-        await self.__main()
+        main_task = asyncio.create_task(self.__main())
+
+        err = None
+        try:
+            await asyncio.gather(entretien_task, devices_task, bluetooth_task, main_task)
+        except Exception as e:
+            err = e
+            sys.print_exception(e)
+            print("Erreur main(), reboot dans 30 secondes")
+        else:
+            print("main() arrete, reboot dans 30 secondes")
+
+        await asyncio.sleep(30)
+        reboot(err)
 
     def afficher_info(self):
         print(CONST_INFO_SEP)
