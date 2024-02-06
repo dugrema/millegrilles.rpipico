@@ -4,9 +4,11 @@ import aioble
 import json
 import struct
 import sys
+import time
 
 from micropython import const
 from millegrilles.message_inscription import NOM_APPAREIL
+from millegrilles.wifi import pack_info_wifi
 
 
 # org.bluetooth.service.environmental_sensing
@@ -31,8 +33,9 @@ _ENV_SETUSER_WRITE_UUID = bluetooth.UUID('7aac7586-88d7-480f-8a01-65406c2decaf')
 _ENV_ETAT_UUID = bluetooth.UUID('7aac7590-88d7-480f-8a01-65406c2decaf')
 _ENV_ETAT_USERID_UUID = bluetooth.UUID('7aac7591-88d7-480f-8a01-65406c2decaf')
 _ENV_ETAT_IDMG_UUID = bluetooth.UUID('7aac7592-88d7-480f-8a01-65406c2decaf')
-_ENV_ETAT_WIFI_UUID = bluetooth.UUID('7aac7593-88d7-480f-8a01-65406c2decaf')
-_ENV_ETAT_TIME_UUID = bluetooth.UUID('7aac7594-88d7-480f-8a01-65406c2decaf')
+_ENV_ETAT_WIFI1_UUID = bluetooth.UUID('7aac7593-88d7-480f-8a01-65406c2decaf')
+_ENV_ETAT_WIFI2_UUID = bluetooth.UUID('7aac7594-88d7-480f-8a01-65406c2decaf')
+_ENV_ETAT_TIME_UUID = bluetooth.UUID('7aac7595-88d7-480f-8a01-65406c2decaf')
 
 # How frequently to send advertising beacons.
 _ADV_INTERVAL_MS = const(250_000)
@@ -53,12 +56,12 @@ class BluetoothHandler:
 
         self.__setwifi_write_characteristic = None
         self.__setrelais_write_characteristic = None
-        #self.__getprofil_config_characteristic = None
         self.__setuser_write_characteristic = None
 
         self.__getetat_idmg_characteristic = None
         self.__getetat_userid_characteristic = None
-        self.__getetat_wifi_characteristic = None
+        self.__getetat_wifi1_characteristic = None
+        self.__getetat_wifi2_characteristic = None
         self.__getetat_time_characteristic = None
 
     async def __initialiser(self):
@@ -78,6 +81,7 @@ class BluetoothHandler:
             self.__temp_service, _ENV_SENSE_HUM_UUID, read=True, notify=True
         )
 
+        # Config
         self.__config_service = aioble.Service(_ENV_CONFIG_UUID)
         self.__setwifi_write_characteristic = aioble.Characteristic(
             self.__config_service, _ENV_SETWIFI_WRITE_UUID, write=True, capture=True, notify=True
@@ -85,26 +89,31 @@ class BluetoothHandler:
         self.__setrelais_write_characteristic = aioble.Characteristic(
             self.__config_service, _ENV_SETRELAIS_WRITE_UUID, write=True, capture=True, notify=True
         )
-        self.__getprofil_idmg_characteristic = aioble.BufferedCharacteristic(
-            self.__config_service, _ENV_GETPROFIL_IDMG_UUID, read=True, max_len=56
-        )
-        self.__getprofil_userid_characteristic = aioble.BufferedCharacteristic(
-            self.__config_service, _ENV_GETPROFIL_USERID_UUID, read=True, max_len=51
-        )
-        self.__getprofil_config_characteristic = aioble.Characteristic(
-            self.__config_service, _ENV_GETPROFIL_CONFIG_UUID,
-            read=True, write=True, capture=True, notify=True, indicate=True,
-        )
-        # self.__setrelais_write_characteristic = aioble.Characteristic(
-        #     self.__config_service, _ENV_SETRELAIS_WRITE_UUID, write=True, capture=True, notify=True
-        # )
         self.__setuser_write_characteristic = aioble.Characteristic(
             self.__config_service, _ENV_SETUSER_WRITE_UUID, write=True, capture=True, notify=True
         )
 
+        # Etat
+        self.__etat_service = aioble.Service(_ENV_ETAT_UUID)
+        self.__getetat_idmg_characteristic = aioble.BufferedCharacteristic(
+            self.__etat_service, _ENV_ETAT_IDMG_UUID, read=True, max_len=56
+        )
+        self.__getetat_userid_characteristic = aioble.BufferedCharacteristic(
+            self.__etat_service, _ENV_ETAT_USERID_UUID, read=True, max_len=51
+        )
+        self.__getetat_wifi1_characteristic = aioble.Characteristic(
+            self.__etat_service, _ENV_ETAT_WIFI1_UUID, read=True, notify=True
+        )
+        self.__getetat_wifi2_characteristic = aioble.Characteristic(
+            self.__etat_service, _ENV_ETAT_WIFI2_UUID, read=True, notify=True
+        )
+        self.__getetat_time_characteristic = aioble.Characteristic(
+            self.__etat_service, _ENV_ETAT_TIME_UUID, read=True, notify=True
+        )
+
         self.__etat_service = aioble.Service(_ENV_ETAT_UUID)
 
-        aioble.register_services(self.__temp_service, self.__config_service)
+        aioble.register_services(self.__etat_service, self.__config_service, self.__temp_service)
 
     async def run(self):
 
@@ -112,25 +121,24 @@ class BluetoothHandler:
             await self.__initialiser()
 
             entretien_task = asyncio.create_task(self.entretien())
+            update_etat_task = asyncio.create_task(self.update_etat_task())
             peripheral_task = asyncio.create_task(self.peripheral_task())
             wifi_set_task = asyncio.create_task(self.wifi_set_task())
             relais_set_task = asyncio.create_task(self.relais_set_task())
-            get_profil_task = asyncio.create_task(self.get_profil_task())
+            # get_profil_task = asyncio.create_task(self.get_profil_task())
             user_set_task = asyncio.create_task(self.user_set_task())
 
-            await asyncio.gather(entretien_task, peripheral_task, wifi_set_task, relais_set_task, get_profil_task, user_set_task)
+            await asyncio.gather(
+                entretien_task, update_etat_task, peripheral_task,
+                wifi_set_task, relais_set_task, user_set_task,
+                # get_profil_task,
+            )
         except Exception as e:
             import sys
             sys.print_exception(e)
             print("Bluetooth non disponible")
 
     async def entretien(self):
-        try:
-            await self.load_sensor()
-        except Exception as e:
-            print("Erreur load_sensor")
-            sys.print_exception(e)
-
         try:
             self.load_profil_config()
         except Exception as e:
@@ -140,11 +148,25 @@ class BluetoothHandler:
 
         await asyncio.sleep(30)
 
-    async def load_sensor(self):
-        # TODO Lire senseurs
-        # temp_characteristic.write(_encode_temperature(t))
-        # hum_characteristic.write(_encode_humidity(h))
-        pass
+    async def update_etat_task(self):
+        while True:
+            self.update_etat()
+            await asyncio.sleep_ms(5_000)
+
+    def update_etat(self):
+        # Mettre l'heure
+        rtc = self.__runner.rtc_pret.is_set()
+        time_val = time.time()
+        encoded_time = struct.pack('<BI', rtc, time_val)
+        self.__getetat_time_characteristic.write(encoded_time)
+
+        # Mettre etat wifi
+        status_1, status_2 = pack_info_wifi()
+        self.__getetat_wifi1_characteristic.write(status_1)
+        self.__getetat_wifi2_characteristic.write(status_2)
+
+        # Lire senseurs (etat instantane)
+        # TODO : Lire senseurs
 
     async def peripheral_task(self):
         while True:
@@ -251,27 +273,27 @@ class BluetoothHandler:
 
         print('user change pour %s' % existant)
 
-    async def get_profil_task(self):
-        while True:
-            # connection, value = await self.__getprofil_config_characteristic.written()
-            await self.__getprofil_config_characteristic.written()
-
-            with open('conn.json', 'rb') as fichier:
-                contenu = fichier.read()
-
-            while len(contenu) > 0:
-                slice_contenu = contenu[0:20]
-                contenu = contenu[20:]
-                print('Profil : %s' % contenu)
-
-                self.__getprofil_config_characteristic.write(slice_contenu, send_update=True)
-
-                # Donner 3ms au client pour lire le buffer
-                await asyncio.sleep_ms(3)
-
-            # Indiqer qu'il ne reste rien a recevoir
-            print("profil termine")
-            self.__getprofil_config_characteristic.write(b'\x00', send_update=True)
+    # async def get_profil_task(self):
+    #     while True:
+    #         # connection, value = await self.__getprofil_config_characteristic.written()
+    #         await self.__getprofil_config_characteristic.written()
+    #
+    #         with open('conn.json', 'rb') as fichier:
+    #             contenu = fichier.read()
+    #
+    #         while len(contenu) > 0:
+    #             slice_contenu = contenu[0:20]
+    #             contenu = contenu[20:]
+    #             print('Profil : %s' % contenu)
+    #
+    #             self.__getprofil_config_characteristic.write(slice_contenu, send_update=True)
+    #
+    #             # Donner 3ms au client pour lire le buffer
+    #             await asyncio.sleep_ms(3)
+    #
+    #         # Indiqer qu'il ne reste rien a recevoir
+    #         print("profil termine")
+    #         self.__getprofil_config_characteristic.write(b'\x00', send_update=True)
 
     def load_profil_config(self):
         try:
@@ -280,15 +302,13 @@ class BluetoothHandler:
 
             try:
                 idmg = config['idmg'].encode('utf-8')
-                self.__getprofil_idmg_characteristic.write(idmg)
-                idmg = None
+                self.__getetat_idmg_characteristic.write(idmg)
             except KeyError:
                 pass
 
             try:
                 user_id = config['user_id'].encode('utf-8')
-                self.__getprofil_userid_characteristic.write(user_id)
-                user_id = None
+                self.__getetat_userid_characteristic.write(user_id)
             except KeyError:
                 pass
         except OSError:

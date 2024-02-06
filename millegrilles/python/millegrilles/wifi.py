@@ -1,5 +1,6 @@
 import json
 import network
+import struct
 import uasyncio as asyncio
 from . import uping
 
@@ -88,4 +89,27 @@ def is_wifi_ok():
     print("is_wifi_ok : Ping gateway (%s) failed" % gw_ip)
 
     return False
-    
+
+
+def map_ip_bytes(ip):
+    return bytes(map(int, (ip).split('.')))
+
+
+def get_wifi_detail():
+    wlan = network.WLAN(network.STA_IF)
+    connected = wlan.isconnected()
+    status = wlan.status()
+    ssid = wlan.config('ssid')
+    channel = wlan.config('channel')
+    ifconfig = wlan.ifconfig()
+    client_ip, client_mask, gw_ip, dns_ip = ifconfig
+    return connected, status, ssid, channel, client_ip, client_mask, gw_ip, dns_ip
+
+
+def pack_info_wifi():
+    val = get_wifi_detail()
+    connected, status, ssid, channel, client_ip, client_mask, gw_ip, dns_ip = val
+    vals = [connected, status, channel, map_ip_bytes(client_ip), map_ip_bytes(client_mask), map_ip_bytes(gw_ip), map_ip_bytes(dns_ip)]
+    status_1 = struct.pack('<BBB4s4s4s4s', *vals)
+    status_2 = ssid.encode('utf-8')[:20]
+    return status_1, status_2
