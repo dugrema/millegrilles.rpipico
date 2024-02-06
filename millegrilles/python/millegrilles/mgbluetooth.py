@@ -24,9 +24,6 @@ _ADV_APPEARANCE_GENERIC_THERMOMETER = const(768)
 _ENV_CONFIG_UUID = bluetooth.UUID('7aac7580-88d7-480f-8a01-65406c2decaf')
 _ENV_SETWIFI_WRITE_UUID = bluetooth.UUID('7aac7581-88d7-480f-8a01-65406c2decaf')
 _ENV_SETRELAIS_WRITE_UUID = bluetooth.UUID('7aac7582-88d7-480f-8a01-65406c2decaf')
-#_ENV_GETPROFIL_IDMG_UUID = bluetooth.UUID('7aac7583-88d7-480f-8a01-65406c2decaf')
-#_ENV_GETPROFIL_USERID_UUID = bluetooth.UUID('7aac7584-88d7-480f-8a01-65406c2decaf')
-#_ENV_GETPROFIL_CONFIG_UUID = bluetooth.UUID('7aac7585-88d7-480f-8a01-65406c2decaf')
 _ENV_SETUSER_WRITE_UUID = bluetooth.UUID('7aac7586-88d7-480f-8a01-65406c2decaf')
 
 # Service d'etat appareil MilleGrille
@@ -110,8 +107,6 @@ class BluetoothHandler:
         self.__getetat_time_characteristic = aioble.Characteristic(
             self.__etat_service, _ENV_ETAT_TIME_UUID, read=True, notify=True
         )
-
-        self.__etat_service = aioble.Service(_ENV_ETAT_UUID)
 
         aioble.register_services(self.__etat_service, self.__config_service, self.__temp_service)
 
