@@ -105,6 +105,7 @@ class BluetoothHandler:
 
         try:
             await self.__initialiser()
+            print('BLE start')
 
             entretien_task = asyncio.create_task(self.entretien())
             update_etat_task = asyncio.create_task(self.update_etat_task())
@@ -153,7 +154,7 @@ class BluetoothHandler:
                 async with await aioble.advertise(
                     _ADV_INTERVAL_MS,
                     name=NOM_APPAREIL,
-                    services=[_ENV_SENSE_UUID, _ENV_ETAT_UUID],
+                    services=[_ENV_CONFIG_UUID],
                     appearance=_ADV_APPEARANCE_GENERIC_THERMOMETER,
                 ) as connection:
                     print("BLE connection from", connection.device)
