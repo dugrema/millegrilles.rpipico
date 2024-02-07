@@ -414,7 +414,7 @@ class Runner:
                     print("Restart wifi")
                     ip = await initialiser_wifi()
                     if ip is not None:
-                        wifi_ok = True
+                        self.__wifi_ok = True
                         print("Wifi OK : ", ip)
                     else:
                         print("Wifi echec")
@@ -437,15 +437,17 @@ class Runner:
             self.__ui_lock.release()
 
     async def charger_urls(self):
-        print('charger_urls*')
+        collect()
+        await asyncio.sleep(0)
+
         if self.__rtc_pret.is_set() is True:
             try:
-                refresh = self.__prochain_refresh_fiche == 0 or self.__prochain_refresh_fiche >= time.time()
+                refresh = self.__prochain_refresh_fiche == 0 or self.__prochain_refresh_fiche <= time.time()
                 collect()
                 await asyncio.sleep(0)
 
                 relais = get_relais()
-                print('charger_urls relais %s' % relais)
+                print('charger_urls pre-refresh %s' % relais)
                 if refresh:
                     try:
                         fiche, certificat = await charger_fiche(buffer=BUFFER_MESSAGE)
@@ -508,19 +510,18 @@ class Runner:
 
     async def __main(self):
         self._mode_operation = await detecter_mode_operation()
-        print("Mode operation initial %d" % self._mode_operation)
+        CONST_MODE_OPERATION_INTIAL = const("Mode operation initial %d")
+        print(CONST_MODE_OPERATION_INTIAL % self._mode_operation)
         
         await led_executer_sequence(const_leds.CODE_MAIN_DEMARRAGE, executions=1, ui_lock=self.__ui_lock)
         while True:
             try:
                 self._mode_operation = await detecter_mode_operation()
-                print("Mode operation: %s" % self._mode_operation)
+                CONST_MODE_OPERATION = const("Mode operation: %s")
+                print(CONST_MODE_OPERATION % self._mode_operation)
 
                 if self._mode_operation >= CONST_MODE_CHARGER_URL_RELAIS:
                     await self.charger_urls()
-                    # if self.__url_relais is None or len(self.__url_relais) == 0:
-                    #     # Recharger les relais
-                    #     await self.charger_urls()
 
                 # Cleanup memoire
                 await asyncio.sleep(0)  # Yield
@@ -545,19 +546,22 @@ class Runner:
                     await self._polling()
                     continue
                 else:
-                    print("Mode operation non supporte : %d" % self._mode_operation)
+                    CONST_MODE_OPERATION_NON_SUPPORTE = const("Mode operation non supporte : %d")
+                    print(CONST_MODE_OPERATION_NON_SUPPORTE % self._mode_operation)
                     await led_executer_sequence(const_leds.CODE_MAIN_OPERATION_INCONNUE, executions=None)
 
             except OSError as e:
                 if e.errno == 12:
                     self.__erreurs_enomem += 1
                     if self.__erreurs_enomem >= CONST_NB_ERREURS_RESET:
-                        print("ENOMEM count:%d, reset" % self.__erreurs_enomem)
+                        CONST_ENOMEM_COUNT = const("ENOMEM count:%d, reset")
+                        print(CONST_ENOMEM_COUNT % self.__erreurs_enomem)
                         await led_executer_sequence(
                             const_leds.CODE_ERREUR_MEMOIRE, executions=1, ui_lock=self.__ui_lock)
                         reboot(e)
-                    
-                    print("Erreur memoire no %d" % self.__erreurs_enomem)
+
+                    CONST_ERREUR_MEMOIRE = const("Erreur memoire no %d")
+                    print(CONST_ERREUR_MEMOIRE % self.__erreurs_enomem)
                     sys.print_exception(e)
                     collect()
                     self.afficher_info()
@@ -565,7 +569,8 @@ class Runner:
                     continue
 
                 else:
-                    print("OSError main")
+                    CONST_OSERROR_MAIN = const("OSError main")
+                    print(CONST_OSERROR_MAIN)
                     sys.print_exception(e)
                     collect()
                     self.afficher_info()
@@ -575,17 +580,21 @@ class Runner:
             except MemoryError as e:
                 self.__erreurs_memory += 1
                 if self.__erreurs_memory >= CONST_NB_ERREURS_RESET:
-                    print("MemoryError count:%d, reset" % self.__erreurs_memory)
+                    CONST_MEMORYERROR1 = const("MemoryError count:%d, reset")
+                    print(CONST_MEMORYERROR1 % self.__erreurs_memory)
                     reboot(e)
-                
-                print("MemoryError %s" % e)
+
+                CONST_MEMORYERROR2 = const("MemoryError %s")
+                print(CONST_MEMORYERROR2 % e)
                 sys.print_exception(e)
-                print("Erreur memoire no %d\n%s" % (self.__erreurs_memory, mem_info()))
+                CONST_MEMORYERROR3 = const("Erreur memoire no %d\n%s")
+                print(CONST_MEMORYERROR3 % (self.__erreurs_memory, mem_info()))
                 collect()
                 self.afficher_info()
                 await asyncio.sleep_ms(50)
             except Exception as e:
-                print("Erreur main")
+                CONST_ERREUR_MAIN = const("Erreur main")
+                print(CONST_ERREUR_MAIN)
                 collect()
                 sys.print_exception(e)
                 self.afficher_info()
@@ -622,18 +631,23 @@ class Runner:
         except Exception as e:
             err = e
             sys.print_exception(e)
-            print("Erreur main(), reboot dans 30 secondes")
+            CONST_ERREUR1 = const("Erreur main(), reboot dans 30 secondes")
+            print(CONST_ERREUR1)
         else:
-            print("main() arrete, reboot dans 30 secondes")
+            CONST_ERREUR2 = const("main() arrete, reboot dans 30 secondes")
+            print(CONST_ERREUR2)
 
         await asyncio.sleep(30)
         reboot(err)
 
     def afficher_info(self):
+        CONST_HEURE = const("Heure %s")
+        CONST_CPU = const("CPU freq %d")
+        CONST_MEMOIRE = const("Memoire")
         print(CONST_INFO_SEP)
-        print("Heure %s" % str(time.gmtime()))
-        print("CPU freq %d" % machine.freq())
-        print("Memoire")
+        print(CONST_HEURE % str(time.gmtime()))
+        print(CONST_CPU % machine.freq())
+        print(CONST_MEMOIRE)
         mem_info()
         print(CONST_INFO_SEP + '\n')
 

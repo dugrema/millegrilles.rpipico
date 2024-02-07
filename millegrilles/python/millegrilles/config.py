@@ -12,7 +12,7 @@ from millegrilles.certificat import PATH_CERT, PATH_CA_CERT
 
 from millegrilles import constantes
 
-from millegrilles.constantes import CONST_PATH_FICHIER_CONN, CONST_PATH_FICHIER_DISPLAY, CONST_PATH_FICHIER_PROGRAMMES, \
+from millegrilles.constantes import CONST_PATH_FICHIER_DISPLAY, CONST_PATH_FICHIER_PROGRAMMES, \
     CONST_PATH_TIMEINFO, CONST_PATH_TZOFFSET, CONST_PATH_SOLAIRE, CONST_PATH_RELAIS, CONST_PATH_RELAIS_NEW, \
     CONST_MODE_INIT, CONST_MODE_RECUPERER_CA, CONST_MODE_CHARGER_URL_RELAIS, CONST_MODE_SIGNER_CERTIFICAT, \
     CONST_MODE_POLLING, CONST_HTTP_TIMEOUT_DEFAULT, CONST_CHAMP_HTTP_INSTANCE, \
@@ -28,7 +28,7 @@ from millegrilles.constantes import CONST_PATH_FICHIER_CONN, CONST_PATH_FICHIER_
 async def detecter_mode_operation():
     # Si wifi.txt/idmg.txt manquants, on est en mode initial.
     try:
-        stat(CONST_PATH_FICHIER_CONN)
+        stat(constantes.CONST_PATH_USER)
     except:
         print("Mode initialisation")
         return CONST_MODE_INIT
@@ -130,7 +130,7 @@ async def initialiser_wifi():
                 ip = await connect_wifi(ssid, params['password'])
                 if ip:
                     ssid_choisi = ssid  # Indiquer qu'on peut nettoyer les listes .json
-                    return  # Ok
+                    return ip  # Ok
             except ValueError as e:
                 print_exception(e)
             except (KeyError, ErreurConnexionWifi):
@@ -144,7 +144,7 @@ async def initialiser_wifi():
                 if ip:
                     ssid_choisi = ssid
                     params_choisi = params  # Conserver les nouveaux parametres
-                    return  # Ok
+                    return ip  # Ok
             except ValueError as e:
                 print_exception(e)
             except (KeyError, ErreurConnexionWifi):
@@ -158,7 +158,7 @@ async def initialiser_wifi():
                     ip = await connect_wifi(ssid, params['password'])
                     if ip:
                         ssid_choisi = ssid  # Indiquer qu'on peut nettoyer les listes .json
-                        return  # Ok
+                        return ip  # Ok
                 except ValueError as e:
                     print_exception(e)
                 except (KeyError, ErreurConnexionWifi):
@@ -208,12 +208,12 @@ def get_http_timeout():
 
 
 def get_idmg():
-    with open(CONST_PATH_FICHIER_CONN, CONST_READ_BINARY) as fichier:
+    with open(constantes.CONST_PATH_USER, CONST_READ_BINARY) as fichier:
         return load(fichier)[CONST_CHAMP_IDMG]
 
 
 def get_user_id():
-    with open(CONST_PATH_FICHIER_CONN, CONST_READ_BINARY) as fichier:
+    with open(constantes.CONST_PATH_USER, CONST_READ_BINARY) as fichier:
         return load(fichier)[CONST_CHAMP_USER_ID]
 
 

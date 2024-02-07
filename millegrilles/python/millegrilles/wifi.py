@@ -1,4 +1,3 @@
-import json
 import network
 import struct
 import uasyncio as asyncio
@@ -7,9 +6,6 @@ from . import uping
 from micropython import const
 
 from millegrilles.constantes import CONST_CHAMP_WIFI_SSID, CONST_CHAMP_WIFI_CHANNEL, CONST_UTF8, CONST_CHAMP_IP
-
-
-PATH_CONFIGURATION = const('conn.json')
 
 
 def detecter_wifi():
@@ -25,22 +21,33 @@ def detecter_wifi():
 
 
 async def connect_wifi(ssid: str, password: str, tentatives=3):
-    print("connect_wifi ssid %s pass %s" % (ssid, password))
+    from gc import collect
+
+    CONST_SSID_MANQUANT = const('SSID manquant')
+    CONST_PASSWORD_MANQUANT = const('password manquant')
+    CONST_WIFI_CONNECT_TO = const('WIFI connect to %s')
+    CONST_WIFI_ATTENDRE = const('WIFI connect to %s')
+    CONST_WIFI_STATUS_FAILED = const("WLAN status %s, connection failed on %s")
+    CONST_WIFI_ERR1 = const("non connecte")
+
+    # print("connect_wifi ssid %s pass %s" % (ssid, password))
     if not isinstance(ssid, str) or ssid == '':
-        raise ValueError('SSID manquant')
+        raise ValueError(CONST_SSID_MANQUANT)
     if not isinstance(password, str) or ssid == '':
-        raise ValueError('password manquant')
+        raise ValueError(CONST_PASSWORD_MANQUANT)
 
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
 
     # Cleanup
     wlan.disconnect()
+    await asyncio.sleep(0)
+    collect()
     await asyncio.sleep_ms(200)
 
     for _ in range(0, tentatives):
         try:
-            print("WiFI connect to %s" % ssid)
+            print(CONST_WIFI_CONNECT_TO % ssid)
             wlan.connect(ssid, password)
         except OSError as e:
             if e.errno == 1:
@@ -50,11 +57,11 @@ async def connect_wifi(ssid: str, password: str, tentatives=3):
                 raise e
 
         # Wait for connect or fail
-        print("Attendre connexion WIFI a %s" % ssid)
+        print(CONST_WIFI_ATTENDRE % ssid)
         max_wait = 20  # 20 secondes, si echec la connexion retry immediatement
         status = network.STAT_CONNECTING
         while max_wait > 0 and status == network.STAT_CONNECTING:
-            print("%s : attendre - reste %d secs" % (ssid, max_wait))
+            # print("%s : attendre - reste %d secs" % (ssid, max_wait))
             await asyncio.sleep(1)
             # Update status
             status = wlan.status()
@@ -64,10 +71,10 @@ async def connect_wifi(ssid: str, password: str, tentatives=3):
             ip = wlan.ifconfig()[0]
             return ip
         else:
-            print("WLAN Status %s" % wlan.status())
-            print("WLAN connection failed on %s" % ssid)
+            # print("WLAN Status %s" % wlan.status())
+            print(CONST_WIFI_STATUS_FAILED % (wlan.status(), ssid))
 
-    raise ErreurConnexionWifi('non connecte')
+    raise ErreurConnexionWifi(CONST_WIFI_ERR1)
 
 
 def get_etat_wifi():

@@ -9,6 +9,7 @@ import time
 from micropython import const
 from millegrilles.message_inscription import NOM_APPAREIL
 from millegrilles.wifi import pack_info_wifi
+from millegrilles import constantes
 
 
 # org.bluetooth.service.environmental_sensing
@@ -237,7 +238,9 @@ class BluetoothHandler:
         if user_id:
             existant['user_id'] = user_id
 
-        with open('user.new.json', 'wb') as fichier:
+        # with open(constantes.CONST_PATH_USER_NEW, 'wb') as fichier:
+        # TODO : ajouter securite pour changement d'usager
+        with open(constantes.CONST_PATH_USER, 'wb') as fichier:
             json.dump(existant, fichier)
 
         print('user change pour %s' % existant)
@@ -273,7 +276,7 @@ class BluetoothHandler:
 
     def load_profil_config(self):
         try:
-            with open('conn.json') as fichier:
+            with open(constantes.CONST_PATH_USER) as fichier:
                 config = json.load(fichier)
 
             try:

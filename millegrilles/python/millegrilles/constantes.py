@@ -1,7 +1,6 @@
 from micropython import const
 
 # Fichiers de configuration
-CONST_PATH_FICHIER_CONN = const('conn.json')
 CONST_PATH_FICHIER_DISPLAY = const('displays.json')
 CONST_PATH_FICHIER_PROGRAMMES = const('programmes.json')
 CONST_PATH_TIMEINFO = const('timeinfo')
