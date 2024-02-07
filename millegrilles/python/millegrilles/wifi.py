@@ -2,7 +2,11 @@ import json
 import network
 import struct
 import uasyncio as asyncio
+
 from . import uping
+from micropython import const
+
+from millegrilles.constantes import CONST_CHAMP_WIFI_SSID, CONST_CHAMP_WIFI_CHANNEL, CONST_UTF8, CONST_CHAMP_IP
 
 
 PATH_CONFIGURATION = const('conn.json')
@@ -66,7 +70,7 @@ def get_etat_wifi():
     wlan.active(True)
     status = wlan.ifconfig()
     
-    return {'ip': status[0]}
+    return {CONST_CHAMP_IP: status[0]}
 
 
 def is_wifi_ok():
@@ -86,7 +90,7 @@ def is_wifi_ok():
     # Verifier qu'au moins 1 paquet a ete recu (confirme par gateway)
     if res[1] > 0:
         return True  # Ping succes, connexion WIFI fonctionne
-    print("is_wifi_ok : Ping gateway (%s) failed" % gw_ip)
+    print(const("is_wifi_ok : Ping gateway (%s) failed") % gw_ip)
 
     return False
 
@@ -99,8 +103,8 @@ def get_wifi_detail():
     wlan = network.WLAN(network.STA_IF)
     connected = wlan.isconnected()
     status = wlan.status()
-    ssid = wlan.config('ssid')
-    channel = wlan.config('channel')
+    ssid = wlan.config(CONST_CHAMP_WIFI_SSID)
+    channel = wlan.config(CONST_CHAMP_WIFI_CHANNEL)
     ifconfig = wlan.ifconfig()
     client_ip, client_mask, gw_ip, dns_ip = ifconfig
     return connected, status, ssid, channel, client_ip, client_mask, gw_ip, dns_ip
@@ -110,6 +114,7 @@ def pack_info_wifi():
     val = get_wifi_detail()
     connected, status, ssid, channel, client_ip, client_mask, gw_ip, dns_ip = val
     vals = [connected, status, channel, map_ip_bytes(client_ip), map_ip_bytes(client_mask), map_ip_bytes(gw_ip), map_ip_bytes(dns_ip)]
-    status_1 = struct.pack('<BBB4s4s4s4s', *vals)
-    status_2 = ssid.encode('utf-8')[:20]
+    CHAMP_PACK_WIFI = const('<BBB4s4s4s4s')
+    status_1 = struct.pack(CHAMP_PACK_WIFI, *vals)
+    status_2 = ssid.encode(CONST_UTF8)[:20]
     return status_1, status_2

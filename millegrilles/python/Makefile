@@ -10,6 +10,7 @@ SRC_MILLEGRILLES = \
     millegrilles/certificat.mpy \
     millegrilles/config.mpy \
     millegrilles/const_leds.mpy \
+    millegrilles/constantes.mpy \
     millegrilles/etat.mpy \
     millegrilles/feed_display.mpy \
     millegrilles/ledblink.mpy \

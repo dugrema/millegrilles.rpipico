@@ -1,8 +1,7 @@
-from json import load, loads, dump, dumps
+from json import load, dump
 from os import stat
 from uasyncio import sleep, sleep_ms
 from sys import print_exception
-from gc import collect
 
 from mgutils import comparer_dict
 from millegrilles.const_leds import CODE_CONFIG_INITIALISATION
@@ -10,45 +9,35 @@ from millegrilles.ledblink import led_executer_sequence
 from millegrilles.wifi import connect_wifi
 from millegrilles.certificat import PATH_CERT, PATH_CA_CERT
 
-CONST_PATH_FICHIER_CONN = const('conn.json')
-CONST_PATH_FICHIER_DISPLAY = const('displays.json')
-CONST_PATH_FICHIER_PROGRAMMES = const('programmes.json')
-CONST_PATH_TIMEINFO = const('timeinfo')
-CONST_PATH_TZOFFSET = const('tzoffset.json')
-CONST_PATH_SOLAIRE = const('solaire.json')
-CONST_PATH_RELAIS = const('relais.json')
+from millegrilles.constantes import CONST_PATH_FICHIER_CONN, CONST_PATH_FICHIER_DISPLAY, CONST_PATH_FICHIER_PROGRAMMES, \
+    CONST_PATH_TIMEINFO, CONST_PATH_TZOFFSET, CONST_PATH_SOLAIRE, CONST_PATH_RELAIS, \
+    CONST_MODE_INIT, CONST_MODE_RECUPERER_CA, CONST_MODE_CHARGER_URL_RELAIS, CONST_MODE_SIGNER_CERTIFICAT, \
+    CONST_MODE_POLLING, CONST_HTTP_TIMEOUT_DEFAULT, CONST_CHAMP_HTTP_INSTANCE, \
+    CONST_CHAMPS_SOLAIRE, CONST_SOLAIRE_CHANGEMENT, \
+    CONST_CHAMP_HTTP_TIMEOUT, \
+    CONST_CHAMP_IDMG, CONST_CHAMP_USER_ID, CONST_CHAMP_TIMEZONE, CONST_CHAMP_OFFSET, \
+    CONST_CHAMP_TRANSITION_TIME, CONST_CHAMP_TRANSITION_OFFSET, \
+    CONST_CHAMP_APPLICATIONSV2, CONST_CHAMP_SENSEURSPASSIFS_RELAI, CONST_CHAMP_INSTANCES, CONST_CHAMP_PATHNAME
 
-CONST_MODE_INIT = const(1)
-CONST_MODE_RECUPERER_CA = const(2)
-CONST_MODE_CHARGER_URL_RELAIS = const(3)
-CONST_MODE_SIGNER_CERTIFICAT = const(4)
-CONST_MODE_POLLING = const(99)
-
-CONST_HTTP_TIMEOUT_DEFAULT = const(60)
-
-CONST_CHAMP_HTTP_INSTANCE = const('http_instance')
-
-CONST_CHAMPS_SOLAIRE = const(('dawn', 'sunrise', 'noon', 'sunset', 'dusk'))
-CONST_SOLAIRE_CHANGEMENT = const(120)
 
 async def detecter_mode_operation():
     # Si wifi.txt/idmg.txt manquants, on est en mode initial.
     try:
         stat(CONST_PATH_FICHIER_CONN)
     except:
-        print("Mode initialisation")
+        print(const("Mode initialisation"))
         return CONST_MODE_INIT
     
     try:
         stat(PATH_CA_CERT)
     except:
-        print("Mode recuperer ca.der")
+        print(const("Mode recuperer ca.der"))
         return CONST_MODE_RECUPERER_CA
     
     try:
         stat(PATH_CERT)
     except:
-        print("Mode signer certificat")
+        print(const("Mode signer certificat"))
         return CONST_MODE_SIGNER_CERTIFICAT
 
     return CONST_MODE_POLLING  # Mode polling
@@ -102,7 +91,7 @@ def get_url_instance():
 def get_http_timeout():
     try:
         with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
-            return load(fichier)['http_timeout']
+            return load(fichier)[CONST_CHAMP_HTTP_TIMEOUT]
     except Exception:
         pass
     
@@ -111,18 +100,18 @@ def get_http_timeout():
 
 def get_idmg():
     with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
-        return load(fichier)['idmg']
+        return load(fichier)[CONST_CHAMP_IDMG]
 
 
 def get_user_id():
     with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
-        return load(fichier)['user_id']
+        return load(fichier)[CONST_CHAMP_USER_ID]
 
 
 def get_timezone():
     try:
         with open(CONST_PATH_TZOFFSET, 'rb') as fichier:
-            return load(fichier)['timezone']
+            return load(fichier)[CONST_CHAMP_TIMEZONE]
     except (KeyError, OSError, ValueError):
         return None
 
@@ -130,7 +119,7 @@ def get_timezone():
 def get_tz_offset():
     try:
         with open(CONST_PATH_TZOFFSET, 'rb') as fichier:
-            return load(fichier)['offset']
+            return load(fichier)[CONST_CHAMP_OFFSET]
     except (KeyError, OSError, ValueError):
         return None
 
@@ -156,8 +145,8 @@ async def transition_timezone():
         await sleep(0)
 
         # Extraire timezone et le nouvel offset a appliquer
-        timezone = info_tz['timezone']
-        transition_offset = info_tz['transition_offset']
+        timezone = info_tz[CONST_CHAMP_TIMEZONE]
+        transition_offset = info_tz[CONST_CHAMP_TRANSITION_OFFSET]
 
         print("tz transition a %s" % transition_offset)
 
@@ -180,12 +169,12 @@ async def set_timezone_offset(offset, timezone=None, transition_time=None, trans
         tz_courant = dict()
     else:
         await sleep(0)
-        diff = offset != tz_courant.get('offset')
-        diff |= timezone and timezone != tz_courant.get('timezone')
+        diff = offset != tz_courant.get(CONST_CHAMP_OFFSET)
+        diff |= timezone and timezone != tz_courant.get(CONST_CHAMP_TIMEZONE)
         if transition_time and transition_offset:
             try:
-                diff |= transition_time and transition_time != tz_courant.get('transition_time')
-                diff |= transition_offset and transition_offset != tz_courant.get('transition_offset')
+                diff |= transition_time and transition_time != tz_courant.get(CONST_CHAMP_TRANSITION_TIME)
+                diff |= transition_offset and transition_offset != tz_courant.get(CONST_CHAMP_TRANSITION_OFFSET)
             except TypeError:
                 diff = True
 
@@ -193,10 +182,10 @@ async def set_timezone_offset(offset, timezone=None, transition_time=None, trans
         print("overwrite %s" % CONST_PATH_TZOFFSET)
         with open(CONST_PATH_TZOFFSET, 'wb') as fichier:
             params = {
-                'offset': offset,
-                'timezone': timezone or tz_courant.get('timezone'),
-                'transition_time': transition_time or tz_courant.get('transition_time'),
-                'transition_offset': transition_offset or tz_courant.get('transition_offset')
+                CONST_CHAMP_OFFSET: offset,
+                CONST_CHAMP_TIMEZONE: timezone or tz_courant.get(CONST_CHAMP_TIMEZONE),
+                CONST_CHAMP_TRANSITION_TIME: transition_time or tz_courant.get(CONST_CHAMP_TRANSITION_TIME),
+                CONST_CHAMP_TRANSITION_OFFSET: transition_offset or tz_courant.get(CONST_CHAMP_TRANSITION_OFFSET)
             }
             dump(params, fichier)
 
@@ -325,17 +314,17 @@ def sauvegarder_relais(fiche: dict):
     # url_relais = [app['url'] for app in fiche['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
 
     app_instance_pathname = dict()
-    for instance_id, app_params in fiche['applicationsV2']['senseurspassifs_relai']['instances'].items():
+    for instance_id, app_params in fiche[CONST_CHAMP_APPLICATIONSV2][CONST_CHAMP_SENSEURSPASSIFS_RELAI][CONST_CHAMP_INSTANCES].items():
         try:
-            app_instance_pathname[instance_id] = app_params['pathname']
-            print("instance_id %s pathname %s" % (instance_id, app_params['pathname']))
+            app_instance_pathname[instance_id] = app_params[CONST_CHAMP_PATHNAME]
+            print("instance_id %s pathname %s" % (instance_id, app_params[CONST_CHAMP_PATHNAME]))
         except KeyError:
             pass
 
     print("relais %d instances" % len(app_instance_pathname))
 
     url_relais = list()
-    for instance_id, instance_params in fiche['instances'].items():
+    for instance_id, instance_params in fiche[CONST_CHAMP_INSTANCES].items():
         try:
             pathname = app_instance_pathname[instance_id]
         except KeyError:
