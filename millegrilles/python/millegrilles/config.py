@@ -2,12 +2,15 @@ from json import load, dump
 from os import stat, unlink
 from uasyncio import sleep, sleep_ms
 from sys import print_exception
+from network import STAT_GOT_IP
 
 from mgutils import comparer_dict
 from millegrilles.const_leds import CODE_CONFIG_INITIALISATION
 from millegrilles.ledblink import led_executer_sequence
-from millegrilles.wifi import connect_wifi
+from millegrilles.wifi import connect_wifi, detecter_wifi, ErreurConnexionWifi
 from millegrilles.certificat import PATH_CERT, PATH_CA_CERT
+
+from millegrilles import constantes
 
 from millegrilles.constantes import CONST_PATH_FICHIER_CONN, CONST_PATH_FICHIER_DISPLAY, CONST_PATH_FICHIER_PROGRAMMES, \
     CONST_PATH_TIMEINFO, CONST_PATH_TZOFFSET, CONST_PATH_SOLAIRE, CONST_PATH_RELAIS, CONST_PATH_RELAIS_NEW, \
@@ -52,43 +55,147 @@ async def initialisation():
     await led_executer_sequence(CODE_CONFIG_INITIALISATION, executions=None)
 
 
-async def initialiser_wifi():
-    wifi_ok = False
-    
+def get_config_wifi():
     try:
-        with open(CONST_PATH_FICHIER_CONN, CONST_READ_BINARY) as fichier:
-            wifis = load(fichier)['wifis']
-    except KeyError:
+        with open(constantes.CONST_PATH_WIFI, constantes.CONST_READ_BINARY) as fichier:
+            wifi_dict = load(fichier)
+    except OSError:
+        wifi_dict = dict()
+    try:
+        with open(constantes.CONST_PATH_WIFI_NEW, constantes.CONST_READ_BINARY) as fichier:
+            wifi_new_dict = load(fichier)
+    except OSError:
+        wifi_new_dict = dict()
+    return wifi_dict, wifi_new_dict
+
+
+def conserver_config_wifi(wifi_dict):
+    ssids = wifi_dict['ssids']
+    if len(ssids) == 0:
+        raise ValueError('ssids dict vide')
+
+    try:
+        with open(constantes.CONST_PATH_WIFI, constantes.CONST_READ_BINARY) as fichier:
+            wifi_dict_courant = load(fichier)
+        ssids_courant = wifi_dict_courant['ssids']
+    except (OSError, KeyError):
+        ssids_courant = dict()
+
+    sauvegarder = False
+    if len(ssids_courant) == len(ssids):
+        # Verifier si on a du contenu qui a change
+        for key, value in ssids_courant.items():
+            if value != ssids.get(key):
+                # Ok, on a une difference. Sauvegarder
+                sauvegarder = True
+    else:
+        # Taille differente
+        sauvegarder = True
+
+    if sauvegarder:
+        # Sauvegarder le nouveau wifi_dict
+        print('maj wifi : %s' % wifi_dict)
+        with open(constantes.CONST_PATH_WIFI, constantes.CONST_WRITE_BINARY) as fichier:
+            dump(wifi_dict, fichier)
+
+    try:
+        # Supprimer le fichier wifi.new.json, on a trouve un reseau qui fonctionne
+        unlink(constantes.CONST_PATH_WIFI_NEW)
+    except OSError:
+        pass  # OK, fichier n'existe pas
+
+
+async def initialiser_wifi():
+    """
+    Utilise les fichiers wifi.json et wifi.new.json pour se connecter au Wifi.
+    Tente de se connecter au AP avec le signal (RSSI) le plus fort en premier.
+    Met a jour wifi.json et efface wifi.new.json apres une connexion reussie.
+    """
+    liste_detectee = detecter_wifi()
+    wifi_dict, wifi_new_dict = get_config_wifi()
+
+    print('wifi dict : %s' % wifi_dict)
+    print('wifi new : %s' % wifi_new_dict)
+
+    ssid_choisi = None
+    params_choisi = None
+    try:
+        # Parcourir wifi_dict et wifi_new_dict avec les reseaux detectes
+        for wifi_detecte in liste_detectee:
+            ssid = wifi_detecte[0]
+            print("wifi connecter %s (rssi: %d)" % (ssid, wifi_detecte[3]))
+            try:
+                params = wifi_dict['ssids'][ssid]
+                print("wifi params %s: %s" % (ssid, params))
+                ip = await connect_wifi(ssid, params['password'])
+                if ip:
+                    ssid_choisi = ssid  # Indiquer qu'on peut nettoyer les listes .json
+                    return  # Ok
+            except ValueError as e:
+                print_exception(e)
+            except (KeyError, ErreurConnexionWifi):
+                pass
+
+            # Essayer avec nouvelle liste
+            try:
+                params = wifi_new_dict['ssids'][ssid]
+                print("wifi new params %s: %s" % (ssid, params))
+                ip = await connect_wifi(ssid, params['password'])
+                if ip:
+                    ssid_choisi = ssid
+                    params_choisi = params  # Conserver les nouveaux parametres
+                    return  # Ok
+            except ValueError as e:
+                print_exception(e)
+            except (KeyError, ErreurConnexionWifi):
+                pass
+
+        # Tenter de se connecter avec les reseaux connus
         try:
-            with open(CONST_PATH_FICHIER_CONN, CONST_READ_BINARY) as fichier:
-                config_conn = load(fichier)
-                wifi_ssid = config_conn['wifi_ssid']
-                wifi_password = config_conn['wifi_password']
-                config_conn = None
-                wifis = [{'wifi_ssid': wifi_ssid, 'wifi_password': wifi_password}]
+            for ssid, params in wifi_dict['ssids'].items():
+                print("wifi connecter %s" % ssid)
+                try:
+                    ip = await connect_wifi(ssid, params['password'])
+                    if ip:
+                        ssid_choisi = ssid  # Indiquer qu'on peut nettoyer les listes .json
+                        return  # Ok
+                except ValueError as e:
+                    print_exception(e)
+                except (KeyError, ErreurConnexionWifi):
+                    pass
         except KeyError:
-            # Aucune configuration wifi
-            raise RuntimeError('wifi')
+            pass
 
-    for _ in range(0, 3):
         try:
-            status = await connect_wifi(wifis)
-            return status
-        except (RuntimeError, OSError) as e:
-            print("Wifi error %s" % e)
-            await sleep(3)
-        except Exception as e:
-            print("connect_wifi exception")
-            print_exception(e)
-    
-    if wifi_ok is False:
-        raise RuntimeError('wifi')
+            for ssid, params in wifi_new_dict['ssids'].items():
+                print("wifi (new) connecter %s" % ssid)
+                try:
+                    ip = await connect_wifi(ssid, params['password'])
+                    if ip:
+                        ssid_choisi = ssid  # Indiquer qu'on peut nettoyer les listes .json
+                        params_choisi = params  # Conserver les nouveaux parametres
+                        return ip  # Ok
+                except ValueError as e:
+                    print_exception(e)
+                except (KeyError, ErreurConnexionWifi):
+                    pass
+        except KeyError:
+            pass
+
+    finally:
+        if ssid_choisi:
+            # S'assurer de conserver les parametres choisis pour cette connexion (valide)
+            if params_choisi:
+                try:
+                    ssids = wifi_dict['ssids']
+                except KeyError:
+                    ssids = dict()
+                    wifi_dict['ssids'] = ssids
+                ssids[ssid_choisi] = params_choisi
+            conserver_config_wifi(wifi_dict)
+
+    raise ErreurConnexionWifi('wifi non connecte')
             
-
-# def get_url_instance():
-#     with open(CONST_PATH_FICHIER_CONN, CONST_READ_BINARY) as fichier:
-#         return load(fichier)[CONST_CHAMP_HTTP_INSTANCE]
-
 
 def get_http_timeout():
     try:
@@ -130,8 +237,8 @@ def get_timezone_transition():
     try:
         with open(CONST_PATH_TZOFFSET, CONST_READ_BINARY) as fichier:
             info_tz = load(fichier)
-        transition_time = info_tz['transition_time']
-        transition_offset = info_tz['transition_offset']
+        transition_time = info_tz[constantes.CONST_CHAMP_TRANSITION_TIME]
+        transition_offset = info_tz[constantes.CONST_CHAMP_TRANSITION_OFFSET]
         return transition_time, transition_offset
     except (KeyError, OSError, ValueError):
         pass

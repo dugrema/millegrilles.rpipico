@@ -12,7 +12,25 @@ from millegrilles.constantes import CONST_CHAMP_WIFI_SSID, CONST_CHAMP_WIFI_CHAN
 PATH_CONFIGURATION = const('conn.json')
 
 
-async def connect_wifi(liste_wifi: list, tentatives=3):
+def detecter_wifi():
+    from network import WLAN, STA_IF
+    wlan = WLAN(STA_IF)
+    scan_result = wlan.scan()
+
+    # Champs : ssid, bssid, channel, rssi, security, hidden
+    # Trier par force du signal (RSSI inv)
+    scan_result.sort(key=lambda x: x[3], reverse=True)
+
+    return scan_result
+
+
+async def connect_wifi(ssid: str, password: str, tentatives=3):
+    print("connect_wifi ssid %s pass %s" % (ssid, password))
+    if not isinstance(ssid, str) or ssid == '':
+        raise ValueError('SSID manquant')
+    if not isinstance(password, str) or ssid == '':
+        raise ValueError('password manquant')
+
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
 
@@ -20,49 +38,36 @@ async def connect_wifi(liste_wifi: list, tentatives=3):
     wlan.disconnect()
     await asyncio.sleep_ms(200)
 
-    for config in liste_wifi:
-        for t in range(0, tentatives):
-            try:
-                ssid = config['wifi_ssid']
-                print("WiFI connect to %s" % ssid)
-                wlan.connect(ssid, config['wifi_password'])
-            except KeyError as e:
-                # raise Exception('SSID/password manquant')
-                print("Config SSID/password manquant, skip")
+    for _ in range(0, tentatives):
+        try:
+            print("WiFI connect to %s" % ssid)
+            wlan.connect(ssid, password)
+        except OSError as e:
+            if e.errno == 1:
+                wlan.active(True)
                 continue
-            except OSError as e:
-                if e.errno == 1:
-                    wlan.active(True)
-                    continue
-                else:
-                    raise e
-
-            # Wait for connect or fail
-            print("Attendre connexion WIFI a %s" % ssid)
-            max_wait = 20  # 20 secondes, si echec la connexion retry immediatement
-            status = network.STAT_CONNECTING
-            while max_wait > 0 and status == network.STAT_CONNECTING:
-                print("%s : attendre - reste %d secs" % (ssid, max_wait))
-                status = wlan.status()
-                if status == network.STAT_GOT_IP:
-                    print('WIFI ready')
-                    break
-                # if status < -1 or status >= 3:
-                #     print("Break, status %d" % status)
-                #     break
-                max_wait -= 1
-                await asyncio.sleep(1)
-
-            # Handle connection error
-            if wlan.status() != network.STAT_GOT_IP:
-                print("WLAN Status %s" % wlan.status())
-                # raise RuntimeError('network connection failed')
-                print("WLAN connection failed on %s" % ssid)
             else:
-                #print('connected')
-                status = wlan.ifconfig()
-                # print( 'ip = ' + status[0] )
-                return status
+                raise e
+
+        # Wait for connect or fail
+        print("Attendre connexion WIFI a %s" % ssid)
+        max_wait = 20  # 20 secondes, si echec la connexion retry immediatement
+        status = network.STAT_CONNECTING
+        while max_wait > 0 and status == network.STAT_CONNECTING:
+            print("%s : attendre - reste %d secs" % (ssid, max_wait))
+            await asyncio.sleep(1)
+            # Update status
+            status = wlan.status()
+            max_wait -= 1
+
+        if wlan.status() == network.STAT_GOT_IP:
+            ip = wlan.ifconfig()[0]
+            return ip
+        else:
+            print("WLAN Status %s" % wlan.status())
+            print("WLAN connection failed on %s" % ssid)
+
+    raise ErreurConnexionWifi('non connecte')
 
 
 def get_etat_wifi():
@@ -118,3 +123,7 @@ def pack_info_wifi():
     status_1 = struct.pack(CHAMP_PACK_WIFI, *vals)
     status_2 = ssid.encode(CONST_UTF8)[:20]
     return status_1, status_2
+
+
+class ErreurConnexionWifi(Exception):
+    pass
