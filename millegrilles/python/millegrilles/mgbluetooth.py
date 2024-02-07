@@ -23,8 +23,6 @@ _ADV_APPEARANCE_GENERIC_THERMOMETER = const(768)
 # Service de configuration MilleGrilles
 _ENV_CONFIG_UUID = bluetooth.UUID('7aac7580-88d7-480f-8a01-65406c2decaf')
 _ENV_SETWIFI_WRITE_UUID = bluetooth.UUID('7aac7581-88d7-480f-8a01-65406c2decaf')
-_ENV_SETRELAIS_WRITE_UUID = bluetooth.UUID('7aac7582-88d7-480f-8a01-65406c2decaf')
-_ENV_SETUSER_WRITE_UUID = bluetooth.UUID('7aac7586-88d7-480f-8a01-65406c2decaf')
 
 # Service d'etat appareil MilleGrille
 _ENV_ETAT_UUID = bluetooth.UUID('7aac7590-88d7-480f-8a01-65406c2decaf')
@@ -51,9 +49,7 @@ class BluetoothHandler:
         self.__temp_characteristic = None
         self.__hum_characteristic = None
 
-        self.__setwifi_write_characteristic = None
-        self.__setrelais_write_characteristic = None
-        self.__setuser_write_characteristic = None
+        self.__config_write_characteristic = None
 
         self.__getetat_idmg_characteristic = None
         self.__getetat_userid_characteristic = None
@@ -80,14 +76,8 @@ class BluetoothHandler:
 
         # Config
         self.__config_service = aioble.Service(_ENV_CONFIG_UUID)
-        self.__setwifi_write_characteristic = aioble.Characteristic(
+        self.__config_write_characteristic = aioble.Characteristic(
             self.__config_service, _ENV_SETWIFI_WRITE_UUID, write=True, capture=True, notify=True
-        )
-        self.__setrelais_write_characteristic = aioble.Characteristic(
-            self.__config_service, _ENV_SETRELAIS_WRITE_UUID, write=True, capture=True, notify=True
-        )
-        self.__setuser_write_characteristic = aioble.Characteristic(
-            self.__config_service, _ENV_SETUSER_WRITE_UUID, write=True, capture=True, notify=True
         )
 
         # Etat
@@ -118,16 +108,9 @@ class BluetoothHandler:
             entretien_task = asyncio.create_task(self.entretien())
             update_etat_task = asyncio.create_task(self.update_etat_task())
             peripheral_task = asyncio.create_task(self.peripheral_task())
-            wifi_set_task = asyncio.create_task(self.wifi_set_task())
-            relais_set_task = asyncio.create_task(self.relais_set_task())
-            # get_profil_task = asyncio.create_task(self.get_profil_task())
-            user_set_task = asyncio.create_task(self.user_set_task())
+            config_set_task = asyncio.create_task(self.config_set_task())
 
-            await asyncio.gather(
-                entretien_task, update_etat_task, peripheral_task,
-                wifi_set_task, relais_set_task, user_set_task,
-                # get_profil_task,
-            )
+            await asyncio.gather(entretien_task, update_etat_task, peripheral_task, config_set_task)
         except Exception as e:
             import sys
             sys.print_exception(e)
@@ -169,7 +152,7 @@ class BluetoothHandler:
                 async with await aioble.advertise(
                     _ADV_INTERVAL_MS,
                     name=NOM_APPAREIL,
-                    services=[_ENV_SENSE_UUID, _ENV_CONFIG_UUID],
+                    services=[_ENV_SENSE_UUID, _ENV_ETAT_UUID],
                     appearance=_ADV_APPEARANCE_GENERIC_THERMOMETER,
                 ) as connection:
                     print("BLE connection from", connection.device)
@@ -179,21 +162,36 @@ class BluetoothHandler:
             finally:
                 print("BLE disconnected")
 
-    async def wifi_set_task(self):
+    async def config_set_task(self):
         while True:
             try:
-                await self.recevoir_wifi()
+                await self.recevoir_config()
             except asyncio.TimeoutError:
-                print("BLE timeout reception ssid")
+                print("BLE timeout reception config")
             except KeyError:
-                print("BLE ssid/password manquant")
+                print("BLE config key manquante")
             except ValueError:
-                print("BLE ssid trop long")
+                print("BLE config trop long")
 
-    async def recevoir_wifi(self):
-        info_wifi = await recevoir_string(self.__setwifi_write_characteristic, MAXLEN=200)
-        print("Info wifi: %s" % info_wifi)
-        params = json.loads(info_wifi)
+    async def recevoir_config(self):
+        info_config = await recevoir_string(self.__config_write_characteristic, MAXLEN=200)
+        print("Info config: %s" % info_config)
+        params = json.loads(info_config)
+
+        # Determiner commande
+        commande = params['commande']
+
+        if commande == 'setWifi':
+            self.process_config_wifi(params)
+        elif commande == 'setUser':
+            self.process_config_user(params)
+        elif commande == 'setRelai':
+            self.process_config_relai(params)
+        else:
+            print("BLE config inconnue %s" % commande)
+            return
+
+    def process_config_wifi(self, params):
         ssid = params['ssid']
         password = params['password']
         print("SSID: %s" % params['ssid'])
@@ -219,31 +217,7 @@ class BluetoothHandler:
         with open('wifi.new.json', 'wb') as fichier:
             json.dump(wifi_dict, fichier)
 
-    async def relais_set_task(self):
-        while True:
-            try:
-                info_relais = await recevoir_string(self.__setrelais_write_characteristic, MAXLEN=1024)
-                print("Info relais: %s" % info_relais)
-                params = json.loads(info_relais)
-                print("Relais: %s" % params.get('relais'))
-            except asyncio.TimeoutError:
-                print("Timeout reception relais")
-            except ValueError:
-                print("relais trop long")
-
-    async def user_set_task(self):
-        while True:
-            try:
-                await self.changer_usager()
-            except asyncio.TimeoutError:
-                print("Timeout reception relais")
-            except ValueError:
-                print("relais trop long")
-
-    async def changer_usager(self):
-        info_user = await recevoir_string(self.__setuser_write_characteristic, MAXLEN=200)
-        print("Info user: %s" % info_user)
-        params = json.loads(info_user)
+    def process_config_user(self, params):
         user_id = params['user_id']
         if user_id == '':
             user_id = None
@@ -263,32 +237,39 @@ class BluetoothHandler:
         if user_id:
             existant['user_id'] = user_id
 
-        with open('user.json', 'wb') as fichier:
+        with open('user.new.json', 'wb') as fichier:
             json.dump(existant, fichier)
 
         print('user change pour %s' % existant)
 
-    # async def get_profil_task(self):
-    #     while True:
-    #         # connection, value = await self.__getprofil_config_characteristic.written()
-    #         await self.__getprofil_config_characteristic.written()
-    #
-    #         with open('conn.json', 'rb') as fichier:
-    #             contenu = fichier.read()
-    #
-    #         while len(contenu) > 0:
-    #             slice_contenu = contenu[0:20]
-    #             contenu = contenu[20:]
-    #             print('Profil : %s' % contenu)
-    #
-    #             self.__getprofil_config_characteristic.write(slice_contenu, send_update=True)
-    #
-    #             # Donner 3ms au client pour lire le buffer
-    #             await asyncio.sleep_ms(3)
-    #
-    #         # Indiqer qu'il ne reste rien a recevoir
-    #         print("profil termine")
-    #         self.__getprofil_config_characteristic.write(b'\x00', send_update=True)
+    def process_config_relai(self, params):
+        relai = params['relai']
+        print("Relai: %s" % relai)
+
+        try:
+            with open('relais.new.json', 'rb') as fichier:
+                relais_new = json.load(fichier)
+        except OSError:
+            relais_new = dict()
+
+        try:
+            liste_relais = relais_new['relais']
+        except KeyError:
+            liste_relais = list()
+            relais_new['relais'] = liste_relais
+
+        if len(liste_relais) > 5:
+            print("liste relais pleine")
+            return
+
+        if relai in liste_relais:
+            print("relai deja dans la liste")
+            return
+
+        liste_relais.append(relai)
+
+        with open('relais.new.json', 'wb') as fichier:
+            json.dump(relais_new, fichier)
 
     def load_profil_config(self):
         try:
