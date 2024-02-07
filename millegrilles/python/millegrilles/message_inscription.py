@@ -17,7 +17,10 @@ from millegrilles.certificat import valider_certificats, \
      get_expiration_certificat_local, generer_cle_secrete, sauvegarder_ca, \
      PATH_CERT, PATH_CLE_PRIVEE, PATHNAME_RENOUVELER
 from millegrilles.mgmessages import formatter_message, verifier_message
-from millegrilles.config import get_user_id, get_timezone, get_idmg, sauvegarder_relais, get_url_instance, set_timezone_offset
+from millegrilles.config import get_user_id, get_timezone, get_idmg, sauvegarder_relais, \
+    set_timezone_offset, get_relais
+
+from millegrilles.webutils import parse_url
 
 
 # Generer le nom d'appareil avec le machine unique_id du RPi PICO
@@ -353,27 +356,15 @@ async def recuperer_ca(buffer=None):
     sauvegarder_relais(fiche)
 
 
-async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
+async def charger_fiche(no_validation=False, buffer=None):
     liste_urls = set()
-    try:
-        with open('relais.json') as fichier:
-            info_relais = load(fichier)
-            for relai in info_relais['relais']:
-                proto, host, port, pathname = parse_url(relai)
-                proto = 'http:'
-                liste_urls.add(proto + '//' + host)
-    except (OSError, KeyError):
-        print("relais.json non disponible")
-    
-    try:
-        url_instance = get_url_instance()
-        proto, host, port, pathname = parse_url(url_instance)
+    relais = get_relais()
+    if len(relais) == 0:
+        raise Exception('relais non diponibles')
+    for relai in relais:
+        proto, host, port, pathname = parse_url(relai)
         proto = 'http:'
         liste_urls.add(proto + '//' + host)
-        # liste_urls.add(get_url_instance())
-    except OSError:
-        print("Fichier connexion absent")
-        return None, None
 
     recu_ok = False
     for url_instance in liste_urls:
@@ -462,33 +453,6 @@ async def charger_fiche(ui_lock=None, no_validation=False, buffer=None):
     return None, None
 
 
-# Recuperer la fiche (CA, chiffrage, etc)
-async def charger_relais(ui_lock=None, refresh=False, buffer=None):
-    info_relais = None
-    try:
-        with open('relais.json') as fichier:
-            info_relais = load(fichier)
-
-        print('relais.json %s, refresh %s' % (info_relais, refresh))
-
-        if refresh is False:
-            return info_relais['relais']
-    except (OSError, KeyError):
-        print("relais.json non disponible")
-    
-    try:
-        fiche, certificat = await charger_fiche(ui_lock, buffer=buffer)
-        if fiche is not None:
-            url_relais = sauvegarder_relais(fiche)
-            return url_relais
-    except Exception as e:
-        print("Erreur chargement fiche, utiliser relais connus : %s" % str(e))
-        sys.print_exception(e)
-
-    # Retourner les relais deja connus
-    return info_relais['relais']
-
-
 async def generer_message_timeinfo(timezone_str: str):
     # Generer message d'inscription
     message_inscription = {
@@ -563,19 +527,3 @@ async def generer_message_timeinfo(timezone_str: str):
 #             set_timezone_offset(0, timezone='UTC')
 #             # with open('tzoffset.json', 'wb') as fichier:
 #             #     dump({'offset': 0}, fichier)
-
-
-def parse_url(url):
-    try:
-        proto, dummy, host, path = url.split("/", 3)
-    except:
-        proto, dummy, host = url.split("/", 2)
-        path = None
-
-    try:
-        host, port = host.split(":", 2)
-    except:
-        port = None
-
-    return proto, host, port, path
-

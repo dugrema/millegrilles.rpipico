@@ -13,7 +13,7 @@ from millegrilles.mgmessages import formatter_message, verifier_message
 from handler_commandes import traiter_commande
 from millegrilles.config import get_http_timeout, set_configuration_display, get_timezone, set_timezone_offset, CONST_PATH_TZOFFSET, get_tz_offset
 
-from millegrilles.message_inscription import verifier_renouveler_certificat_ws, charger_relais, generer_message_timeinfo
+from millegrilles.message_inscription import verifier_renouveler_certificat_ws, generer_message_timeinfo
 
 CONST_VERSION = const('2024.0.3')
 

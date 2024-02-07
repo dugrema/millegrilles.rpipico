@@ -1,5 +1,5 @@
 from json import load, dump
-from os import stat
+from os import stat, unlink
 from uasyncio import sleep, sleep_ms
 from sys import print_exception
 
@@ -10,14 +10,16 @@ from millegrilles.wifi import connect_wifi
 from millegrilles.certificat import PATH_CERT, PATH_CA_CERT
 
 from millegrilles.constantes import CONST_PATH_FICHIER_CONN, CONST_PATH_FICHIER_DISPLAY, CONST_PATH_FICHIER_PROGRAMMES, \
-    CONST_PATH_TIMEINFO, CONST_PATH_TZOFFSET, CONST_PATH_SOLAIRE, CONST_PATH_RELAIS, \
+    CONST_PATH_TIMEINFO, CONST_PATH_TZOFFSET, CONST_PATH_SOLAIRE, CONST_PATH_RELAIS, CONST_PATH_RELAIS_NEW, \
     CONST_MODE_INIT, CONST_MODE_RECUPERER_CA, CONST_MODE_CHARGER_URL_RELAIS, CONST_MODE_SIGNER_CERTIFICAT, \
     CONST_MODE_POLLING, CONST_HTTP_TIMEOUT_DEFAULT, CONST_CHAMP_HTTP_INSTANCE, \
     CONST_CHAMPS_SOLAIRE, CONST_SOLAIRE_CHANGEMENT, \
     CONST_CHAMP_HTTP_TIMEOUT, \
     CONST_CHAMP_IDMG, CONST_CHAMP_USER_ID, CONST_CHAMP_TIMEZONE, CONST_CHAMP_OFFSET, \
     CONST_CHAMP_TRANSITION_TIME, CONST_CHAMP_TRANSITION_OFFSET, \
-    CONST_CHAMP_APPLICATIONSV2, CONST_CHAMP_SENSEURSPASSIFS_RELAI, CONST_CHAMP_INSTANCES, CONST_CHAMP_PATHNAME
+    CONST_CHAMP_APPLICATIONSV2, CONST_CHAMP_SENSEURSPASSIFS_RELAI, CONST_CHAMP_INSTANCES, CONST_CHAMP_PATHNAME, \
+    CONST_CHAMP_HTTPS, CONST_CHAMP_PORTS, CONST_CHAMP_DOMAINES, CONST_CHAMP_RELAIS, \
+    CONST_READ_BINARY, CONST_WRITE_BINARY
 
 
 async def detecter_mode_operation():
@@ -25,19 +27,19 @@ async def detecter_mode_operation():
     try:
         stat(CONST_PATH_FICHIER_CONN)
     except:
-        print(const("Mode initialisation"))
+        print("Mode initialisation")
         return CONST_MODE_INIT
     
     try:
         stat(PATH_CA_CERT)
     except:
-        print(const("Mode recuperer ca.der"))
+        print("Mode recuperer ca.der")
         return CONST_MODE_RECUPERER_CA
     
     try:
         stat(PATH_CERT)
     except:
-        print(const("Mode signer certificat"))
+        print("Mode signer certificat")
         return CONST_MODE_SIGNER_CERTIFICAT
 
     return CONST_MODE_POLLING  # Mode polling
@@ -54,11 +56,11 @@ async def initialiser_wifi():
     wifi_ok = False
     
     try:
-        with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
+        with open(CONST_PATH_FICHIER_CONN, CONST_READ_BINARY) as fichier:
             wifis = load(fichier)['wifis']
     except KeyError:
         try:
-            with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
+            with open(CONST_PATH_FICHIER_CONN, CONST_READ_BINARY) as fichier:
                 config_conn = load(fichier)
                 wifi_ssid = config_conn['wifi_ssid']
                 wifi_password = config_conn['wifi_password']
@@ -83,14 +85,14 @@ async def initialiser_wifi():
         raise RuntimeError('wifi')
             
 
-def get_url_instance():
-    with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
-        return load(fichier)[CONST_CHAMP_HTTP_INSTANCE]
+# def get_url_instance():
+#     with open(CONST_PATH_FICHIER_CONN, CONST_READ_BINARY) as fichier:
+#         return load(fichier)[CONST_CHAMP_HTTP_INSTANCE]
 
 
 def get_http_timeout():
     try:
-        with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
+        with open(CONST_PATH_FICHIER_CONN, CONST_READ_BINARY) as fichier:
             return load(fichier)[CONST_CHAMP_HTTP_TIMEOUT]
     except Exception:
         pass
@@ -99,18 +101,18 @@ def get_http_timeout():
 
 
 def get_idmg():
-    with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
+    with open(CONST_PATH_FICHIER_CONN, CONST_READ_BINARY) as fichier:
         return load(fichier)[CONST_CHAMP_IDMG]
 
 
 def get_user_id():
-    with open(CONST_PATH_FICHIER_CONN, 'rb') as fichier:
+    with open(CONST_PATH_FICHIER_CONN, CONST_READ_BINARY) as fichier:
         return load(fichier)[CONST_CHAMP_USER_ID]
 
 
 def get_timezone():
     try:
-        with open(CONST_PATH_TZOFFSET, 'rb') as fichier:
+        with open(CONST_PATH_TZOFFSET, CONST_READ_BINARY) as fichier:
             return load(fichier)[CONST_CHAMP_TIMEZONE]
     except (KeyError, OSError, ValueError):
         return None
@@ -118,7 +120,7 @@ def get_timezone():
 
 def get_tz_offset():
     try:
-        with open(CONST_PATH_TZOFFSET, 'rb') as fichier:
+        with open(CONST_PATH_TZOFFSET, CONST_READ_BINARY) as fichier:
             return load(fichier)[CONST_CHAMP_OFFSET]
     except (KeyError, OSError, ValueError):
         return None
@@ -126,7 +128,7 @@ def get_tz_offset():
 
 def get_timezone_transition():
     try:
-        with open(CONST_PATH_TZOFFSET, 'rb') as fichier:
+        with open(CONST_PATH_TZOFFSET, CONST_READ_BINARY) as fichier:
             info_tz = load(fichier)
         transition_time = info_tz['transition_time']
         transition_offset = info_tz['transition_offset']
@@ -140,7 +142,7 @@ def get_timezone_transition():
 async def transition_timezone():
     """ Effectuer une transition de timezone """
     try:
-        with open(CONST_PATH_TZOFFSET, 'rb') as fichier:
+        with open(CONST_PATH_TZOFFSET, CONST_READ_BINARY) as fichier:
             info_tz = load(fichier)
         await sleep(0)
 
@@ -161,7 +163,7 @@ async def set_timezone_offset(offset, timezone=None, transition_time=None, trans
 
     # Charger info, aucun write si information non changee
     try:
-        with open(CONST_PATH_TZOFFSET, 'rb') as fichier:
+        with open(CONST_PATH_TZOFFSET, CONST_READ_BINARY) as fichier:
             tz_courant = load(fichier)
     except (OSError, ValueError):
         print('tzoffset.json absent/invalide')
@@ -180,7 +182,7 @@ async def set_timezone_offset(offset, timezone=None, transition_time=None, trans
 
     if diff:
         print("overwrite %s" % CONST_PATH_TZOFFSET)
-        with open(CONST_PATH_TZOFFSET, 'wb') as fichier:
+        with open(CONST_PATH_TZOFFSET, CONST_WRITE_BINARY) as fichier:
             params = {
                 CONST_CHAMP_OFFSET: offset,
                 CONST_CHAMP_TIMEZONE: timezone or tz_courant.get(CONST_CHAMP_TIMEZONE),
@@ -206,11 +208,11 @@ def temps_liste_to_secs(temps_list: list):
 async def set_horaire_solaire(solaire: dict):
     print("set solaire %s" % solaire)
     try:
-        with open(CONST_PATH_SOLAIRE, 'rb') as fichier:
+        with open(CONST_PATH_SOLAIRE, CONST_READ_BINARY) as fichier:
             solaire_courant = load(fichier)
     except OSError:
         # sauvegarder information directement
-        with open(CONST_PATH_SOLAIRE, 'wb') as fichier:
+        with open(CONST_PATH_SOLAIRE, CONST_WRITE_BINARY) as fichier:
             print("maj solaire(1)")
             dump(solaire, fichier)
         return
@@ -237,7 +239,7 @@ async def set_horaire_solaire(solaire: dict):
 
 def get_horaire_solaire():
     try:
-        with open(CONST_PATH_SOLAIRE, 'rb') as fichier:
+        with open(CONST_PATH_SOLAIRE, CONST_READ_BINARY) as fichier:
             return load(fichier)
     except OSError:
         return
@@ -245,7 +247,7 @@ def get_horaire_solaire():
 
 def set_configuration_display(configuration: dict):
     # print('Maj configuration display')
-    with open(CONST_PATH_FICHIER_DISPLAY, 'wb') as fichier:
+    with open(CONST_PATH_FICHIER_DISPLAY, CONST_WRITE_BINARY) as fichier:
         dump(configuration, fichier)
 
 
@@ -306,18 +308,16 @@ async def update_configuration_programmes(configuration: dict, appareil):
     
 
 def set_configuration_programmes(configuration: dict):
-    with open(CONST_PATH_FICHIER_PROGRAMMES, 'wb') as fichier:
+    with open(CONST_PATH_FICHIER_PROGRAMMES, CONST_WRITE_BINARY) as fichier:
         dump(configuration, fichier)
     
 
 def sauvegarder_relais(fiche: dict):
-    # url_relais = [app['url'] for app in fiche['applications']['senseurspassifs_relai'] if app['nature'] == 'dns']
-
     app_instance_pathname = dict()
     for instance_id, app_params in fiche[CONST_CHAMP_APPLICATIONSV2][CONST_CHAMP_SENSEURSPASSIFS_RELAI][CONST_CHAMP_INSTANCES].items():
         try:
             app_instance_pathname[instance_id] = app_params[CONST_CHAMP_PATHNAME]
-            print("instance_id %s pathname %s" % (instance_id, app_params[CONST_CHAMP_PATHNAME]))
+            # print("instance_id %s pathname %s" % (instance_id, app_params[CONST_CHAMP_PATHNAME]))
         except KeyError:
             pass
 
@@ -331,12 +331,12 @@ def sauvegarder_relais(fiche: dict):
             continue  # Pas de path
 
         try:
-            port = instance_params['ports']['https']
+            port = instance_params[CONST_CHAMP_PORTS][CONST_CHAMP_HTTPS]
         except KeyError:
             port = 443
 
         try:
-            for domaine in instance_params['domaines']:
+            for domaine in instance_params[CONST_CHAMP_DOMAINES]:
                 url_relais.append(f'https://{domaine}:{port}{pathname}')
         except KeyError:
             pass
@@ -348,6 +348,14 @@ def sauvegarder_relais(fiche: dict):
 
 
 def sauvegarder_relais_liste(url_relais: list):
+    """
+    Sauvegarde la liste de relais recu d'une fiche de MilleGrille.
+    Supprime relais.new.json.
+    """
+    if len(url_relais) == 0:
+        # Empecher le retrait de tous les relais, on doit en garder au moins 1.
+        raise ValueError('liste vide')
+
     info_relais = None
     try:
         with open(CONST_PATH_RELAIS) as fichier:
@@ -359,28 +367,87 @@ def sauvegarder_relais_liste(url_relais: list):
     change = False
     if info_relais is None:
         change = True
-    elif len(info_relais['relais']) != len(url_relais):
+    elif len(info_relais[CONST_CHAMP_RELAIS]) != len(url_relais):
         change = True
     else:
         for relai in url_relais:
-            if relai not in info_relais['relais']:
+            if relai not in info_relais[CONST_CHAMP_RELAIS]:
                 change = True
 
     if change:
         print('Sauvegarder %s maj' % CONST_PATH_RELAIS)
         try:
-            with open(CONST_PATH_RELAIS, 'wb') as fichier:
-                dump({'relais': url_relais}, fichier)
+            with open(CONST_PATH_RELAIS, CONST_WRITE_BINARY) as fichier:
+                dump({CONST_CHAMP_RELAIS: url_relais}, fichier)
         except Exception as e:
             print('Erreur sauvegarde %s' % CONST_PATH_RELAIS)
             print_exception(e)
     else:
         print("Relais non changes")
 
+    try:
+        # Cleanup relais.new.json
+        unlink(CONST_PATH_RELAIS_NEW)
+        print("relais.new.json supprime")
+    except OSError:
+        pass  # Le fichier n'existe pas
+
 
 def get_relais():
+    """ Charge les listes de relais.json et relais.new.json. """
+    relais = list()
+
     try:
-        with open(CONST_PATH_RELAIS, 'rb') as fichier:
-            return load(fichier)['relais']
+        with open(CONST_PATH_RELAIS, CONST_READ_BINARY) as fichier:
+            relais.extend(load(fichier)[CONST_CHAMP_RELAIS])
     except (OSError, KeyError):
-        return
+        pass
+
+    try:
+        with open(CONST_PATH_RELAIS_NEW, CONST_READ_BINARY) as fichier:
+            relais.extend(load(fichier)[CONST_CHAMP_RELAIS])
+    except (OSError, KeyError):
+        pass
+
+    return relais
+
+
+async def set_time():
+    from ntptime import settime
+    import time
+    import urequests
+    from millegrilles.webutils import parse_url
+
+    # ntptime.host = 'maple.maceroc.com'
+    try:
+        settime()
+        print("NTP Time : ", time.gmtime())
+    except OSError as e:
+        import sys
+        print('NTP erreur')
+        print_exception(e)
+        await sleep(0)
+
+        # Tenter acces via relais
+        url_relais = get_relais()
+        if url_relais:
+            for relai in url_relais:
+                print("parse relai %s" % relai)
+                proto, host, port, pathname = parse_url(relai)
+                # print("relai %s:%s" % (host, port))
+                url_time = 'http://%s/%s' % (host, 'time.txt')
+                reponse = urequests.get(url_time)
+                await sleep(0)
+                if reponse.status_code == 200:
+                    time_reponse = reponse.text
+                    # print("time reponse text : %s" % time_reponse)
+                    await sleep(0)
+                    time_reponse_int = int(time_reponse.split('.')[0])
+                    print("time reponse : %s -> %s" % (time_reponse, time_reponse_int))
+                    from machine import RTC
+                    year, month, day, hour, minute, second, dow, doy = time.gmtime(time_reponse_int)
+                    rtc = RTC()
+                    rtc.datetime((year, month, day, dow, hour, minute, second, None))
+                    return
+
+        raise e

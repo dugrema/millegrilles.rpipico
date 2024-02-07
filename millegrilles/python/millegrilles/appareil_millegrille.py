@@ -17,73 +17,33 @@ from millegrilles.ledblink import led_executer_sequence
 
 from millegrilles import feed_display
 
-from mgbluetooth import BluetoothHandler
+# from mgbluetooth import BluetoothHandler
+from millegrilles.mgbluetooth import BluetoothHandler
 
 from millegrilles.websocket_messages import PollingThread, CONST_DUREE_THREAD_POLLING
 from handler_devices import DeviceHandler
 from handler_programmes import ProgrammesHandler
 from millegrilles.certificat import entretien_certificat as __entretien_certificat, PATH_CERT
-from millegrilles.message_inscription import run_inscription, recuperer_ca, charger_relais, \
-     verifier_renouveler_certificat as __verifier_renouveler_certificat, parse_url
+from millegrilles.message_inscription import run_inscription, recuperer_ca, \
+     verifier_renouveler_certificat as __verifier_renouveler_certificat, parse_url, charger_fiche
 from millegrilles.chiffrage import ChiffrageMessages
 
 # from dev import config
 from millegrilles.config import \
-     detecter_mode_operation, get_tz_offset, initialisation, initialiser_wifi, get_relais, \
-     get_timezone_transition, transition_timezone, \
-     CONST_MODE_INIT, \
-     CONST_MODE_RECUPERER_CA, \
-     CONST_MODE_CHARGER_URL_RELAIS, \
-     CONST_MODE_SIGNER_CERTIFICAT, \
-     CONST_MODE_POLLING
+     set_time, detecter_mode_operation, get_tz_offset, initialisation, initialiser_wifi, get_relais, \
+     get_timezone_transition, transition_timezone, sauvegarder_relais
+
+from millegrilles.constantes import  CONST_MODE_INIT, CONST_MODE_RECUPERER_CA, CONST_MODE_CHARGER_URL_RELAIS, \
+     CONST_MODE_SIGNER_CERTIFICAT, CONST_MODE_POLLING, CONST_PATH_FICHIER_DISPLAY
 
 CONST_INFO_SEP = const(' ---- INFO ----')
 CONST_NB_ERREURS_RESET = const(10)
 CONST_HTTP_TIMEOUT_DEFAULT = const(60)
 _CONST_INTERVALLE_REFRESH_FICHE = const(1 * 60 * 60)
 
-CONST_PATH_FICHIER_DISPLAY = const('displays.json')
-
 
 # Initialiser classe de buffer
 BUFFER_MESSAGE = mgmessages.BufferMessage(16*1024)
-
-
-async def set_time():
-    from ntptime import settime
-    # ntptime.host = 'maple.maceroc.com'
-    try:
-        settime()
-        print("NTP Time : ", time.gmtime())
-    except OSError as e:
-        import sys
-        print('NTP erreur')
-        sys.print_exception(e)
-        await asyncio.sleep(0)
-
-        # Tenter acces via relais
-        url_relais = get_relais()
-        if url_relais:
-            for relai in url_relais:
-                print("parse relai %s" % relai)
-                proto, host, port, pathname = parse_url(relai)
-                print("relai %s:%s" % (host, port))
-                url_time = 'http://%s/%s' % (host, 'time.txt')
-                reponse = urequests.get(url_time)
-                await asyncio.sleep(0)
-                if reponse.status_code == 200:
-                    time_reponse = reponse.text
-                    print("time reponse text : %s" % time_reponse)
-                    await asyncio.sleep(0)
-                    time_reponse_int = int(time_reponse.split('.')[0])
-                    print("time reponse : %s -> %s" % (time_reponse, time_reponse_int))
-                    from machine import RTC
-                    year, month, day, hour, minute, second, dow, doy = time.gmtime(time_reponse_int)
-                    rtc = RTC()
-                    rtc.datetime((year, month, day, dow, hour, minute, second, None))
-                    return
-
-        raise e
 
 
 def reboot(e=None):
@@ -477,20 +437,36 @@ class Runner:
             self.__ui_lock.release()
 
     async def charger_urls(self):
+        print('charger_urls*')
         if self.__rtc_pret.is_set() is True:
-            refresh = self.__prochain_refresh_fiche != 0 and self.__prochain_refresh_fiche >= time.time()
-            # refresh = self.__prochain_refresh_fiche >= time.time()
+            try:
+                refresh = self.__prochain_refresh_fiche == 0 or self.__prochain_refresh_fiche >= time.time()
+                collect()
+                await asyncio.sleep(0)
 
-            collect()
-            relais = await charger_relais(
-                self.__ui_lock, refresh=refresh, buffer=BUFFER_MESSAGE)
-            self.set_relais(relais)
+                relais = get_relais()
+                print('charger_urls relais %s' % relais)
+                if refresh:
+                    try:
+                        fiche, certificat = await charger_fiche(buffer=BUFFER_MESSAGE)
+                        if fiche is not None:
+                            relais = sauvegarder_relais(fiche)
+                            print('charger_url relais fiche sauvegardee %s' % relais)
+                            await asyncio.sleep(0)
+                    except Exception as e:
+                        print("Erreur chargement fiche, utiliser relais connus : %s" % str(e))
+                        sys.print_exception(e)
 
-            if self.__prochain_refresh_fiche == 0:
-                # Faire rafraichir la fiche a la prochaine boucle d'entretien
-                self.__prochain_refresh_fiche = time.time()
-            elif refresh is True:
-                self.__prochain_refresh_fiche = _CONST_INTERVALLE_REFRESH_FICHE + time.time()
+                print('charger_urls relais %s' % relais)
+                self.set_relais(relais)
+
+                if refresh is True:
+                    self.__prochain_refresh_fiche = _CONST_INTERVALLE_REFRESH_FICHE + time.time()
+            except Exception:
+                print('charger_urls erreur')
+                sys.print_exception(e)
+        else:
+            print('charger_urls rtc non pret')
 
     def get_configuration_display(self):
         try:

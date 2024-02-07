@@ -17,6 +17,7 @@ CONST_PATH_RELAIS_NEW = const('relais.new.json')
 CONST_PATH_WIFI = const('wifi.json')
 CONST_PATH_WIFI_NEW = const('wifi.new.json')
 
+
 # Modes operation
 CONST_MODE_INIT = const(1)
 CONST_MODE_RECUPERER_CA = const(2)
@@ -26,6 +27,10 @@ CONST_MODE_POLLING = const(99)
 
 # Timeouts
 CONST_HTTP_TIMEOUT_DEFAULT = const(60)
+
+# Fichiers
+CONST_READ_BINARY = const('rb')
+CONST_WRITE_BINARY = const('wb')
 
 # Champs generiques
 CONST_UTF8 = const('utf-8')
@@ -41,6 +46,10 @@ CONST_CHAMP_OFFSET = const('offset')
 CONST_CHAMP_TRANSITION_TIME = const('transition_time')
 CONST_CHAMP_TRANSITION_OFFSET = const('transition_offset')
 CONST_CHAMP_PATHNAME = const('pathname')
+CONST_CHAMP_PORTS = const('ports')
+CONST_CHAMP_HTTPS = const('https')
+CONST_CHAMP_DOMAINES = const('domaines')
+CONST_CHAMP_RELAIS = const('relais')
 
 # Champs fichie
 CONST_CHAMP_APPLICATIONSV2 = const('applicationsV2')
