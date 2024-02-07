@@ -28,6 +28,8 @@ from millegrilles.message_inscription import run_inscription, recuperer_ca, \
      verifier_renouveler_certificat as __verifier_renouveler_certificat, parse_url, charger_fiche
 from millegrilles.chiffrage import ChiffrageMessages
 
+from millegrilles.webutils import reboot
+
 # from dev import config
 from millegrilles.config import \
      set_time, detecter_mode_operation, get_tz_offset, initialisation, initialiser_wifi, get_relais, \
@@ -44,27 +46,6 @@ _CONST_INTERVALLE_REFRESH_FICHE = const(1 * 60 * 60)
 
 # Initialiser classe de buffer
 BUFFER_MESSAGE = mgmessages.BufferMessage(16*1024)
-
-
-def reboot(e=None):
-    """
-    Redemarre. Conserve une trace dans les fichiers exception.log et reboot.log.
-    """
-    print("Rebooting")
-    date_line = 'Date %s (%s)' % (str(time.gmtime()), time.time())
-    
-    if e is not None:
-        with open('exception.log', 'w') as logfile:
-            logfile.write('%s\n\n---\nCaused by:\n' % date_line)
-            sys.print_exception(e, logfile)
-            logfile.write('\n')
-    else:
-        e = 'N/A'
-    
-    with open('reboot.log', 'a') as logfile:
-        logfile.write('%s (Cause: %s)\n' % (date_line, str(e)))
-
-    machine.reset()
 
 
 async def entretien_certificat():

@@ -245,6 +245,9 @@ class BluetoothHandler:
 
         print('user change pour %s' % existant)
 
+        from millegrilles.webutils import reboot
+        reboot(Exception('BLE change user'))
+
     def process_config_relai(self, params):
         relai = params['relai']
         print("Relai: %s" % relai)
