@@ -2,4 +2,4 @@
 *.mpy
 **/.idea
 pico-sdk/
-
+build/
