@@ -14,7 +14,7 @@ mkdir -p build
 rm "${REP_BUILD}/firmware.uf2"
 
 # Preparer mpy PYTHON
-echo "MILLEGRILLES_VERSION=const('2024.0.5')" > ${REP_MILLEGRILLES_PYTHON}/millegrilles/version.py
+#echo "MILLEGRILLES_VERSION=const('2024.0.5')" > ${REP_MILLEGRILLES_PYTHON}/millegrilles/version.py
 cd "${REP_MILLEGRILLES_PYTHON}"
 make clean; make all
 cp -r "${REP_MILLEGRILLES_PYTHON}/build/millegrilles" "${REP_RP2}/modules/"
