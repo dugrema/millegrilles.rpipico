@@ -8,8 +8,7 @@ LED_ONBOARD = Pin('WL_GPIO0', machine.Pin.OUT)
 from millegrilles.version import MILLEGRILLES_VERSION
 
 # Initialiser bus
-MESSAGE_INIT = const('MilleGrilles micropython version %s')
-print(MESSAGE_INIT % MILLEGRILLES_VERSION)
+print('Version %s' % MILLEGRILLES_VERSION)
 sleep_ms(500)
 
 
