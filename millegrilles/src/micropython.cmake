@@ -1,6 +1,6 @@
 # Librarie crypto Oryx Embedded
 # https://www.oryx-embedded.com/
-set(ORYX_LIB /home/mathieu/git/millegrilles.rpipico/oryx-embedded)
+set(ORYX_LIB ${CMAKE_CURRENT_SOURCE_DIR}/../../../oryx-embedded)
 
 add_library(usermod_oryx_lib STATIC)
 
