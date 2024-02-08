@@ -10,12 +10,12 @@ from micropython import mem_info
 from uwebsockets.client import connect
 from millegrilles.certificat import get_expiration_certificat_local
 from millegrilles.mgmessages import formatter_message, verifier_message
-from handler_commandes import traiter_commande
+from millegrilles.handler_commandes import traiter_commande
+# from handler_commandes import traiter_commande
 from millegrilles.config import get_http_timeout, set_configuration_display, get_timezone, set_timezone_offset, CONST_PATH_TZOFFSET, get_tz_offset
 
 from millegrilles.message_inscription import verifier_renouveler_certificat_ws, generer_message_timeinfo
 
-CONST_VERSION = const('2024.0.3')
 
 PATHNAME_POLL = const('/poll')
 PATHNAME_REQUETE = const('/requete')
@@ -531,6 +531,8 @@ class PollingThread:
 
     async def echanger_secret(self):
         """ Genere une cle publique ed25519 pour obtenir un secret avec le serveur """
+        from millegrilles.version import MILLEGRILLES_VERSION as CONST_VERSION
+
         chiffrage_messages = self.__appareil.chiffrage_messages
         if chiffrage_messages.doit_renouveler_secret() is False:
             return

@@ -1,7 +1,7 @@
 MPYCROSS = ../../micropython/mpy-cross/build/mpy-cross
 
-SRC_PYTHON = \
-    handler_commandes.mpy
+# SRC_PYTHON = \
+#     handler_commandes.mpy
 
 
 SRC_MILLEGRILLES = \
@@ -15,6 +15,7 @@ SRC_MILLEGRILLES = \
     millegrilles/feed_display.mpy \
     millegrilles/ledblink.mpy \
     millegrilles/message_inscription.mpy \
+    millegrilles/handler_commandes.mpy \
     millegrilles/chiffrage.mpy \
     millegrilles/mgmessages.mpy \
     millegrilles/mgthreads.mpy \
@@ -31,7 +32,8 @@ SRC_MILLEGRILLES = \
 build_folders:
 	mkdir -p build/millegrilles
 
-python: $(SRC_PYTHON) ${SRC_MILLEGRILLES}
+# python: $(SRC_PYTHON) ${SRC_MILLEGRILLES}
+python: ${SRC_MILLEGRILLES}
 
 build: build_folders python
 
