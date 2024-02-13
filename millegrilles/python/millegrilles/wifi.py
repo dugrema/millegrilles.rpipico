@@ -36,10 +36,21 @@ class StatusWifi:
         if status != 3:
             return False
 
-        # Ping gateway, 1 seul paquet avec timeout court (la connexion est directe)
+        # Ping gateway, timeout court (la connexion est directe)
         gw_ip = wlan.ifconfig()[2]
         await asyncio.sleep(0)  # Yield
-        res = uping.ping(gw_ip, count=1, timeout=50, quiet=True)
+        timeout = 25  # Besoin d'un minimum de 11ms pour transmettre le paquet et recevoir reponse
+        for _ in range(0, 10):
+            # print(const("ping timeout %d ms" % timeout))
+            res = uping.ping(gw_ip, count=1, timeout=timeout, quiet=True)
+
+            if res[1] == 1:  # Ping reussi
+                break
+
+            # Reessayer
+            timeout += 25  # Augmenter timeout
+            await asyncio.sleep_ms(100)
+
         await asyncio.sleep(0)  # Yield
 
         # Verifier qu'au moins 1 paquet a ete recu (confirme par gateway)
