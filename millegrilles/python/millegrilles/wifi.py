@@ -3,10 +3,12 @@ import struct
 import uasyncio as asyncio
 import time
 
-from . import uping
+from gc import collect
+from sys import print_exception
 from micropython import const
 
 from millegrilles.constantes import CONST_CHAMP_WIFI_SSID, CONST_CHAMP_WIFI_CHANNEL, CONST_UTF8, CONST_CHAMP_IP
+from . import uping
 
 
 CONST_EXPIRATION_ERREUR = const(10 * 60)  # Expiration apres une deconnexion
@@ -42,14 +44,21 @@ class StatusWifi:
         timeout = 25  # Besoin d'un minimum de 11ms pour transmettre le paquet et recevoir reponse
         for _ in range(0, 10):
             # print(const("ping timeout %d ms" % timeout))
-            res = uping.ping(gw_ip, count=1, timeout=timeout, quiet=True)
-
-            if res[1] == 1:  # Ping reussi
-                break
+            try:
+                res = uping.ping(gw_ip, count=1, timeout=timeout, quiet=True)
+                if res[1] == 1:  # Ping reussi
+                    break
+                timeout += 25  # Augmenter timeout
+            except MemoryError as e:
+                await asyncio.sleep(0)  # Yield
+                collect()
+                await asyncio.sleep(0)  # Yield
+                print_exception(e)
 
             # Reessayer
-            timeout += 25  # Augmenter timeout
-            await asyncio.sleep_ms(100)
+            await asyncio.sleep_ms(200)
+        else:
+            res = (0, 0)  # Valeur par defaut (echec)
 
         await asyncio.sleep(0)  # Yield
 
