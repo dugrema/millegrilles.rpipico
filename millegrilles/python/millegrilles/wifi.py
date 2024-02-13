@@ -1,11 +1,67 @@
 import network
 import struct
 import uasyncio as asyncio
+import time
 
 from . import uping
 from micropython import const
 
 from millegrilles.constantes import CONST_CHAMP_WIFI_SSID, CONST_CHAMP_WIFI_CHANNEL, CONST_UTF8, CONST_CHAMP_IP
+
+
+CONST_EXPIRATION_ERREUR = const(10 * 60)  # Expiration apres une deconnexion
+
+
+class StatusWifi:
+
+    def __init__(self):
+        self.connecte = False
+        self.ip = None
+        self.last_ping_ok = None
+
+    async def wifi_thread(self):
+        while True:
+            await self.is_wifi_ok()
+            await asyncio.sleep(60)
+
+    async def is_wifi_ok(self):
+        """ Verifier etat avec antenne """
+        wlan = network.WLAN(network.STA_IF)
+
+        self.connecte = wlan.isconnected()
+        if self.connecte is False:
+            return False
+
+        status = wlan.status()
+        if status != 3:
+            return False
+
+        # Ping gateway, 1 seul paquet avec timeout court (la connexion est directe)
+        gw_ip = wlan.ifconfig()[2]
+        await asyncio.sleep(0)  # Yield
+        res = uping.ping(gw_ip, count=1, timeout=50, quiet=True)
+        await asyncio.sleep(0)  # Yield
+
+        # Verifier qu'au moins 1 paquet a ete recu (confirme par gateway)
+        if res[1] == 0:
+            print(const("is_wifi_ok : Ping gateway (%s) failed") % gw_ip)
+            return False  # Ping succes, connexion WIFI fonctionne
+
+        # La connexion WIFI est OK
+        self.last_ping_ok = time.time()
+        return True
+
+    def err_expire(self):
+        """ @returns True si la connexion ne fonctionne plus depuis un certain temps. """
+        if self.last_ping_ok is None:
+            # La connexion n'a jamais ete etablie
+            return False
+
+        return time.time() - self.last_ping_ok > CONST_EXPIRATION_ERREUR
+
+    @property
+    def ok(self):
+        return self.last_ping_ok and time.time() - self.last_ping_ok < CONST_EXPIRATION_ERREUR
 
 
 def detecter_wifi():
@@ -81,30 +137,8 @@ def get_etat_wifi():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     status = wlan.ifconfig()
-    
+
     return {CONST_CHAMP_IP: status[0]}
-
-
-def is_wifi_ok():
-    wlan = network.WLAN(network.STA_IF)
-
-    if wlan.isconnected() is False:
-        return False
-
-    status = wlan.status()
-    if status != 3:
-        return False
-
-    # Ping gateway, 1 seul paquet avec timeout court (la connexion est directe)
-    gw_ip = wlan.ifconfig()[2]
-    res = uping.ping(gw_ip, count=1, timeout=100, quiet=True)
-
-    # Verifier qu'au moins 1 paquet a ete recu (confirme par gateway)
-    if res[1] > 0:
-        return True  # Ping succes, connexion WIFI fonctionne
-    print(const("is_wifi_ok : Ping gateway (%s) failed") % gw_ip)
-
-    return False
 
 
 def map_ip_bytes(ip):

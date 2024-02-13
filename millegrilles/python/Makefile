@@ -22,6 +22,7 @@ SRC_MILLEGRILLES = \
     millegrilles/uping.mpy \
     millegrilles/urequests2.mpy \
     millegrilles/websocket_messages.mpy \
+    millegrilles/watchdog.mpy \
     millegrilles/webutils.mpy \
     millegrilles/version.mpy \
     millegrilles/wifi.mpy

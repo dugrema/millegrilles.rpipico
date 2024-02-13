@@ -8,11 +8,12 @@ import uasyncio as asyncio
 import urequests
 
 from gc import collect
-from micropython import mem_info
+from micropython import mem_info, const
 
 from millegrilles import const_leds
 from millegrilles import mgmessages
-from millegrilles import wifi
+# from millegrilles import wifi
+from millegrilles.wifi import StatusWifi
 from millegrilles.ledblink import led_executer_sequence
 
 from millegrilles import feed_display
@@ -29,6 +30,7 @@ from millegrilles.message_inscription import run_inscription, recuperer_ca, \
 from millegrilles.chiffrage import ChiffrageMessages
 
 from millegrilles.webutils import reboot
+from millegrilles.watchdog import watchdog_thread
 
 # from dev import config
 from millegrilles.config import \
@@ -42,7 +44,6 @@ CONST_INFO_SEP = const(' ---- INFO ----')
 CONST_NB_ERREURS_RESET = const(10)
 CONST_HTTP_TIMEOUT_DEFAULT = const(60)
 _CONST_INTERVALLE_REFRESH_FICHE = const(1 * 60 * 60)
-
 
 # Initialiser classe de buffer
 BUFFER_MESSAGE = mgmessages.BufferMessage(16*1024)
@@ -85,7 +86,7 @@ class Runner:
         self.__url_relais = None
         self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
         
-        self.__wifi_ok = False
+        self.__etat_wifi = StatusWifi()
         # self.__ntp_ok = False
         self.__prochain_entretien_certificat = 0
         self.__prochain_refresh_fiche = 0
@@ -345,11 +346,15 @@ class Runner:
         Thread d'entretien
         """
         while True:
-            print("Entretien mode %d" % self._mode_operation)
-            await self.__ui_lock.acquire()
+            print(const("appareil_millegrille.entretien Mode %d") % self._mode_operation)
+            # await self.__ui_lock.acquire()
 
-            await self.__entretien_cycle()
-            
+            try:
+                await self.__entretien_cycle()
+            except Exception as e:
+                print("entretien erreur")
+                sys.print_exception(e)
+
             if init is True:
                 # Premiere run a l'initialisation
                 break
@@ -385,47 +390,51 @@ class Runner:
         return False
 
     async def __entretien_cycle(self):
+        print(const("__entretien_cycle Start"))
         try:
+            print(const("__entretien_cycle Mode operation %d") % self._mode_operation)
             if self._mode_operation >= 1:
                 # Verifier etat wifi
-                self.__wifi_ok = wifi.is_wifi_ok()
-
-                if self.__wifi_ok is False:
+                if self.__etat_wifi.connecte is False:
                     self.__rtc_pret.clear()
-                    print("Restart wifi")
+                    print(const("__entretien_cycle Restarting Wifi"))
                     ip = await initialiser_wifi()
                     if ip is not None:
-                        self.__wifi_ok = True
-                        print("Wifi OK : ", ip)
+                        # Mettre a jour etat wifi
+                        await self.__etat_wifi.is_wifi_ok()
+                        print(const("__entretien_cycle Wifi OK ip: %s") % ip)
                     else:
-                        print("Wifi echec")
+                        print(const("__entretien_cycle Wifi echec connexion"))
                     ip = None
 
-            if self.__wifi_ok is True:
+            if self.__etat_wifi.ok is True:
+                print(const("__entretien_cycle Etat wifi OK"))
 
+                # Wifi est ok (incluant verification ping gateway)
                 if self.__rtc_pret.is_set() is not True:
                     await set_time()
                     self.set_rtc_pret()
-                    # self.__ntp_ok = True
-
                 if self._mode_operation == CONST_MODE_POLLING:
                     await entretien_certificat()
+            elif self.__etat_wifi.err_expire():
+                # Wifi a deja ete connecte correctement, n'arrive pas a se reconnecter.
+                reboot(const("__entretien_cycle wifi deconnecte"))
+            else:
+                print(const("__entretien_cycle wifi OK false, last ok: %s") % self.__etat_wifi.last_ping_ok)
 
         except Exception as e:
-            print("Erreur entretien: %s" % e)
+            print(const("__entretien_cycle Erreur entretien: %s") % e)
             sys.print_exception(e)
-        finally:
-            self.__ui_lock.release()
 
     async def charger_urls(self):
         collect()
-        await asyncio.sleep(0)
+        await asyncio.sleep(0)  # Yield
 
         if self.__rtc_pret.is_set() is True:
             try:
                 refresh = self.__prochain_refresh_fiche == 0 or self.__prochain_refresh_fiche <= time.time()
                 collect()
-                await asyncio.sleep(0)
+                await asyncio.sleep(0)  # Yield
 
                 relais = get_relais()
                 print('charger_urls pre-refresh %s' % relais)
@@ -491,15 +500,14 @@ class Runner:
 
     async def __main(self):
         self._mode_operation = await detecter_mode_operation()
-        CONST_MODE_OPERATION_INTIAL = const("Mode operation initial %d")
-        print(CONST_MODE_OPERATION_INTIAL % self._mode_operation)
-        
+
+        print(const("Mode operation initial %d") % self._mode_operation)
+
         await led_executer_sequence(const_leds.CODE_MAIN_DEMARRAGE, executions=1, ui_lock=self.__ui_lock)
         while True:
             try:
                 self._mode_operation = await detecter_mode_operation()
-                CONST_MODE_OPERATION = const("Mode operation: %s")
-                print(CONST_MODE_OPERATION % self._mode_operation)
+                print(const("Mode operation: %s") % self._mode_operation)
 
                 if self._mode_operation >= CONST_MODE_CHARGER_URL_RELAIS:
                     await self.charger_urls()
@@ -527,22 +535,19 @@ class Runner:
                     await self._polling()
                     continue
                 else:
-                    CONST_MODE_OPERATION_NON_SUPPORTE = const("Mode operation non supporte : %d")
-                    print(CONST_MODE_OPERATION_NON_SUPPORTE % self._mode_operation)
+                    print(const("Mode operation non supporte : %d") % self._mode_operation)
                     await led_executer_sequence(const_leds.CODE_MAIN_OPERATION_INCONNUE, executions=None)
 
             except OSError as e:
                 if e.errno == 12:
                     self.__erreurs_enomem += 1
                     if self.__erreurs_enomem >= CONST_NB_ERREURS_RESET:
-                        CONST_ENOMEM_COUNT = const("ENOMEM count:%d, reset")
-                        print(CONST_ENOMEM_COUNT % self.__erreurs_enomem)
+                        print(const("ENOMEM count:%d, reset") % self.__erreurs_enomem)
                         await led_executer_sequence(
                             const_leds.CODE_ERREUR_MEMOIRE, executions=1, ui_lock=self.__ui_lock)
                         reboot(e)
 
-                    CONST_ERREUR_MEMOIRE = const("Erreur memoire no %d")
-                    print(CONST_ERREUR_MEMOIRE % self.__erreurs_enomem)
+                    print(const("Erreur memoire no %d") % self.__erreurs_enomem)
                     sys.print_exception(e)
                     collect()
                     self.afficher_info()
@@ -594,21 +599,28 @@ class Runner:
 
         # Demarrer thread entretien (wifi, date, configuration)
         await self.entretien(init=True)
-        entretien_task = asyncio.create_task(self.entretien())
+        entretien_task = self.entretien()
 
         # Task devices
-        devices_task = asyncio.create_task(self._device_handler.run(
-            self.__ui_lock, self.recevoir_lectures, self.get_feeds, 20_000))
+        devices_task = self._device_handler.run(
+            self.__ui_lock, self.recevoir_lectures, self.get_feeds, 20_000)
 
         # Task bluetooth
-        bluetooth_task = asyncio.create_task(self._bluetooth_handler.run())
+        bluetooth_task = self._bluetooth_handler.run()
+
+        # Verification wifi
+        wifi_task = self.__etat_wifi.wifi_thread()
+
+        # Watchdog thread
+        # watchdog_task = watchdog_thread()
 
         # Executer main loop
-        main_task = asyncio.create_task(self.__main())
+        # main_task = asyncio.create_task(self.__main())
+        main_task = self.__main()
 
         err = None
         try:
-            await asyncio.gather(entretien_task, devices_task, bluetooth_task, main_task)
+            await asyncio.gather(entretien_task, devices_task, bluetooth_task, wifi_task, main_task)
         except Exception as e:
             err = e
             sys.print_exception(e)

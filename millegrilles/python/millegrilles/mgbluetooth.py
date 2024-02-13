@@ -40,8 +40,9 @@ _ADV_INTERVAL_MS = const(250_000)
 class BluetoothHandler:
     """ Classe principale pour Bluetooth. Utiliser run(). """
 
-    def __init__(self, runner):
+    def __init__(self, runner, optionnel=False):
         self.__runner = runner  # Appareil
+        self.__optionnel = optionnel
 
         self.__temp_service = None
         self.__config_service = None
@@ -117,6 +118,8 @@ class BluetoothHandler:
             import sys
             sys.print_exception(e)
             print("Bluetooth non disponible")
+            if not self.__optionnel:
+                raise e
 
     async def entretien(self):
         try:
