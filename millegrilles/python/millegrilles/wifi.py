@@ -40,6 +40,7 @@ class StatusWifi:
 
         # Ping gateway, timeout court (la connexion est directe)
         gw_ip = wlan.ifconfig()[2]
+        collect()
         await asyncio.sleep(0)  # Yield
         timeout = 25  # Besoin d'un minimum de 11ms pour transmettre le paquet et recevoir reponse
         for _ in range(0, 10):
@@ -60,6 +61,8 @@ class StatusWifi:
         else:
             res = (0, 0)  # Valeur par defaut (echec)
 
+        await asyncio.sleep(0)  # Yield
+        collect()
         await asyncio.sleep(0)  # Yield
 
         # Verifier qu'au moins 1 paquet a ete recu (confirme par gateway)

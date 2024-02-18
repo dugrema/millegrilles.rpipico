@@ -5,7 +5,7 @@ import machine
 import os
 import sys
 import uasyncio as asyncio
-import urequests
+# import urequests
 
 from gc import collect
 from micropython import mem_info, const
@@ -30,7 +30,7 @@ from millegrilles.message_inscription import run_inscription, recuperer_ca, \
 from millegrilles.chiffrage import ChiffrageMessages
 
 from millegrilles.webutils import reboot
-from millegrilles.watchdog import watchdog_thread
+# from millegrilles.watchdog import watchdog_thread
 
 # from dev import config
 from millegrilles.config import \

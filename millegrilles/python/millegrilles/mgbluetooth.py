@@ -7,6 +7,7 @@ import sys
 import time
 
 from micropython import const
+from gc import collect
 from millegrilles.message_inscription import NOM_APPAREIL
 from millegrilles.wifi import pack_info_wifi
 from millegrilles import constantes
@@ -60,10 +61,14 @@ class BluetoothHandler:
         self.__getetat_time_characteristic = None
 
     async def __initialiser(self):
+        collect()
         self.preparer_gatt_server()
+        collect()
         await asyncio.sleep(0)  # Yield
 
         self.load_profil_config()
+        await asyncio.sleep(0)  # Yield
+        collect()
         await asyncio.sleep(0)  # Yield
 
     def preparer_gatt_server(self):
@@ -154,6 +159,7 @@ class BluetoothHandler:
     async def peripheral_task(self):
         while True:
             try:
+                print(const("BLE await connection"))
                 async with await aioble.advertise(
                     _ADV_INTERVAL_MS,
                     name=NOM_APPAREIL,
@@ -161,11 +167,21 @@ class BluetoothHandler:
                     appearance=_ADV_APPEARANCE_GENERIC_THERMOMETER,
                 ) as connection:
                     print("BLE connection from", connection.device)
-                    await connection.disconnected(timeout_ms=20_000)
+                    await connection.disconnected(timeout_ms=600_000)
+                    # await self.connection_thread(connection)
             except asyncio.CancelledError:
-                print("BLE CancelledError")
+                print(const("BLE CancelledError"))
             finally:
-                print("BLE disconnected")
+                print(const("BLE disconnected"))
+
+    # async def connection_thread(self, connection):
+    #     try:
+    #         print(const("BLE connection from"), connection.device)
+    #         await connection.disconnected(timeout_ms=600_000)
+    #     except asyncio.CancelledError:
+    #         print(const("BLE CancelledError "), connection.device)
+    #     finally:
+    #         print(const("BLE disconnected "), connection.device)
 
     async def config_set_task(self):
         while True:
