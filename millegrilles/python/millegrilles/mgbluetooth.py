@@ -13,26 +13,28 @@ from millegrilles.wifi import pack_info_wifi
 from millegrilles import constantes
 
 
-# org.bluetooth.service.environmental_sensing
-_ENV_SENSE_UUID = bluetooth.UUID(0x181A)
-# org.bluetooth.characteristic.temperature
-_ENV_SENSE_TEMP_UUID = bluetooth.UUID(0x2A6E)
-# org.bluetooth.characteristic.humidity
-_ENV_SENSE_HUM_UUID = bluetooth.UUID(0x2A6F)
+# # org.bluetooth.service.environmental_sensing
+# _ENV_SENSE_UUID = bluetooth.UUID(0x181A)
+# # org.bluetooth.characteristic.temperature
+# _ENV_SENSE_TEMP_UUID = bluetooth.UUID(0x2A6E)
+# # org.bluetooth.characteristic.humidity
+# _ENV_SENSE_HUM_UUID = bluetooth.UUID(0x2A6F)
 # org.bluetooth.characteristic.gap.appearance.xml
 _ADV_APPEARANCE_GENERIC_THERMOMETER = const(768)
 
 # Service de configuration MilleGrilles
-_ENV_CONFIG_UUID = bluetooth.UUID('7aac7580-88d7-480f-8a01-65406c2decaf')
-_ENV_SETWIFI_WRITE_UUID = bluetooth.UUID('7aac7581-88d7-480f-8a01-65406c2decaf')
+_ENV_COMMAND_UUID = bluetooth.UUID('7aac7580-88d7-480f-8a01-65406c2decaf')
+_ENV_COMMAND_WRITE_UUID = bluetooth.UUID('7aac7581-88d7-480f-8a01-65406c2decaf')
 
 # Service d'etat appareil MilleGrille
 _ENV_ETAT_UUID = bluetooth.UUID('7aac7590-88d7-480f-8a01-65406c2decaf')
 _ENV_ETAT_USERID_UUID = bluetooth.UUID('7aac7591-88d7-480f-8a01-65406c2decaf')
 _ENV_ETAT_IDMG_UUID = bluetooth.UUID('7aac7592-88d7-480f-8a01-65406c2decaf')
-_ENV_ETAT_WIFI1_UUID = bluetooth.UUID('7aac7593-88d7-480f-8a01-65406c2decaf')
-_ENV_ETAT_WIFI2_UUID = bluetooth.UUID('7aac7594-88d7-480f-8a01-65406c2decaf')
-_ENV_ETAT_TIME_UUID = bluetooth.UUID('7aac7595-88d7-480f-8a01-65406c2decaf')
+# _ENV_ETAT_WIFI1_UUID = bluetooth.UUID('7aac7593-88d7-480f-8a01-65406c2decaf')
+# _ENV_ETAT_WIFI2_UUID = bluetooth.UUID('7aac7594-88d7-480f-8a01-65406c2decaf')
+# _ENV_ETAT_TIME_UUID = bluetooth.UUID('7aac7595-88d7-480f-8a01-65406c2decaf')
+_ENV_ETAT_WIFI_UUID = bluetooth.UUID('7aac7596-88d7-480f-8a01-65406c2decaf')
+_ENV_ETAT_LECTURES_UUID = bluetooth.UUID('7aac7597-88d7-480f-8a01-65406c2decaf')
 
 # How frequently to send advertising beacons.
 _ADV_INTERVAL_MS = const(250_000)
@@ -46,19 +48,21 @@ class BluetoothHandler:
         self.__optionnel = optionnel
 
         self.__temp_service = None
-        self.__config_service = None
+        self.__command_service = None
         self.__etat_service = None
 
         self.__temp_characteristic = None
         self.__hum_characteristic = None
 
-        self.__config_write_characteristic = None
+        self.__command_write_characteristic = None
 
         self.__getetat_idmg_characteristic = None
         self.__getetat_userid_characteristic = None
-        self.__getetat_wifi1_characteristic = None
-        self.__getetat_wifi2_characteristic = None
-        self.__getetat_time_characteristic = None
+        # self.__getetat_wifi1_characteristic = None
+        # self.__getetat_wifi2_characteristic = None
+        # self.__getetat_time_characteristic = None
+        self.__getetat_wifi_characteristic = None
+        self.__getetat_lectures_characteristic = None
 
     async def __initialiser(self):
         collect()
@@ -73,18 +77,11 @@ class BluetoothHandler:
 
     def preparer_gatt_server(self):
         # Register GATT server.
-        self.__temp_service = aioble.Service(_ENV_SENSE_UUID)
-        self.__temp_characteristic = aioble.Characteristic(
-            self.__temp_service, _ENV_SENSE_TEMP_UUID, read=True, notify=True
-        )
-        self.__hum_characteristic = aioble.Characteristic(
-            self.__temp_service, _ENV_SENSE_HUM_UUID, read=True, notify=True
-        )
 
         # Config
-        self.__config_service = aioble.Service(_ENV_CONFIG_UUID)
-        self.__config_write_characteristic = aioble.Characteristic(
-            self.__config_service, _ENV_SETWIFI_WRITE_UUID, write=True, capture=True, notify=True
+        self.__command_service = aioble.Service(_ENV_COMMAND_UUID)
+        self.__command_write_characteristic = aioble.Characteristic(
+            self.__command_service, _ENV_COMMAND_WRITE_UUID, write=True, capture=True, notify=True
         )
 
         # Etat
@@ -95,17 +92,24 @@ class BluetoothHandler:
         self.__getetat_userid_characteristic = aioble.BufferedCharacteristic(
             self.__etat_service, _ENV_ETAT_USERID_UUID, read=True, max_len=51
         )
-        self.__getetat_wifi1_characteristic = aioble.Characteristic(
-            self.__etat_service, _ENV_ETAT_WIFI1_UUID, read=True, notify=True
+        # self.__getetat_wifi1_characteristic = aioble.Characteristic(
+        #     self.__etat_service, _ENV_ETAT_WIFI1_UUID, read=True, notify=True
+        # )
+        # self.__getetat_wifi2_characteristic = aioble.Characteristic(
+        #     self.__etat_service, _ENV_ETAT_WIFI2_UUID, read=True, notify=True
+        # )
+        # self.__getetat_time_characteristic = aioble.Characteristic(
+        #     self.__etat_service, _ENV_ETAT_TIME_UUID, read=True, notify=True
+        # )
+        self.__getetat_wifi_characteristic = aioble.BufferedCharacteristic(
+            self.__etat_service, _ENV_ETAT_WIFI_UUID, read=True, notify=True, max_len=39
         )
-        self.__getetat_wifi2_characteristic = aioble.Characteristic(
-            self.__etat_service, _ENV_ETAT_WIFI2_UUID, read=True, notify=True
-        )
-        self.__getetat_time_characteristic = aioble.Characteristic(
-            self.__etat_service, _ENV_ETAT_TIME_UUID, read=True, notify=True
+        self.__getetat_lectures_characteristic = aioble.Characteristic(
+            self.__etat_service, _ENV_ETAT_LECTURES_UUID, read=True, notify=True
         )
 
-        aioble.register_services(self.__etat_service, self.__config_service, self.__temp_service)
+        # aioble.register_services(self.__etat_service, self.__command_service, self.__temp_service)
+        aioble.register_services(self.__etat_service, self.__command_service)
 
     async def run(self):
 
@@ -116,9 +120,9 @@ class BluetoothHandler:
             entretien_task = asyncio.create_task(self.entretien())
             update_etat_task = asyncio.create_task(self.update_etat_task())
             peripheral_task = asyncio.create_task(self.peripheral_task())
-            config_set_task = asyncio.create_task(self.config_set_task())
+            command_set_task = asyncio.create_task(self.command_set_task())
 
-            await asyncio.gather(entretien_task, update_etat_task, peripheral_task, config_set_task)
+            await asyncio.gather(entretien_task, update_etat_task, peripheral_task, command_set_task)
         except Exception as e:
             import sys
             sys.print_exception(e)
@@ -145,16 +149,45 @@ class BluetoothHandler:
         # Mettre l'heure
         rtc = self.__runner.rtc_pret.is_set()
         time_val = time.time()
-        encoded_time = struct.pack('<BI', rtc, time_val)
-        self.__getetat_time_characteristic.write(encoded_time)
+        # encoded_time = struct.pack('<BI', rtc, time_val)
+        # self.__getetat_time_characteristic.write(encoded_time)
 
         # Mettre etat wifi
         status_1, status_2 = pack_info_wifi()
-        self.__getetat_wifi1_characteristic.write(status_1)
-        self.__getetat_wifi2_characteristic.write(status_2)
+        # self.__getetat_wifi1_characteristic.write(status_1)
+        # self.__getetat_wifi2_characteristic.write(status_2)
+        status_wifi = status_1 + status_2
+        self.__getetat_wifi_characteristic.write(status_wifi)
 
-        # Lire senseurs (etat instantane)
-        # TODO : Lire senseurs
+        # Remplir buffer lectures
+        temp1_deg_c = 23.4  # TODO : dummy value
+        temp2_deg_c = None  # TODO : dummy value
+        hum_pct = 45.6      # TODO : dummy value
+        switch_1 = False
+        switch_2 = True
+        switch_3 = None
+        switch_4 = None
+        switch_encoding = pack_bools((
+            switch_1 is not None, switch_1,
+            switch_2 is not None, switch_2,
+            switch_3 is not None, switch_3,
+            switch_4 is not None, switch_4,
+        ))
+        try:
+            temperature_1 = int(temp1_deg_c * 100)
+        except (TypeError, ValueError):
+            temperature_1 = constantes.CONST_SHORT_MIN  # Minimum
+        try:
+            temperature_2 = int(temp2_deg_c * 100)
+        except (TypeError, ValueError):
+            temperature_2 = constantes.CONST_SHORT_MIN  # Minimum
+        try:
+            humidite = int(hum_pct * 10)
+        except (TypeError, ValueError):
+            humidite = constantes.CONST_SHORT_MIN
+
+        encoded_lectures = struct.pack('<BIhhhB', rtc, time_val, temperature_1, temperature_2, humidite, switch_encoding)
+        self.__getetat_lectures_characteristic.write(encoded_lectures)
 
     async def peripheral_task(self):
         while True:
@@ -163,7 +196,7 @@ class BluetoothHandler:
                 async with await aioble.advertise(
                     _ADV_INTERVAL_MS,
                     name=NOM_APPAREIL,
-                    services=[_ENV_CONFIG_UUID],
+                    services=[_ENV_COMMAND_UUID],
                     appearance=_ADV_APPEARANCE_GENERIC_THERMOMETER,
                 ) as connection:
                     print("BLE connection from", connection.device)
@@ -183,7 +216,7 @@ class BluetoothHandler:
     #     finally:
     #         print(const("BLE disconnected "), connection.device)
 
-    async def config_set_task(self):
+    async def command_set_task(self):
         while True:
             try:
                 await self.recevoir_config()
@@ -195,7 +228,7 @@ class BluetoothHandler:
                 print("BLE config trop long")
 
     async def recevoir_config(self):
-        info_config = await recevoir_string(self.__config_write_characteristic, MAXLEN=200)
+        info_config = await recevoir_string(self.__command_write_characteristic, MAXLEN=200)
         print("Info config: %s" % info_config)
         params = json.loads(info_config)
 
@@ -346,3 +379,21 @@ async def recevoir_string(characteristic, MAXLEN=200):
         connection, value = await asyncio.wait_for(characteristic.written(), 1)
 
     return valeur_string
+
+
+def pack_bools(bool_vals: tuple[bool]) -> int:
+    """
+    Pack jusqu'a 8 bools dans un seul byte
+    """
+    if len(bool_vals) > 8:
+        raise ValueError('max 8 bools')
+
+    val = 0x0
+    position = 0
+
+    for b in bool_vals:
+        if b is True:  # Note : None et False donnent 0
+            val |= 1 << position
+        position += 1
+
+    return val

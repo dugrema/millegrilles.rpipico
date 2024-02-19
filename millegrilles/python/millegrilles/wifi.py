@@ -180,12 +180,15 @@ def get_wifi_detail():
 
 
 def pack_info_wifi():
+    """
+    @returns status_1 (status packed 19 bytes), status_2 (ssid, max 20 bytes)
+    """
     val = get_wifi_detail()
     connected, status, ssid, channel, client_ip, client_mask, gw_ip, dns_ip = val
     vals = [connected, status, channel, map_ip_bytes(client_ip), map_ip_bytes(client_mask), map_ip_bytes(gw_ip), map_ip_bytes(dns_ip)]
-    CHAMP_PACK_WIFI = const('<BBB4s4s4s4s')
+    CHAMP_PACK_WIFI = const('<BBB4s4s4s4s')  # 19 bytes
     status_1 = struct.pack(CHAMP_PACK_WIFI, *vals)
-    status_2 = ssid.encode(CONST_UTF8)[:20]
+    status_2 = ssid.encode(CONST_UTF8)[:20]  # 20 bytes
     return status_1, status_2
 
 
