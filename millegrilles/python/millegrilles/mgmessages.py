@@ -66,12 +66,18 @@ async def verifier_message(message: dict, buffer=None, err_ca_ok=False):
     # Valider le certificat - raise Exception si erreur
     pubkey = message['pubkey']
 
-    await asyncio.sleep_ms(1)
-    ticks_debut = time.ticks_ms()
-    info_certificat = await certificat.valider_certificats(message['certificat'], fingerprint=pubkey, err_ca_ok=err_ca_ok)  #, fingerprint=message['pubkey'])
-    print("verifier_message verifier certificat %s duree %d" % (pubkey, time.ticks_diff(time.ticks_ms(), ticks_debut)))
-    del message['certificat']
-    await asyncio.sleep_ms(1)
+    try:
+        await asyncio.sleep_ms(1)
+        ticks_debut = time.ticks_ms()
+        info_certificat = await certificat.valider_certificats(message['certificat'], fingerprint=pubkey, err_ca_ok=err_ca_ok)  #, fingerprint=message['pubkey'])
+        print("verifier_message verifier certificat %s duree %d" % (pubkey, time.ticks_diff(time.ticks_ms(), ticks_debut)))
+        del message['certificat']
+        await asyncio.sleep_ms(1)
+    except KeyError as ke:
+        if err_ca_ok is True:
+            info_certificat = True
+        else:
+            raise ke
 
     # Verifier la signature du message
     signature = message['sig']

@@ -11,8 +11,8 @@ from gc import collect
 from millegrilles.message_inscription import NOM_APPAREIL
 from millegrilles.wifi import pack_info_wifi
 from millegrilles import constantes
-from millegrilles.config import get_nom_appareil
-
+from millegrilles.config import get_nom_appareil, get_user_id, get_idmg
+from millegrilles.mgmessages import BufferMessage, verifier_message
 
 # # org.bluetooth.service.environmental_sensing
 # _ENV_SENSE_UUID = bluetooth.UUID(0x181A)
@@ -39,6 +39,8 @@ _ENV_ETAT_LECTURES_UUID = bluetooth.UUID('7aac7597-88d7-480f-8a01-65406c2decaf')
 
 # How frequently to send advertising beacons.
 _ADV_INTERVAL_MS = const(250_000)
+
+BUFFER_COMMANDE_BLUETOOTH = BufferMessage(2*1024)
 
 
 class BluetoothHandler:
@@ -67,6 +69,8 @@ class BluetoothHandler:
 
         self.__devices_lecture_map = None
         self.__lectures_sticky = dict()
+
+        self.__pubkey_auth = None  # Cle publique authentifiee de la connexion courante
 
     async def __initialiser(self):
         collect()
@@ -292,6 +296,7 @@ class BluetoothHandler:
                 print(const("BLE CancelledError"))
             finally:
                 print(const("BLE disconnected"))
+                self.__pubkey_auth = None  # Retirer authentification
 
     # async def connection_thread(self, connection):
     #     try:
@@ -312,14 +317,20 @@ class BluetoothHandler:
                 print("BLE config key manquante")
             except ValueError:
                 print("BLE config trop long")
+            except Exception as e:
+                print("BLE erreur")
+                sys.print_exception(e)
 
     async def recevoir_config(self):
-        info_config = await recevoir_string(self.__command_write_characteristic, MAXLEN=200)
-        print("Info config: %s" % info_config)
-        params = json.loads(info_config)
+        params = await recevoir_json(self.__command_write_characteristic)
+        print("BLE commande: %s" % params)
 
-        # Determiner commande
-        commande = params['commande']
+        # Determiner commande. Supporte commandes signees et non signees.
+        signee = params.get('sig') is not None
+        try:
+            commande = params['routage']['action']
+        except KeyError:
+            commande = params['commande']
 
         if commande == 'setWifi':
             self.process_config_wifi(params)
@@ -327,17 +338,23 @@ class BluetoothHandler:
             self.process_config_user(params)
         elif commande == 'setRelai':
             self.process_config_relai(params)
-        elif commande == 'setSwitch':
-            await self.process_set_switch(params)
+        elif commande == 'authentifier':
+            await self.process_authentifier(params)
+        elif signee:
+            if params['pubkey'] != self.__pubkey_auth:
+                print('BLE mauvaise auth, reject')
+            elif commande == 'setSwitch':
+                await self.process_set_switch(params)
+            else:
+                print("BLE commande signee inconnue %s" % commande)
         else:
-            print("BLE config inconnue %s" % commande)
-            return
+            print("BLE commande inconnue %s" % commande)
 
     def process_config_wifi(self, params):
         ssid = params['ssid']
         password = params['password']
         print("SSID: %s" % params['ssid'])
-        print("Mot de passe: %s" % password)
+        # print("Mot de passe: %s" % password)
         try:
             with open('wifi.new.json', 'rb') as fichier:
                 wifi_dict = json.load(fichier)
@@ -421,6 +438,47 @@ class BluetoothHandler:
     async def process_set_switch(self, params):
         print("Set switch ", params)
 
+        # Verifier la signature du message. Un erreur est lancee si la signature est invalide
+        await verifier_message(params, buffer=BUFFER_COMMANDE_BLUETOOTH, err_ca_ok=True)
+
+        contenu = json.loads(params['contenu'])
+        switch_idx = contenu['idx']
+        valeur = contenu['valeur']
+        print("BLE set switch %d -> %s" % (switch_idx, valeur))
+        did = self.__devices_lecture_map['switch'][switch_idx]
+        print("BLE did ", did)
+        device = self.__runner.get_device(did)
+        if valeur is True:
+            device.value = 1
+        else:
+            device.value = 0
+        self.__runner.trigger_stale_event()
+
+        # async def appareil_set_switch_value(appareil, senseur_id, value):
+        #     print("appareil_set_switch_value %s -> %s" % (senseur_id, value))
+        #
+        #     device_id = senseur_id.split('/')[0]
+        #     device = appareil.get_device(device_id)
+        #     print("Device trouve : %s" % device)
+        #     device.value = value
+        #     appareil.trigger_stale_event()
+
+    async def process_authentifier(self, params):
+        print("BLE Authentifier ", params)
+
+        # Verifier le certificat et la signature du message.
+        # Une erreur est lancee si la signature ou le certificat sont invalides.
+        info_certificat = await verifier_message(params, buffer=BUFFER_COMMANDE_BLUETOOTH)
+        print("BLE Auth info : ", info_certificat)
+
+        if info_certificat['user_id'] != get_user_id():
+            print("BLE auth mauvais user")
+            return
+
+        # L'usager est authentifie
+        self.__pubkey_auth = info_certificat['fingerprint']
+        print("BLE auth OK ", self.__pubkey_auth)
+
     def load_profil_config(self):
         try:
             with open(constantes.CONST_PATH_USER) as fichier:
@@ -459,17 +517,23 @@ def _encode_humidity(hum_pct):
     raise ValueError('pct invalide')
 
 
-async def recevoir_string(characteristic, MAXLEN=200):
+async def recevoir_string(characteristic):
     connection, value = await characteristic.written()
 
-    valeur_string = ''
-    while value and value != b'\x00':
-        valeur_string += value.decode('utf-8')
-        if len(valeur_string) > MAXLEN:
-            raise ValueError("len > %d" % MAXLEN)
-        connection, value = await asyncio.wait_for(characteristic.written(), 1)
+    BUFFER_COMMANDE_BLUETOOTH.clear()
 
-    return valeur_string
+    while value and value != b'\x00':
+        BUFFER_COMMANDE_BLUETOOTH.write(value)
+        connection, value = await asyncio.wait_for(characteristic.written(), 3)
+
+    return BUFFER_COMMANDE_BLUETOOTH
+
+
+async def recevoir_json(characteristic):
+    buffer = await recevoir_string(characteristic)  # Remplit le buffer
+    valeur = json.loads(buffer.get_data())
+    buffer.clear()
+    return valeur
 
 
 def pack_bools(bool_vals: tuple[bool]) -> int:
