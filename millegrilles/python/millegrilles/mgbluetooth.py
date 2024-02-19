@@ -273,7 +273,7 @@ class BluetoothHandler:
     async def peripheral_task(self):
         try:
             nom_appareil = get_nom_appareil()[0:25]
-        except AttributeError:
+        except TypeError:
             nom_appareil = NOM_APPAREIL
 
         while True:
