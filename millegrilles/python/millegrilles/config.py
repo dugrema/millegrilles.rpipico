@@ -358,6 +358,27 @@ def set_configuration_display(configuration: dict):
         dump(configuration, fichier)
 
 
+def set_nom_appareil(nom_appareil: str):
+    try:
+        with open('nom.txt', 'r') as fichier:
+            nom_courant = fichier.read()
+    except OSError:
+        nom_courant = None
+
+    if nom_appareil != nom_courant:
+        print("Changer nom appareil pour ", nom_appareil)
+        with open('nom.txt', 'w') as fichier:
+            fichier.write(nom_appareil)
+
+
+def get_nom_appareil():
+    try:
+        with open('nom.txt', 'r') as fichier:
+            return fichier.read()
+    except OSError:
+        pass
+
+
 async def update_configuration_programmes(configuration: dict, appareil):
     """
     Detecte les programmes changes et sauvegarde programmes.json

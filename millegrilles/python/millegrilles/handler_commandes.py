@@ -4,7 +4,8 @@ import json
 from binascii import unhexlify
 
 from millegrilles.config import set_configuration_display, update_configuration_programmes, \
-     set_timezone_offset, sauvegarder_relais, sauvegarder_relais_liste, set_horaire_solaire, get_timezone
+     set_timezone_offset, sauvegarder_relais, sauvegarder_relais_liste, set_horaire_solaire, get_timezone, \
+     set_nom_appareil
 
 from millegrilles.certificat import get_userid_local
 from millegrilles.message_inscription import recevoir_certificat
@@ -109,10 +110,26 @@ async def recevoir_timezone_offset(appareil, commande):
 async def recevoir_configuration_display(reponse):
     try:
         commande = json.loads(reponse['contenu'])
-        displays = commande['display_configuration']['configuration']['displays']
+        configuration = commande['display_configuration']['configuration']
+    except KeyError:
+        print('ERR recv reponse displays (contenu)')
+        return
+
+    await asyncio.sleep(0)  # Yield
+
+    try:
+        displays = configuration['displays']
         set_configuration_display(displays)
     except KeyError:
         print("Erreur reception displays %s" % reponse)
+
+    await asyncio.sleep(0)  # Yield
+
+    try:
+        descriptif_appareil = configuration['descriptif']
+        set_nom_appareil(descriptif_appareil)
+    except KeyError:
+        pass
 
 
 async def recevoir_configuration_programmes(appareil, programmes):

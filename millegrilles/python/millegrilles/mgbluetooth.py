@@ -11,6 +11,7 @@ from gc import collect
 from millegrilles.message_inscription import NOM_APPAREIL
 from millegrilles.wifi import pack_info_wifi
 from millegrilles import constantes
+from millegrilles.config import get_nom_appareil
 
 
 # # org.bluetooth.service.environmental_sensing
@@ -270,12 +271,17 @@ class BluetoothHandler:
         self.__getetat_lectures_characteristic.write(encoded_lectures)
 
     async def peripheral_task(self):
+        try:
+            nom_appareil = get_nom_appareil()[0:25]
+        except AttributeError:
+            nom_appareil = NOM_APPAREIL
+
         while True:
             try:
-                print(const("BLE await connection"))
+                print(const("BLE %s await connection") % nom_appareil)
                 async with await aioble.advertise(
                     _ADV_INTERVAL_MS,
-                    name=NOM_APPAREIL,
+                    name=nom_appareil,
                     services=[_ENV_COMMAND_UUID],
                     appearance=_ADV_APPEARANCE_GENERIC_THERMOMETER,
                 ) as connection:
@@ -321,6 +327,8 @@ class BluetoothHandler:
             self.process_config_user(params)
         elif commande == 'setRelai':
             self.process_config_relai(params)
+        elif commande == 'setSwitch':
+            await self.process_set_switch(params)
         else:
             print("BLE config inconnue %s" % commande)
             return
@@ -409,6 +417,9 @@ class BluetoothHandler:
 
         with open('relais.new.json', 'wb') as fichier:
             json.dump(relais_new, fichier)
+
+    async def process_set_switch(self, params):
+        print("Set switch ", params)
 
     def load_profil_config(self):
         try:
