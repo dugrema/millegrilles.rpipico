@@ -1,6 +1,7 @@
 import machine
 import uasyncio as asyncio
 from handler_devices import Driver
+from micropython import const
 
 from millegrilles.wifi import get_etat_wifi
 
@@ -47,3 +48,7 @@ class RPiPicoW(Driver):
     @property
     def device_id(self):
         return 'rp2picow'
+
+    @property
+    def types_lectures(self):
+        return const(('temperature', 'ip'))

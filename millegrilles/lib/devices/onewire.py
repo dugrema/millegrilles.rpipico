@@ -2,6 +2,7 @@ import onewire
 import uasyncio as asyncio
 import ubinascii as binascii
 from machine import Pin
+from micropython import const
 
 from handler_devices import Driver
 
@@ -54,3 +55,7 @@ class DriverOnewire(Driver):
             await asyncio.sleep_ms(1)  # Yield
 
         return lectures
+
+    @property
+    def types_lectures(self):
+        return const(('temperature',))

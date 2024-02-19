@@ -1,6 +1,8 @@
 from barometre import TendanceBarometrique
 from handler_devices import Driver
 
+from micropython import const
+
 
 class DriverBmp180(Driver):
     
@@ -52,3 +54,7 @@ class DriverBmp180(Driver):
     @property
     def device_id(self):
         return 'bmp180'
+
+    @property
+    def types_lectures(self):
+        return const(('temperature', 'pression'))

@@ -189,7 +189,10 @@ class Runner:
         devices = self._device_handler.devices
         print("List devices %s" % devices.keys())
         return self._device_handler.get_device(device_id)
-    
+
+    def get_devices(self):
+        return self._device_handler.devices.values()
+
     def reset_erreurs(self):
         self.__erreurs_memory = 0
         self.__erreurs_enomem = 0

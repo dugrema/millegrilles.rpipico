@@ -1,6 +1,7 @@
 import machine
 import uasyncio as asyncio
 from machine import Pin
+from micropython import const
 
 from handler_devices import Driver
 
@@ -44,3 +45,6 @@ class DriverSwitchPin(Driver):
         pin = self._params['pin']
         return 'switch_p%d' % pin
 
+    @property
+    def types_lectures(self):
+        return const(('switch',))

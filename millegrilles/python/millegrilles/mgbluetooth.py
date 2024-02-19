@@ -64,6 +64,9 @@ class BluetoothHandler:
         self.__getetat_wifi_characteristic = None
         self.__getetat_lectures_characteristic = None
 
+        self.__devices_lecture_map = None
+        self.__lectures_sticky = dict()
+
     async def __initialiser(self):
         collect()
         self.preparer_gatt_server()
@@ -74,6 +77,39 @@ class BluetoothHandler:
         await asyncio.sleep(0)  # Yield
         collect()
         await asyncio.sleep(0)  # Yield
+
+        await self.initialiser_devices_lectures()
+
+    async def initialiser_devices_lectures(self):
+        devices = self.__runner.get_devices()
+        devices_dict = dict()
+        for d in devices:
+            ble_value = d.ble
+            if isinstance(ble_value, str):
+                devices_dict[ble_value] = d
+            elif d.ble is True:
+                devices_dict[d.device_id] = d
+
+        # Trier keys
+        device_ids = sorted(devices_dict.keys())
+        devices_map = dict()
+        # Remplir types lecture en ordre (specifiquement temperatures et switch)
+        for did in device_ids:
+            device = devices_dict[did]
+            types_lectures = device.types_lectures
+            if types_lectures is None:
+                continue
+
+            for tl in types_lectures:
+                try:
+                    dm = devices_map[tl]
+                except KeyError:
+                    dm = list()
+                    devices_map[tl] = dm
+                dm.append(did)
+
+        print("BLE init Device ", devices_map)
+        self.__devices_lecture_map = devices_map
 
     def preparer_gatt_server(self):
         # Register GATT server.
@@ -160,30 +196,74 @@ class BluetoothHandler:
         self.__getetat_wifi_characteristic.write(status_wifi)
 
         # Remplir buffer lectures
-        temp1_deg_c = 23.4  # TODO : dummy value
-        temp2_deg_c = None  # TODO : dummy value
-        hum_pct = 45.6      # TODO : dummy value
-        switch_1 = False
-        switch_2 = True
-        switch_3 = None
-        switch_4 = None
+        lectures_courantes = self.__runner.lectures_courantes
+        # print("Lect courantes : %s" % lectures_courantes)
+
+        valeurs_lectures = {}
+
+        for key, value in lectures_courantes.items():
+            did = key.split('/')[0]
+            try:
+                type_lecture = value['type']
+                mapping_type = self.__devices_lecture_map[type_lecture]
+                # print("BLE type lecture %s, mapping %s, did %s" % (type_lecture, mapping_type, did))
+                try:
+                    position_appareil = mapping_type.index(did)
+                except ValueError:
+                    i = 0
+                    for map_value in mapping_type:
+                        if did.startswith(map_value):
+                            position_appareil = i
+                            break
+                        i += 1
+                    else:
+                        position_appareil = None
+
+                if position_appareil is not None:
+                    nom_valeur = '%s_%s' % (type_lecture, position_appareil)
+                    valeurs_lectures[nom_valeur] = value['valeur']
+            except (ValueError, KeyError):
+                pass
+
+        # print("BLE valeurs lectures mappees : ", valeurs_lectures)
+
+        self.__lectures_sticky.update(valeurs_lectures)
+
+        try:
+            switch_1 = self.__lectures_sticky['switch_0'] == 1
+        except KeyError:
+            switch_1 = None
+        try:
+            switch_2 = self.__lectures_sticky['switch_1'] == 1
+        except KeyError:
+            switch_2 = None
+        try:
+            switch_3 = self.__lectures_sticky['switch_2'] == 1
+        except KeyError:
+            switch_3 = None
+        try:
+            switch_4 = self.__lectures_sticky['switch_3'] == 1
+        except KeyError:
+            switch_4 = None
+
         switch_encoding = pack_bools((
             switch_1 is not None, switch_1,
             switch_2 is not None, switch_2,
             switch_3 is not None, switch_3,
             switch_4 is not None, switch_4,
         ))
+
         try:
-            temperature_1 = int(temp1_deg_c * 100)
-        except (TypeError, ValueError):
+            temperature_1 = int(self.__lectures_sticky['temperature_0'] * 100)
+        except (KeyError, TypeError, ValueError):
             temperature_1 = constantes.CONST_SHORT_MIN  # Minimum
         try:
-            temperature_2 = int(temp2_deg_c * 100)
-        except (TypeError, ValueError):
+            temperature_2 = int(self.__lectures_sticky['temperature_1'] * 100)
+        except (KeyError, TypeError, ValueError):
             temperature_2 = constantes.CONST_SHORT_MIN  # Minimum
         try:
-            humidite = int(hum_pct * 10)
-        except (TypeError, ValueError):
+            humidite = int(self.__lectures_sticky['humidite_0'] * 10)
+        except (KeyError, TypeError, ValueError):
             humidite = constantes.CONST_SHORT_MIN
 
         encoded_lectures = struct.pack('<BIhhhB', rtc, time_val, temperature_1, temperature_2, humidite, switch_encoding)

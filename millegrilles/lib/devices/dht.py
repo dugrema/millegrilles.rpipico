@@ -1,6 +1,6 @@
-import machine
 import uasyncio as asyncio
 from machine import Pin
+from micropython import const
 
 from handler_devices import Driver
 
@@ -46,3 +46,7 @@ class DriverDHT(Driver):
         pin = self._params['pin']
         modele_str = self._params['model'].upper()
         return '%s_p%d' % (modele_str, pin)
+
+    @property
+    def types_lectures(self):
+        return const(('temperature', 'humidite'))

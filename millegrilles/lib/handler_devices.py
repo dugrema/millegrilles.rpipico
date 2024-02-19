@@ -6,6 +6,7 @@ import uasyncio as asyncio
 
 from json import load
 from sys import print_exception
+from micropython import const
 
 CONST_FICHIER_DEVICES = const('devices.json')
 
@@ -23,19 +24,35 @@ class Driver:
     def parse(appareil, params, busses, ui_lock):
         driver_name = params['driver']
         driver_class = import_driver(driver_name)
-        print("Driver class: %s" % driver_class)
+        print(const("Driver class: %s") % driver_class)
         return driver_class(appareil, params, busses, ui_lock)
 
     @property
     def device_id(self):
         return self._params['driver'].replace('.', '_')
 
+    @property
+    def ble(self):
+        """
+        @returns: True si ble (bluetooth LE) n'est pas explicitement desactive.
+        """
+        param_ble = self._params.get('ble')
+        if param_ble is False:
+            return False
+        if isinstance(param_ble, str):
+            return param_ble
+        return True
+
+    @property
+    def types_lectures(self):
+        return None
+
 
 class DeviceHandler:
     
     def __init__(self, appareil):
         self.__appareil = appareil
-        self.__configuration = None
+        # self.__configuration = None
         self.__devices = dict()
         self.__busses = list()
         self.__ui_lock = None
@@ -43,19 +60,21 @@ class DeviceHandler:
     async def load(self, ui_lock: asyncio.Event):
         self.__ui_lock = ui_lock
         with open(CONST_FICHIER_DEVICES, 'rb') as fichier:
-            self.__configuration = load(fichier)
-        print("Configuration devices %s" % self.__configuration)
+            # self.__configuration = load(fichier)
+            configuration = load(fichier)
+        print("Configuration devices %s" % configuration)
 
         try:
-            await self._configurer_busses()
+            await self._configurer_busses(configuration['bus'])
         except KeyError:
             print("Aucuns bus configures")
             
-        await self._configurer_devices()
+        await self._configurer_devices(configuration['devices'])
         
-    async def _configurer_busses(self):
-        busses = self.__configuration['bus']
-        print("_configurer devices ", self.__configuration)
+    async def _configurer_busses(self, busses):
+        # busses = self.__configuration['bus']
+        # busses = configuration['bus']
+        print("_configurer busses ", busses)
         from devices.bus import Bus
         for bus_params in busses:
             bus_name = bus_params.get('driver')
@@ -63,8 +82,8 @@ class DeviceHandler:
             bus_instance = Bus.parse(bus_params)
             self.__busses.append(bus_instance)
 
-    async def _configurer_devices(self):
-        devices_list = self.__configuration['devices']
+    async def _configurer_devices(self, devices_list):
+        # devices_list = self.__configuration['devices']
         print("Devices list : %s" % devices_list)
         for dev in devices_list:
             print("Device : %s" % dev)
@@ -142,16 +161,16 @@ class DeviceHandler:
             self.__appareil.stale_event.clear()
 
             await self._lire_devices(sink_method, rapide=rapide)
-            print("lire_devices duree %d ms (rapide:%s)" % (time.ticks_diff(time.ticks_ms(), ticks_debut), rapide))
+            print(const("lire_devices duree %d ms (rapide:%s)") % (time.ticks_diff(time.ticks_ms(), ticks_debut), rapide))
 
             if stale:
-                print('DeviceHandler.run stale detecte')
+                print(const('DeviceHandler.run stale detecte'))
                 # Indiquer que l'etat a ete mis a jour et doit etre emis des que possible
                 self.__appareil.emit_event.set()
 
             try:
                 await asyncio.wait_for_ms(self.__appareil.stale_event.wait(), intervalle_ms)
-                print('DeviceHandler.run stale wait jump')
+                print(const('DeviceHandler.run stale wait jump'))
                 rapide = True
             except asyncio.TimeoutError:
                 rapide = False
