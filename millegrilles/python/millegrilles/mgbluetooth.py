@@ -1,6 +1,7 @@
 import uasyncio as asyncio
 import bluetooth
 import aioble
+import binascii
 import json
 import struct
 import sys
@@ -469,15 +470,15 @@ class BluetoothHandler:
             return
 
         # L'usager est authentifie
-        # self.__pubkey_auth = info_certificat['fingerprint']
-        # print("BLE auth OK ", self.__pubkey_auth)
+        pubkey_auth = binascii.unhexlify(info_certificat['fingerprint'].encode('utf-8'))
 
         cle_publique = json.loads(params['contenu'])['pubkey']
 
         # Calculer le secret partage
         self.__chiffrage_handler.calculer_secret_exchange(cle_publique, charger_info_app=False)
-        self.__command_auth_characteristic.write(b'')  # Vider le registre (indique que l'authentification a reussi)
-        print("BLE auth OK")
+        # Placer le fingerprint du peer authentifie. Va indiquer qu'on a accepte l'echange.
+        self.__command_auth_characteristic.write(pubkey_auth)
+        print("BLE auth OK ", info_certificat['fingerprint'])
 
     def load_profil_config(self):
         try:
