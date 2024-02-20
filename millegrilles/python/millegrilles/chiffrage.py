@@ -48,7 +48,7 @@ class ChiffrageMessages:
         cle_publique_remote = unhexlify(cle_publique.encode('utf-8'))
         self.__secret_echange = oryx_crypto.x25519computesharedsecret(self.__cle_privee_echange, cle_publique_remote)
 
-        print("!!! SECRET !!! : %s" % hexlify(self.__secret_echange))
+        # print("!!! SECRET !!! : %s" % hexlify(self.__secret_echange))
 
         # Cleanup
         self.__cle_privee_echange = None
