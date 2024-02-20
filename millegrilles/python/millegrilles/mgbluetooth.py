@@ -352,6 +352,8 @@ class BluetoothHandler:
         elif authentifiee:
             if action == const('setSwitchValue'):
                 await self.process_set_switch(commande)
+            elif action == const('reboot'):
+                await self.process_reboot(commande)
             else:
                 print(const("BLE commande authentifiee inconnue "), action)
         else:
@@ -456,6 +458,11 @@ class BluetoothHandler:
         else:
             device.value = 0
         self.__runner.trigger_stale_event()
+
+    async def process_reboot(self, params):
+        print("BLE Reboot")
+        from millegrilles.webutils import reboot
+        reboot(Exception('BLE cmd usager'))
 
     async def process_authentifier(self, params):
         print("BLE Authentifier ", params)
