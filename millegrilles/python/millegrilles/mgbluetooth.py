@@ -13,6 +13,7 @@ from millegrilles.wifi import pack_info_wifi
 from millegrilles import constantes
 from millegrilles.config import get_nom_appareil, get_user_id, get_idmg
 from millegrilles.mgmessages import BufferMessage, verifier_message
+from millegrilles.chiffrage import ChiffrageMessages
 
 # # org.bluetooth.service.environmental_sensing
 # _ENV_SENSE_UUID = bluetooth.UUID(0x181A)
@@ -26,6 +27,7 @@ _ADV_APPEARANCE_GENERIC_THERMOMETER = const(768)
 # Service de configuration MilleGrilles
 _ENV_COMMAND_UUID = bluetooth.UUID('7aac7580-88d7-480f-8a01-65406c2decaf')
 _ENV_COMMAND_WRITE_UUID = bluetooth.UUID('7aac7581-88d7-480f-8a01-65406c2decaf')
+_ENV_COMMAND_AUTH_UUID = bluetooth.UUID('7aac7582-88d7-480f-8a01-65406c2decaf')
 
 # Service d'etat appareil MilleGrille
 _ENV_ETAT_UUID = bluetooth.UUID('7aac7590-88d7-480f-8a01-65406c2decaf')
@@ -50,6 +52,8 @@ class BluetoothHandler:
         self.__runner = runner  # Appareil
         self.__optionnel = optionnel
 
+        self.__chiffrage_handler = ChiffrageMessages()
+
         self.__temp_service = None
         self.__command_service = None
         self.__etat_service = None
@@ -58,19 +62,17 @@ class BluetoothHandler:
         self.__hum_characteristic = None
 
         self.__command_write_characteristic = None
+        self.__command_auth_characteristic = None
 
         self.__getetat_idmg_characteristic = None
         self.__getetat_userid_characteristic = None
-        # self.__getetat_wifi1_characteristic = None
-        # self.__getetat_wifi2_characteristic = None
-        # self.__getetat_time_characteristic = None
         self.__getetat_wifi_characteristic = None
         self.__getetat_lectures_characteristic = None
 
         self.__devices_lecture_map = None
         self.__lectures_sticky = dict()
 
-        self.__pubkey_auth = None  # Cle publique authentifiee de la connexion courante
+        # self.__pubkey_auth = None  # Cle publique authentifiee de la connexion courante
 
     async def __initialiser(self):
         collect()
@@ -121,8 +123,14 @@ class BluetoothHandler:
 
         # Config
         self.__command_service = aioble.Service(_ENV_COMMAND_UUID)
-        self.__command_write_characteristic = aioble.Characteristic(
-            self.__command_service, _ENV_COMMAND_WRITE_UUID, write=True, capture=True, notify=True
+        # self.__command_write_characteristic = aioble.Characteristic(
+        #     self.__command_service, _ENV_COMMAND_WRITE_UUID, write=True, capture=True, notify=True
+        # )
+        self.__command_write_characteristic = aioble.BufferedCharacteristic(
+            self.__command_service, _ENV_COMMAND_WRITE_UUID, write=True, capture=True, notify=True, max_len=100
+        )
+        self.__command_auth_characteristic = aioble.BufferedCharacteristic(
+            self.__command_service, _ENV_COMMAND_AUTH_UUID, read=True, notify=True, max_len=32
         )
 
         # Etat
@@ -133,15 +141,6 @@ class BluetoothHandler:
         self.__getetat_userid_characteristic = aioble.BufferedCharacteristic(
             self.__etat_service, _ENV_ETAT_USERID_UUID, read=True, max_len=51
         )
-        # self.__getetat_wifi1_characteristic = aioble.Characteristic(
-        #     self.__etat_service, _ENV_ETAT_WIFI1_UUID, read=True, notify=True
-        # )
-        # self.__getetat_wifi2_characteristic = aioble.Characteristic(
-        #     self.__etat_service, _ENV_ETAT_WIFI2_UUID, read=True, notify=True
-        # )
-        # self.__getetat_time_characteristic = aioble.Characteristic(
-        #     self.__etat_service, _ENV_ETAT_TIME_UUID, read=True, notify=True
-        # )
         self.__getetat_wifi_characteristic = aioble.BufferedCharacteristic(
             self.__etat_service, _ENV_ETAT_WIFI_UUID, read=True, notify=True, max_len=39
         )
@@ -149,7 +148,6 @@ class BluetoothHandler:
             self.__etat_service, _ENV_ETAT_LECTURES_UUID, read=True, notify=True
         )
 
-        # aioble.register_services(self.__etat_service, self.__command_service, self.__temp_service)
         aioble.register_services(self.__etat_service, self.__command_service)
 
     async def run(self):
@@ -282,6 +280,9 @@ class BluetoothHandler:
 
         while True:
             try:
+                # Generer une nouvelle cle pour l'authentification
+                self.generer_cle_chiffrage()
+
                 print(const("BLE %s await connection") % nom_appareil)
                 async with await aioble.advertise(
                     _ADV_INTERVAL_MS,
@@ -290,27 +291,25 @@ class BluetoothHandler:
                     appearance=_ADV_APPEARANCE_GENERIC_THERMOMETER,
                 ) as connection:
                     print("BLE connection from", connection.device)
-                    await connection.disconnected(timeout_ms=600_000)
-                    # await self.connection_thread(connection)
+                    await connection.disconnected(timeout_ms=1_200_000)
+                    # await connection.disconnected()
             except asyncio.CancelledError:
                 print(const("BLE CancelledError"))
             finally:
                 print(const("BLE disconnected"))
-                self.__pubkey_auth = None  # Retirer authentification
+                # Reset authentification
+                self.__chiffrage_handler.clear()
 
-    # async def connection_thread(self, connection):
-    #     try:
-    #         print(const("BLE connection from"), connection.device)
-    #         await connection.disconnected(timeout_ms=600_000)
-    #     except asyncio.CancelledError:
-    #         print(const("BLE CancelledError "), connection.device)
-    #     finally:
-    #         print(const("BLE disconnected "), connection.device)
+    def generer_cle_chiffrage(self):
+        # Generer nouvelle cle de chiffrage
+        cle_publique = self.__chiffrage_handler.generer_cle_bytes()
+        # Exposer la cle publique de 32 bytes dans le registre
+        self.__command_auth_characteristic.write(cle_publique)
 
     async def command_set_task(self):
         while True:
             try:
-                await self.recevoir_config()
+                await self.recevoir_commande()
             except asyncio.TimeoutError:
                 print("BLE timeout reception config")
             except KeyError:
@@ -321,39 +320,42 @@ class BluetoothHandler:
                 print("BLE erreur")
                 sys.print_exception(e)
 
-    async def recevoir_config(self):
-        params = await recevoir_json(self.__command_write_characteristic)
-        print("BLE commande: %s" % params)
+    async def recevoir_commande(self):
+        commande = await recevoir_json(self.__command_write_characteristic)
+        print(const("BLE commande: "), commande)
 
-        # Determiner commande. Supporte commandes signees et non signees.
-        signee = params.get('sig') is not None
+        # Determiner commande. Supporte commandes authentifiee et non authentifiee.
         try:
-            commande = params['routage']['action']
+            commande = self.__chiffrage_handler.dechiffrer(commande)
+            authentifiee = True
         except KeyError:
-            commande = params['commande']
+            authentifiee = False
 
-        if commande == 'setWifi':
-            self.process_config_wifi(params)
-        elif commande == 'setUser':
-            self.process_config_user(params)
-        elif commande == 'setRelai':
-            self.process_config_relai(params)
-        elif commande == 'authentifier':
-            await self.process_authentifier(params)
-        elif signee:
-            if params['pubkey'] != self.__pubkey_auth:
-                print('BLE mauvaise auth, reject')
-            elif commande == 'setSwitch':
-                await self.process_set_switch(params)
+        try:
+            action = commande['routage']['action']
+        except KeyError:
+            action = commande['commande']
+
+        if action == const('setWifi'):
+            self.process_config_wifi(commande)
+        elif action == const('setUser'):
+            self.process_config_user(commande)
+        elif action == const('setRelai'):
+            self.process_config_relai(commande)
+        elif action == const('authentifier'):
+            await self.process_authentifier(commande)
+        elif authentifiee:
+            if action == const('setSwitch'):
+                await self.process_set_switch(commande)
             else:
-                print("BLE commande signee inconnue %s" % commande)
+                print(const("BLE commande authentifiee inconnue "), action)
         else:
-            print("BLE commande inconnue %s" % commande)
+            print(const("BLE commande inconnue "), action)
 
     def process_config_wifi(self, params):
         ssid = params['ssid']
         password = params['password']
-        print("SSID: %s" % params['ssid'])
+        print(const("SSID: "), params['ssid'])
         # print("Mot de passe: %s" % password)
         try:
             with open('wifi.new.json', 'rb') as fichier:
@@ -438,12 +440,12 @@ class BluetoothHandler:
     async def process_set_switch(self, params):
         print("Set switch ", params)
 
-        # Verifier la signature du message. Un erreur est lancee si la signature est invalide
-        await verifier_message(params, buffer=BUFFER_COMMANDE_BLUETOOTH, err_ca_ok=True)
+        # # Verifier la signature du message. Un erreur est lancee si la signature est invalide
+        # await verifier_message(params, buffer=BUFFER_COMMANDE_BLUETOOTH, err_ca_ok=True)
+        # contenu = json.loads(params['contenu'])
 
-        contenu = json.loads(params['contenu'])
-        switch_idx = contenu['idx']
-        valeur = contenu['valeur']
+        switch_idx = params['idx']
+        valeur = params['valeur']
         print("BLE set switch %d -> %s" % (switch_idx, valeur))
         did = self.__devices_lecture_map['switch'][switch_idx]
         print("BLE did ", did)
@@ -453,15 +455,6 @@ class BluetoothHandler:
         else:
             device.value = 0
         self.__runner.trigger_stale_event()
-
-        # async def appareil_set_switch_value(appareil, senseur_id, value):
-        #     print("appareil_set_switch_value %s -> %s" % (senseur_id, value))
-        #
-        #     device_id = senseur_id.split('/')[0]
-        #     device = appareil.get_device(device_id)
-        #     print("Device trouve : %s" % device)
-        #     device.value = value
-        #     appareil.trigger_stale_event()
 
     async def process_authentifier(self, params):
         print("BLE Authentifier ", params)
@@ -476,8 +469,15 @@ class BluetoothHandler:
             return
 
         # L'usager est authentifie
-        self.__pubkey_auth = info_certificat['fingerprint']
-        print("BLE auth OK ", self.__pubkey_auth)
+        # self.__pubkey_auth = info_certificat['fingerprint']
+        # print("BLE auth OK ", self.__pubkey_auth)
+
+        cle_publique = json.loads(params['contenu'])['pubkey']
+
+        # Calculer le secret partage
+        self.__chiffrage_handler.calculer_secret_exchange(cle_publique, charger_info_app=False)
+        self.__command_auth_characteristic.write(b'')  # Vider le registre (indique que l'authentification a reussi)
+        print("BLE auth OK")
 
     def load_profil_config(self):
         try:
@@ -497,24 +497,6 @@ class BluetoothHandler:
                 pass
         except OSError:
             pass  # Fichier n'existe pas
-
-
-def _encode_temperature(temp_deg_c):
-    """
-    Helper to encode the temperature characteristic (sint16, hundredths of a degree).
-    """
-    temp = int(temp_deg_c * 100)
-    if -27315 <= temp <= 32767:
-        return struct.pack("<h", temp)
-    raise ValueError('temp invalide')
-
-
-def _encode_humidity(hum_pct):
-    """ Helper to encode the humidity characteristic (sint16, tenths of a percent). """
-    hum = int(hum_pct * 10)
-    if 0 <= hum <= 100:
-        return struct.pack("<h", hum)
-    raise ValueError('pct invalide')
 
 
 async def recevoir_string(characteristic):

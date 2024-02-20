@@ -29,28 +29,31 @@ class ChiffrageMessages:
         self.__fingerprint_local = None
 
     def generer_cle(self) -> str:
+        return hexlify(self.generer_cle_bytes()).decode('utf-8')
+
+    def generer_cle_bytes(self) -> bytes:
         if self.__cle_privee_echange is None:
             self.__cle_privee_echange = rnd_bytes(32)
         cle_publique = oryx_crypto.x25519generatepubkey(self.__cle_privee_echange)
-        cle_publique = hexlify(cle_publique).decode('utf-8')
         return cle_publique
 
     def charger_info_certificat(self):
         self.__fingerprint_local = get_fingerprint_local()
         self.__uuid_appareil = NOM_APPAREIL
 
-    def calculer_secret_exchange(self, cle_publique: str):
+    def calculer_secret_exchange(self, cle_publique: str, charger_info_app=True):
         if self.__cle_privee_echange is None:
-            raise Error('cle privee None')
+            raise Exception('cle privee None')
 
         cle_publique_remote = unhexlify(cle_publique.encode('utf-8'))
         self.__secret_echange = oryx_crypto.x25519computesharedsecret(self.__cle_privee_echange, cle_publique_remote)
 
-        # print("!!! SECRET !!! : %s" % hexlify(self.__secret_echange))
+        print("!!! SECRET !!! : %s" % hexlify(self.__secret_echange))
 
         # Cleanup
         self.__cle_privee_echange = None
-        self.charger_info_certificat()
+        if charger_info_app is True:
+            self.charger_info_certificat()
 
         # Mettre date d'expiration de la cle secrete
         self.__expiration_secret_echange = time.time() + EXPIRATION_SECRET
@@ -68,12 +71,12 @@ class ChiffrageMessages:
     async def chiffrer(self, message: dict) -> dict:
         message = dumps(message)
 
-        ticks_debut = time.ticks_ms()
+        # ticks_debut = time.ticks_ms()
         nonce = rnd_bytes(12)
         tag = oryx_crypto.cipherchacha20poly1305encrypt(self.__secret_echange, nonce, message)
         tag = b2a_base64(tag).decode('utf-8')[:-1]
         nonce = b2a_base64(nonce).decode('utf-8')[:-1]
-        print("chiffrer duree %d ms" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+        # print("chiffrer duree %d ms" % time.ticks_diff(time.ticks_ms(), ticks_debut))
 
         return {
             'uuid_appareil': self.__uuid_appareil,
