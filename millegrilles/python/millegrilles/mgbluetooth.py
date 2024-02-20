@@ -313,10 +313,12 @@ class BluetoothHandler:
                 await self.recevoir_commande()
             except asyncio.TimeoutError:
                 print("BLE timeout reception config")
-            except KeyError:
+            except KeyError as e:
                 print("BLE config key manquante")
-            except ValueError:
-                print("BLE config trop long")
+                sys.print_exception(e)
+            except ValueError as e:
+                print("BLE commande invalide")
+                sys.print_exception(e)
             except Exception as e:
                 print("BLE erreur")
                 sys.print_exception(e)
@@ -328,6 +330,8 @@ class BluetoothHandler:
         # Determiner commande. Supporte commandes authentifiee et non authentifiee.
         try:
             commande = self.__chiffrage_handler.dechiffrer(commande)
+            print(const('Commande dechiffree '), commande)
+            commande = json.loads(commande)
             authentifiee = True
         except KeyError:
             authentifiee = False
@@ -346,7 +350,7 @@ class BluetoothHandler:
         elif action == const('authentifier'):
             await self.process_authentifier(commande)
         elif authentifiee:
-            if action == const('setSwitch'):
+            if action == const('setSwitchValue'):
                 await self.process_set_switch(commande)
             else:
                 print(const("BLE commande authentifiee inconnue "), action)
@@ -441,10 +445,6 @@ class BluetoothHandler:
     async def process_set_switch(self, params):
         print("Set switch ", params)
 
-        # # Verifier la signature du message. Un erreur est lancee si la signature est invalide
-        # await verifier_message(params, buffer=BUFFER_COMMANDE_BLUETOOTH, err_ca_ok=True)
-        # contenu = json.loads(params['contenu'])
-
         switch_idx = params['idx']
         valeur = params['valeur']
         print("BLE set switch %d -> %s" % (switch_idx, valeur))
@@ -475,9 +475,12 @@ class BluetoothHandler:
         cle_publique = json.loads(params['contenu'])['pubkey']
 
         # Calculer le secret partage
+        await asyncio.sleep(0)  # Yield
         self.__chiffrage_handler.calculer_secret_exchange(cle_publique, charger_info_app=False)
+        await asyncio.sleep(0)  # Yield
         # Placer le fingerprint du peer authentifie. Va indiquer qu'on a accepte l'echange.
         self.__command_auth_characteristic.write(pubkey_auth)
+        await asyncio.sleep(0)  # Yield
         print("BLE auth OK ", info_certificat['fingerprint'])
 
     def load_profil_config(self):
