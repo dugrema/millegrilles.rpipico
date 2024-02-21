@@ -188,7 +188,6 @@ class BluetoothHandler:
     def update_etat(self):
         # Mettre l'heure
         rtc = self.__runner.rtc_pret.is_set()
-        time_val = time.time()
         # encoded_time = struct.pack('<BI', rtc, time_val)
         # self.__getetat_time_characteristic.write(encoded_time)
 
@@ -197,7 +196,7 @@ class BluetoothHandler:
         # self.__getetat_wifi1_characteristic.write(status_1)
         # self.__getetat_wifi2_characteristic.write(status_2)
         status_wifi = status_1 + status_2
-        self.__getetat_wifi_characteristic.write(status_wifi)
+        self.__getetat_wifi_characteristic.write(status_wifi, send_update=True)
 
         # Remplir buffer lectures
         lectures_courantes = self.__runner.lectures_courantes
@@ -270,8 +269,9 @@ class BluetoothHandler:
         except (KeyError, TypeError, ValueError):
             humidite = constantes.CONST_SHORT_MIN
 
+        time_val = time.time()
         encoded_lectures = struct.pack('<BIhhhB', rtc, time_val, temperature_1, temperature_2, humidite, switch_encoding)
-        self.__getetat_lectures_characteristic.write(encoded_lectures)
+        self.__getetat_lectures_characteristic.write(encoded_lectures, send_update=True)
 
     async def peripheral_task(self):
         try:
@@ -492,7 +492,7 @@ class BluetoothHandler:
         self.__chiffrage_handler.calculer_secret_exchange(cle_publique, charger_info_app=False)
         await asyncio.sleep(0)  # Yield
         # Placer le fingerprint du peer authentifie. Va indiquer qu'on a accepte l'echange.
-        self.__command_auth_characteristic.write(pubkey_auth)
+        self.__command_auth_characteristic.write(pubkey_auth, send_update=True)
         await asyncio.sleep(0)  # Yield
         print("BLE auth OK ", info_certificat['fingerprint'])
 
