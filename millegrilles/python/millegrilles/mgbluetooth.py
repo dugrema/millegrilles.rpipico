@@ -43,7 +43,7 @@ _ENV_ETAT_LECTURES_UUID = bluetooth.UUID('7aac7597-88d7-480f-8a01-65406c2decaf')
 # How frequently to send advertising beacons.
 _ADV_INTERVAL_MS = const(250_000)
 
-BUFFER_COMMANDE_BLUETOOTH = BufferMessage(2*1024)
+BUFFER_COMMANDE_BLUETOOTH = BufferMessage(3*1024)
 
 
 class BluetoothHandler:
@@ -479,7 +479,13 @@ class BluetoothHandler:
         # L'usager est authentifie
         pubkey_auth = binascii.unhexlify(info_certificat['fingerprint'].encode('utf-8'))
 
-        cle_publique = json.loads(params['contenu'])['pubkey']
+        contenu = json.loads(params['contenu'])
+        exp = contenu.get('exp')
+        if exp and time.time() > exp:
+            print(const('BLE Auth expiree'))
+            return
+
+        cle_publique = contenu['pubkey']
 
         # Calculer le secret partage
         await asyncio.sleep(0)  # Yield
