@@ -19,6 +19,7 @@ SRC_MILLEGRILLES = \
     millegrilles/chiffrage.mpy \
     millegrilles/mgmessages.mpy \
     millegrilles/mgthreads.mpy \
+    millegrilles/pins.mpy \
     millegrilles/uping.mpy \
     millegrilles/urequests2.mpy \
     millegrilles/websocket_messages.mpy \
