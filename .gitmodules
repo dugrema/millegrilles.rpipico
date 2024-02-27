@@ -4,6 +4,7 @@
 [submodule "oryx-embedded/common"]
 	path = oryx-embedded/common
 	url = https://github.com/Oryx-Embedded/Common.git
+        branch = v2.3.2
 [submodule "oryx-embedded/cyclone_crypto"]
 	path = oryx-embedded/cyclone_crypto
 #	url = https://github.com/Oryx-Embedded/CycloneCRYPTO.git
@@ -13,4 +14,4 @@
 	path = micropython
 #	url = https://github.com/micropython/micropython.git
 	url = ssh://git.maple.maceroc.com/git/micropython.git
-        branch = master
+        branch = mg-2024.0-release
