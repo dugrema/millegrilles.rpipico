@@ -1,8 +1,8 @@
 import uasyncio as asyncio
 
-from handler_devices import Driver
-
 from devices.display import OutputLignes
+
+CONST_ERROR_BUS_NON_CONFIGURE = const('Bus %d non configure')
 
 
 class Ssd1306(OutputLignes):
@@ -22,7 +22,7 @@ class Ssd1306(OutputLignes):
         bus_no = self._params['bus']
         i2c = self.__busses[bus_no]
         if i2c is None:
-            raise Exception('Bus %d non configure' % bus_no)
+            raise Exception(CONST_ERROR_BUS_NON_CONFIGURE % bus_no)
 
         return SSD1306_I2C(self.__width, self.__height, i2c)
 

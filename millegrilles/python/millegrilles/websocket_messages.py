@@ -10,11 +10,13 @@ from micropython import mem_info
 from uwebsockets.client import connect
 from millegrilles.certificat import get_expiration_certificat_local
 from millegrilles.mgmessages import formatter_message, verifier_message
-from millegrilles.handler_commandes import traiter_commande
-# from handler_commandes import traiter_commande
 from millegrilles.config import get_http_timeout, set_configuration_display, get_timezone, set_timezone_offset, CONST_PATH_TZOFFSET, get_tz_offset
 
 from millegrilles.message_inscription import verifier_renouveler_certificat_ws, generer_message_timeinfo
+
+# Import dev/prod
+# from handler_commandes import traiter_commande
+from millegrilles.handler_commandes import traiter_commande
 
 
 PATHNAME_POLL = const('/poll')
@@ -29,8 +31,8 @@ CONST_REQUETE_FICHE_PUBLIQUE = const('getFichePublique')
 CONST_REQUETE_RELAIS_WEB = const('getRelaisWeb')
 CONST_COMMANDE_ECHANGE_CLES = const('echangerClesChiffrage')
 
-CONST_DUREE_THREAD_POLLING = const(6 * 60 * 60)
-CONST_EXPIRATION_CONFIG = const(20 * 60)
+# Durees en secondes
+CONST_EXPIRATION_CONFIG = const(8 * 3600)
 
 
 class HttpErrorException(Exception):
@@ -247,8 +249,8 @@ async def charger_timeinfo(chiffrage_messages, websocket, buffer, refresh: False
     websocket.send(buffer.get_data())
 
 
-async def verifier_signature(reponse, buffer, task_runner):
-    return await verifier_message(reponse, buffer, task_runner)
+async def verifier_signature(reponse, buffer):
+    return await verifier_message(reponse, buffer)
 
 
 class PollingThread:
@@ -505,7 +507,7 @@ class PollingThread:
                             reponse = {'routage': routage, 'contenu': reponse['contenu']}
                         except Exception:
                             # On n'a pas de message chiffre ou echec dechiffrage. Valider le message au complet.
-                            info_certificat = await verifier_signature(reponse, self.__buffer, self.__appareil.task_runner)
+                            info_certificat = await verifier_signature(reponse, self.__buffer)
 
                         # Cleanup
                         await asyncio.sleep_ms(2)  # Yield

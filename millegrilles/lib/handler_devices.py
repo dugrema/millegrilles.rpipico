@@ -123,8 +123,8 @@ class DeviceHandler:
     async def _output_devices(self, feeds, ui_lock: asyncio.Event):
         for dev in self.__devices.values():
             try:
-                coro = dev.run_display(feeds)
-                print("Demarrage display %s" % dev.device_id)
+                coro = dev.run_device(feeds)
+                print("Demarrage task device %s" % dev.device_id)
                 asyncio.create_task(coro)
             except AttributeError:
                 print("Dev %s sans output" % dev.device_id)

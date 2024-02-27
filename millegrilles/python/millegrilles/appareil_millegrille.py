@@ -12,7 +12,6 @@ from micropython import mem_info, const
 
 from millegrilles import const_leds
 from millegrilles import mgmessages
-# from millegrilles import wifi
 from millegrilles.wifi import StatusWifi
 from millegrilles.ledblink import led_executer_sequence
 
@@ -21,7 +20,7 @@ from millegrilles import feed_display
 # from mgbluetooth import BluetoothHandler
 from millegrilles.mgbluetooth import BluetoothHandler
 
-from millegrilles.websocket_messages import PollingThread, CONST_DUREE_THREAD_POLLING
+from millegrilles.websocket_messages import PollingThread
 from handler_devices import DeviceHandler
 from handler_programmes import ProgrammesHandler
 from millegrilles.certificat import entretien_certificat as __entretien_certificat, PATH_CERT
@@ -44,6 +43,7 @@ CONST_INFO_SEP = const(' ---- INFO ----')
 CONST_NB_ERREURS_RESET = const(10)
 CONST_HTTP_TIMEOUT_DEFAULT = const(60)
 _CONST_INTERVALLE_REFRESH_FICHE = const(1 * 60 * 60)
+CONST_DUREE_THREAD_POLLING = const(24 * 60 * 60)
 
 # Initialiser classe de buffer
 BUFFER_MESSAGE = mgmessages.BufferMessage(16*1024)
@@ -73,7 +73,6 @@ class Runner:
         self._mode_operation = 0
         self._device_handler = DeviceHandler(self)
         self._programmes_handler = ProgrammesHandler(self)
-        self.task_runner = None  # TaskRunner()
         self._bluetooth_handler = BluetoothHandler(self)
 
         self._lectures_courantes = dict()
@@ -87,7 +86,6 @@ class Runner:
         self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
         
         self.__etat_wifi = StatusWifi()
-        # self.__ntp_ok = False
         self.__prochain_entretien_certificat = 0
         self.__prochain_refresh_fiche = 0
         self.__timezone_offset = None

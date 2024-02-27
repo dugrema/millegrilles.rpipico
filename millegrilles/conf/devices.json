@@ -10,6 +10,7 @@
         {"driver": "devices.display.DummyOutput"},
         {"driver": "devices.lcd1602.LCD1602", "model": "i2c", "bus": 0},
         {"driver": "devices.ssd1306.Ssd1306", "model": "i2c", "bus": 0},
-        {"driver": "devices.switch.DriverSwitchPin", "pin": 18}
+        {"driver": "devices.switch.DriverSwitchPin", "pin": 18},
+        {"driver": "devices.button.DriverButtonPin", "pin": 15, "short": {"did": "switch_p18", "action": "toggle"}, "long": {"action": "bleconfig"}}
     ]
 }

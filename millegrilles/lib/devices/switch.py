@@ -5,6 +5,7 @@ from micropython import const
 
 from handler_devices import Driver
 
+
 class DriverSwitchPin(Driver):
     
     def __init__(self, appareil, params, busses, ui_lock):

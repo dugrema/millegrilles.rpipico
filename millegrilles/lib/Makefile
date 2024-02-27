@@ -22,6 +22,7 @@ SRC_UWEBSOCKETS = \
 SRC_DEVICES = \
     devices/bmp.mpy \
     devices/bus.mpy \
+    devices/button.mpy \
     devices/dht.mpy \
     devices/display.mpy \
     devices/lcd1602.mpy \

@@ -1,9 +1,14 @@
 import time
+
+from micropython import const
 from sys import print_exception
 
 import uasyncio as asyncio
 
 from handler_devices import Driver
+
+CONST_NOT_IMPLEMENTED = const('Not implemented')
+CONST_INITIALISATION = const(b'Initialisation')
 
 
 class OutputLignes(Driver):
@@ -26,22 +31,22 @@ class OutputLignes(Driver):
         except AttributeError:
             pass  # No async setup required
 
-        await self.preparer_ligne(b"Initialisation")
+        await self.preparer_ligne(CONST_INITIALISATION)
         await self.show(attente=0.1)
 
     def _get_instance(self):
-        raise Exception('Not implemented')
+        raise Exception(CONST_NOT_IMPLEMENTED)
 
     async def preparer_ligne(self, data, flag=None):
-        raise Exception('Not implemented')
+        raise Exception(CONST_NOT_IMPLEMENTED)
 
     async def show(self, attente=5.0):
-        raise Exception('Not implemented')
+        raise Exception(CONST_NOT_IMPLEMENTED)
 
     async def clear(self):
         pass  # Optionnel
 
-    async def run_display(self, feeds):
+    async def run_device(self, feeds):
         while True:
             try:
                 data_generator = feeds(name=self.__class__.__name__)
@@ -103,11 +108,11 @@ class OutputLignes(Driver):
                         await self.show(attente=duree_page)
 
             except SkipRemainingLines:
-                print("run_display SkipRemainingLines")
+                print(const("run_device SkipRemainingLines"))
                 await self.clear()
                 await asyncio.sleep_ms(10)
             except OSError as e:
-                print("Display OSError")
+                print(const("Display OSError"))
                 print_exception(e)
                 # Attendre 30 secs avant de reessayer
                 await asyncio.sleep(30)
@@ -147,9 +152,9 @@ class OutputLignes(Driver):
 
         (year, month, day, hour, minutes, seconds, _, _) = timenow
         if ligne == 0:
-            await self.preparer_ligne('{:d}-{:0>2d}-{:0>2d}'.format(year, month, day))
+            await self.preparer_ligne(const('{:d}-{:0>2d}-{:0>2d}').format(year, month, day))
         elif ligne == 1:
-            await self.preparer_ligne('{:0>2d}:{:0>2d}:{:0>2d}'.format(hour, minutes, seconds))
+            await self.preparer_ligne(const('{:0>2d}:{:0>2d}:{:0>2d}').format(hour, minutes, seconds))
         #elif ligne == 2:
         #    await self.preparer_ligne('Ligne 3')
         #elif ligne == 3:
