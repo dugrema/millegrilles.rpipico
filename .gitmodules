@@ -6,8 +6,11 @@
 	url = https://github.com/Oryx-Embedded/Common.git
 [submodule "oryx-embedded/cyclone_crypto"]
 	path = oryx-embedded/cyclone_crypto
-	url = https://github.com/Oryx-Embedded/CycloneCRYPTO.git
+#	url = https://github.com/Oryx-Embedded/CycloneCRYPTO.git
+	url = ssh://git.maple.maceroc.com/git/oryx-embedded-cyclonecrypto.git
+        branch = millegrilles
 [submodule "micropython"]
 	path = micropython
-	url = https://github.com/micropython/micropython.git
-	branch = 2023.8.0
+#	url = https://github.com/micropython/micropython.git
+	url = ssh://git.maple.maceroc.com/git/micropython.git
+        branch = master
