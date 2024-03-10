@@ -1,3 +1,4 @@
+import os
 from json import load, dump
 from os import stat, unlink
 from uasyncio import sleep, sleep_ms
@@ -252,7 +253,12 @@ async def transition_timezone():
         with open(CONST_PATH_TZOFFSET, CONST_READ_BINARY) as fichier:
             info_tz = load(fichier)
         await sleep(0)
+    except OSError:
+        print("tz transition erreur config absent")
+        await sleep(1)
+        return
 
+    try:
         # Extraire timezone et le nouvel offset a appliquer
         timezone = info_tz[CONST_CHAMP_TIMEZONE]
         transition_offset = info_tz[CONST_CHAMP_TRANSITION_OFFSET]
@@ -260,32 +266,41 @@ async def transition_timezone():
         print("tz transition a %s" % transition_offset)
 
         # Ecraser l'information courante. Ceci supprime l'information de transition qui vient de prendre effet.
-        await set_timezone_offset(transition_offset, timezone)
-    except (KeyError, OSError, ValueError):
-        pass
+        await set_timezone_offset(transition_offset, timezone, reset=True)
+    except Exception as e:
+        print("tz transition erreur, reset")
+        print_exception(e)
+        try:
+            os.unlink(CONST_PATH_TZOFFSET)
+        except OSError:
+            pass
 
 
-async def set_timezone_offset(offset, timezone=None, transition_time=None, transition_offset=None):
+async def set_timezone_offset(offset, timezone=None, transition_time=None, transition_offset=None, reset=False):
     print("Offset : %s" % offset)
 
     # Charger info, aucun write si information non changee
-    try:
-        with open(CONST_PATH_TZOFFSET, CONST_READ_BINARY) as fichier:
-            tz_courant = load(fichier)
-    except (OSError, ValueError):
-        print('tzoffset.json absent/invalide')
+    if reset is True:
         diff = True
         tz_courant = dict()
     else:
-        await sleep(0)
-        diff = offset != tz_courant.get(CONST_CHAMP_OFFSET)
-        diff |= timezone and timezone != tz_courant.get(CONST_CHAMP_TIMEZONE)
-        if transition_time and transition_offset:
-            try:
-                diff |= transition_time and transition_time != tz_courant.get(CONST_CHAMP_TRANSITION_TIME)
-                diff |= transition_offset and transition_offset != tz_courant.get(CONST_CHAMP_TRANSITION_OFFSET)
-            except TypeError:
-                diff = True
+        try:
+            with open(CONST_PATH_TZOFFSET, CONST_READ_BINARY) as fichier:
+                tz_courant = load(fichier)
+        except (OSError, ValueError):
+            print('tzoffset.json absent/invalide')
+            diff = True
+            tz_courant = dict()
+        else:
+            await sleep(0)
+            diff = offset != tz_courant.get(CONST_CHAMP_OFFSET)
+            diff |= timezone and timezone != tz_courant.get(CONST_CHAMP_TIMEZONE)
+            if transition_time and transition_offset:
+                try:
+                    diff |= transition_time and transition_time != tz_courant.get(CONST_CHAMP_TRANSITION_TIME)
+                    diff |= transition_offset and transition_offset != tz_courant.get(CONST_CHAMP_TRANSITION_OFFSET)
+                except TypeError:
+                    diff = True
 
     if diff:
         print("overwrite %s" % CONST_PATH_TZOFFSET)

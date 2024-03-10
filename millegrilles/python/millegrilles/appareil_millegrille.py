@@ -414,6 +414,7 @@ class Runner:
                 # Wifi est ok (incluant verification ping gateway)
                 if self.__rtc_pret.is_set() is not True:
                     await set_time()
+                    self.__etat_wifi.last_ping_ok = None  # Reset last ping ok - sinon peut detecter longue periode en erreur
                     self.set_rtc_pret()
                 if self._mode_operation == CONST_MODE_POLLING:
                     await entretien_certificat()

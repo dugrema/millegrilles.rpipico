@@ -86,6 +86,9 @@ class StatusWifi:
     def ok(self):
         return self.last_ping_ok and time.time() - self.last_ping_ok < CONST_EXPIRATION_ERREUR
 
+    def reset_timeout(self):
+        self.last_ping_ok = None
+
 
 def detecter_wifi():
     from network import WLAN, STA_IF
