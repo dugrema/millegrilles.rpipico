@@ -323,6 +323,13 @@ def remove_certificate():
         pass
 
 
+def remove_ca():
+    try:
+        remove(PATH_CA_CERT)
+    except OSError:
+        pass
+
+
 async def entretien_certificat():
     # global CACHE_DICT
 

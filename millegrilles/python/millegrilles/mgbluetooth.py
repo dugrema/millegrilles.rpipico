@@ -15,6 +15,7 @@ from millegrilles import constantes
 from millegrilles.config import get_nom_appareil, get_user_id, get_idmg
 from millegrilles.mgmessages import BufferMessage, verifier_message
 from millegrilles.chiffrage import ChiffrageMessages
+from millegrilles.certificat import remove_certificate, remove_ca
 
 # # org.bluetooth.service.environmental_sensing
 # _ENV_SENSE_UUID = bluetooth.UUID(0x181A)
@@ -400,10 +401,16 @@ class BluetoothHandler:
             existant = dict()
 
         # TODO - ajouter verification d'autorisation, bouton reset hardware, etc.
-        if idmg:
+        changement = False
+        if idmg and existant.get('idmg') != idmg:
+            changement = True
             existant['idmg'] = idmg
-        if user_id:
+        if user_id and existant.get('user_id') != user_id:
+            changement = True
             existant['user_id'] = user_id
+
+        if not changement:
+            return  # Rien a faire
 
         # with open(constantes.CONST_PATH_USER_NEW, 'wb') as fichier:
         # TODO : ajouter securite pour changement d'usager
@@ -411,6 +418,10 @@ class BluetoothHandler:
             json.dump(existant, fichier)
 
         print('user change pour %s' % existant)
+
+        # Reset certificats
+        remove_certificate()
+        remove_ca()
 
         from millegrilles.webutils import reboot
         reboot(Exception('BLE change user'))
