@@ -27,7 +27,7 @@ from millegrilles.webutils import parse_url
 NOM_APPAREIL = 'rpi-pico-' + hexlify(unique_id()).decode('utf-8')
 print("Nom appareil : %s" % NOM_APPAREIL)
 
-CONST_RENOUVELLEMENT_DELAI = const(3 * 24 * 60 * 60)  # jours pour renouvellement
+CONST_RENOUVELLEMENT_DELAI = const(6 * 24 * 60 * 60)  # jours pour renouvellement
 
 CONST_PATH_INSCRIPTION = '/inscrire'
 CONST_CSR_BEGIN = const('-----BEGIN CERTIFICATE REQUEST-----')

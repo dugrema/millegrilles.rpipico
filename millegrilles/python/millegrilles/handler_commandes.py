@@ -47,7 +47,7 @@ async def traiter_commande(buffer, websocket, appareil, commande: dict, info_cer
         await recevoir_configuration_display(commande)
     elif action == 'signerAppareil':
         try:
-            certificat = commande['certificat']
+            certificat = json.loads(commande['contenu'])['certificat']
             await recevoir_certificat(certificat)
         except KeyError as e:
             print("Erreur reception certificat KeyError %s" % str(e))
