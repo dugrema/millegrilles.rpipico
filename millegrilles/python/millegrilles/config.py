@@ -199,12 +199,6 @@ async def initialiser_wifi():
             
 
 def get_http_timeout():
-    try:
-        with open(CONST_PATH_FICHIER_CONN, CONST_READ_BINARY) as fichier:
-            return load(fichier)[CONST_CHAMP_HTTP_TIMEOUT]
-    except Exception:
-        pass
-    
     return CONST_HTTP_TIMEOUT_DEFAULT
 
 

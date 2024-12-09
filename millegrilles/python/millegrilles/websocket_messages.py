@@ -92,15 +92,15 @@ async def poll(appareil, websocket, emit_event, buffer, timeout_http=60, generer
             else:
                 raise e
 
-        if cycle > 3 and emit_event.is_set():
+        if cycle > 5 and emit_event.is_set():
             print("Emit event set, emettre")
             emettre = True
             refresh = False
-        elif cycle == 30 and deja_emis is False:
+        elif cycle == 50 and deja_emis is False:
             emettre = True
         else:
             # Intervalle polling socket
-            await asyncio.sleep_ms(100)
+            await asyncio.sleep_ms(50)
 
         if emettre is True:
             emettre = False
@@ -271,6 +271,7 @@ class PollingThread:
         
         self.__nie_count = 0
         self.__memory_error = 0
+        self.__last_message_ts = time.time()
 
     @property
     def emit_event(self):

@@ -520,9 +520,9 @@ class Runner:
                     await self.charger_urls()
 
                 # Cleanup memoire
-                await asyncio.sleep(0)  # Yield
+                await asyncio.sleep_ms(1)  # Yield
                 collect()
-                await asyncio.sleep(0)  # Yield
+                await asyncio.sleep_ms(1)  # Yield
 
                 if self._mode_operation == CONST_MODE_INIT:
                     await self.__initialisation()
