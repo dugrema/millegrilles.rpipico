@@ -397,14 +397,18 @@ class PollingThread:
                         raise e
                     
                 # Boucle polling sur connexion websocket
-                while expiration_thread > time.time() and self.__memory_error < 10:
-                    print("Expiration thread dans %s " % (expiration_thread - time.time()))
+                now = time.time()
+                while expiration_thread > now and self.__memory_error < 10:
+                    print("Expiration thread dans %s " % (expiration_thread - now))
 
-                    if time.time() > self.__prochain_refresh_config:
+                    if now > self.__prochain_refresh_config:
                         await self._refresh_config()
                         await asyncio.sleep_ms(1)
                         collect()
                         await asyncio.sleep_ms(1)
+                    elif self.__last_message_ts < now - (CONST_EXPIRATION_CONFIG+300):
+                        # This is an attempt to force a reboot if the connection is not working properly
+                        raise Exception('WS thread message timeout')
 
                     try:
                         print("debut ws poll")
@@ -432,6 +436,9 @@ class PollingThread:
                     except MemoryError as e:
                         self.__memory_error += 1
                         collect()
+
+                    # Update now
+                    now = time.time()
 
             finally:
                 self.__appareil.reset_websocket_pret()
@@ -477,6 +484,9 @@ class PollingThread:
 
                 try:
                     reponse = loads(self.__buffer.get_data())
+                    if reponse:
+                        # Keep track of messages - proxy to identify problems with the app server/connection
+                        self.__last_message_ts = time.time()
                 except ValueError:
                     len_buffer = len(self.__buffer.get_data())
                     print('*** JSON Decode error, len %d ***' % len_buffer)
