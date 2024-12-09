@@ -81,12 +81,12 @@ void osStartKernel(void)
  * @return Task identifier referencing the newly created task
  **/
 
-OsTaskId osCreateTask(const char_t *name, OsTaskCode taskCode,
-   void *param, size_t stackSize, int_t priority)
-{
-   //Return a dummy task identifier
-   return (OsTaskId) 1;
-}
+//OsTaskId osCreateTask(const char_t *name, OsTaskCode taskCode,
+//   void *param, size_t stackSize, int_t priority)
+//{
+//   //Return a dummy task identifier
+//   return (OsTaskId) 1;
+//}
 
 
 /**
