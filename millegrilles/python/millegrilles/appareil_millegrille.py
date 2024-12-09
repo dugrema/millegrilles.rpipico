@@ -1,6 +1,7 @@
 # Programme appareil millegrille
 import json
 import time
+
 import machine
 import os
 import sys
@@ -29,6 +30,7 @@ from millegrilles.message_inscription import run_inscription, recuperer_ca, \
 from millegrilles.chiffrage import ChiffrageMessages
 
 from millegrilles.webutils import reboot
+from millegrilles.garbage_collector import garbage_collection_thread, garbage_collection_update
 # from millegrilles.watchdog import watchdog_thread
 
 # from dev import config
@@ -505,6 +507,9 @@ class Runner:
 
         print(const("Mode operation initial %d") % self._mode_operation)
 
+        # Set garbage collection params
+        await garbage_collection_update()
+
         await led_executer_sequence(const_leds.CODE_MAIN_DEMARRAGE, executions=1, ui_lock=self.__ui_lock)
         while True:
             try:
@@ -620,9 +625,12 @@ class Runner:
         # main_task = asyncio.create_task(self.__main())
         main_task = self.__main()
 
+        garbage_collection_task = garbage_collection_thread()
+
         err = None
         try:
-            await asyncio.gather(entretien_task, devices_task, bluetooth_task, wifi_task, main_task)
+            await asyncio.gather(entretien_task, devices_task, bluetooth_task, wifi_task, main_task, garbage_collection_task)
+            print("A thread stopped - rebooting")
         except Exception as e:
             err = e
             sys.print_exception(e)

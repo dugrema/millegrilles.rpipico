@@ -41,7 +41,7 @@ class StatusWifi:
         # Ping gateway, timeout court (la connexion est directe)
         gw_ip = wlan.ifconfig()[2]
         collect()
-        await asyncio.sleep(0)  # Yield
+        await asyncio.sleep_ms(1)  # Yield
         timeout = 25  # Besoin d'un minimum de 11ms pour transmettre le paquet et recevoir reponse
         for _ in range(0, 10):
             # print(const("ping timeout %d ms" % timeout))
@@ -51,9 +51,9 @@ class StatusWifi:
                     break
                 timeout += 25  # Augmenter timeout
             except MemoryError as e:
-                await asyncio.sleep(0)  # Yield
+                await asyncio.sleep_ms(1)  # Yield
                 collect()
-                await asyncio.sleep(0)  # Yield
+                await asyncio.sleep_ms(1)  # Yield
                 print_exception(e)
 
             # Reessayer
@@ -61,9 +61,9 @@ class StatusWifi:
         else:
             res = (0, 0)  # Valeur par defaut (echec)
 
-        await asyncio.sleep(0)  # Yield
+        await asyncio.sleep_ms(1)  # Yield
         collect()
-        await asyncio.sleep(0)  # Yield
+        await asyncio.sleep_ms(1)  # Yield
 
         # Verifier qu'au moins 1 paquet a ete recu (confirme par gateway)
         if res[1] == 0:
