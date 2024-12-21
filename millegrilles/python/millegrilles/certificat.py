@@ -1,10 +1,12 @@
 import binascii
+import struct
+
 import oryx_crypto
 import time
 import uasyncio as asyncio
 
 from os import mkdir, remove
-from math import ceil
+from math import floor
 from struct import pack
 from random import getrandbits
 
@@ -64,8 +66,10 @@ def calculer_idmg(ca_der):
     fingerprint = multihash.wrap(CONST_HACHAGE_FINGERPRINT, fingerprint)
 
     date_expiration = oryx_crypto.x509EndDate(x509_info)
-    date_expiration = float(date_expiration) / 1000.0
-    date_expiration = ceil(date_expiration)
+    # Ceil does not work (proper idmg algo), the precision is insufficient.
+    # So just add a full unit (1000), divide and use floor to be sure.
+    date_expiration = (date_expiration + 1000) / 1000
+    date_expiration = floor(date_expiration)
     date_expiration = int(date_expiration)
     
     IDMG_VERSION_PACK = '<BI'
@@ -74,6 +78,38 @@ def calculer_idmg(ca_der):
     valeur_combinee = valeur_combinee + fingerprint
     
     return multibase.encode('base58btc', bytes(valeur_combinee))
+
+
+def verifier_idmg(ca_der, idmg):
+    idmg_bytes = multibase.decode(idmg)
+    print('Idmg hex')
+    print(binascii.hexlify(idmg_bytes))
+
+    version = idmg_bytes[0]
+    print("version")
+    print(version)
+
+    if version != IDMG_VERSION_ACTIVE:
+        raise Exception("IDMG V%d not supported" % version)
+
+    fingerprint = oryx_crypto.blake2s(ca_der)
+    print('fingerprint')
+    print(binascii.hexlify(fingerprint))
+    print('idmg fp')
+    print(binascii.hexlify(idmg_bytes[9:]))
+    if fingerprint != idmg_bytes[9:]:
+        raise Exception('fingerprint')
+
+    date_expiration_idmg, = struct.unpack('<I', idmg_bytes[1:5])
+
+    x509_info = oryx_crypto.x509certificatinfo(ca_der)
+    date_expiration = oryx_crypto.x509EndDate(x509_info)
+    # Ceil does not work (proper idmg algo), the precision is insufficient.
+    # So just add a full unit (1000), divide and use floor to be sure.
+    date_expiration = (date_expiration + 1000) / 1000
+    date_expiration = floor(date_expiration)
+    if date_expiration_idmg != date_expiration:
+        raise Exception('exp date')
 
 
 def load_pem_certificat(pem_path, format_str=False):
@@ -226,11 +262,17 @@ def sauvegarder_ca(ca_pem, idmg=None):
     
     # Convertir en DER
     ca_der = oryx_crypto.x509readpemcertificate(ca_pem)
-    
+
     if idmg is not None:
         # Valider le idmg
-        if calculer_idmg(ca_der) != idmg.encode('utf-8'):
-            raise Exception("Mismatch IDMG")
+        verifier_idmg(ca_der, idmg)  # Lance exception si invalide
+        # if calculer_idmg(ca_der) != idmg.encode('utf-8'):
+        #     print("DER Len")
+        #     print(len(ca_der))
+        #     print(idmg)
+        #     print("!=")
+        #     print(calculer_idmg(ca_der).decode('utf-8'))
+        #     raise Exception("Mismatch IDMG")
     
     # Valider (self-signed) - raise Exception si invalide
     oryx_crypto.x509validercertificate(ca_der, ca_der, time.time())
