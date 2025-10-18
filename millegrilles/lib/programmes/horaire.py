@@ -110,8 +110,8 @@ class HoraireMinuteEffet:
         if isinstance(self.__jour, str):
             # Jour desire
             jour_prog = int(self.__jour)
-            # Jour courant
-            dow_now = time.gmtime(timestamp_horaire + timezone_offset)[6]
+            # Jour courant - deja calcule
+            # dow_now = time.gmtime(timestamp_horaire + timezone_offset)[6]
 
             # Trouver le prochain jour de la semaine correspondant
             diff_jours = jour_prog - dow_now

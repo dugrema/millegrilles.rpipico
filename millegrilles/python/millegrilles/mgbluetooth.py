@@ -42,7 +42,7 @@ _ENV_ETAT_WIFI_UUID = bluetooth.UUID('7aac7596-88d7-480f-8a01-65406c2decaf')
 _ENV_ETAT_LECTURES_UUID = bluetooth.UUID('7aac7597-88d7-480f-8a01-65406c2decaf')
 
 # How frequently to send advertising beacons.
-_ADV_INTERVAL_MS = const(250_000)
+_ADV_INTERVAL_US = const(250_000)
 
 BUFFER_COMMANDE_BLUETOOTH = BufferMessage(3*1024)
 
@@ -287,7 +287,7 @@ class BluetoothHandler:
 
                 print(const("BLE %s await connection") % nom_appareil)
                 async with await aioble.advertise(
-                    _ADV_INTERVAL_MS,
+                    _ADV_INTERVAL_US,
                     name=nom_appareil,
                     services=[_ENV_COMMAND_UUID],
                     appearance=_ADV_APPEARANCE_GENERIC_THERMOMETER,
