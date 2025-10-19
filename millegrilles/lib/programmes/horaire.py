@@ -84,8 +84,6 @@ class HoraireMinuteEffet:
                 if timestamp_horaire < timestamp_now:
                     # Augmenter le timestamp de 24h (prochain evenement solaire du meme type)
                     timestamp_horaire = timestamp_horaire + JOUR_SECS
-
-            print("evenement solaire %s -> %s" % (self.__solaire, timestamp_horaire))
         elif isinstance(self.__heure, int) and isinstance(self.__minute, int):
             # Appliquer heure et minute en fonction du timezone offset
             timestamp_horaire = time.mktime((year_now, month_now, day_now, self.__heure, self.__minute, 0, None, None))
@@ -102,16 +100,12 @@ class HoraireMinuteEffet:
                 if timestamp_horaire < timestamp_now:
                     # Augmenter le timestamp de 24h (prochaine heure identique)
                     timestamp_horaire += JOUR_SECS
-
-            print("evenement heure %s:%s => %s" % (self.__heure, self.__minute, timestamp_horaire))
         else:
             raise ValueError("horaire vals incompatibles : %s" % self)
 
-        if isinstance(self.__jour, str):
+        if isinstance(self.__jour, int):
             # Jour desire
             jour_prog = int(self.__jour)
-            # Jour courant - deja calcule
-            # dow_now = time.gmtime(timestamp_horaire + timezone_offset)[6]
 
             # Trouver le prochain jour de la semaine correspondant
             diff_jours = jour_prog - dow_now
@@ -128,8 +122,10 @@ class HoraireMinuteEffet:
 
             # print("Ajustement de %d jours" % diff_jours)
             timestamp_horaire += diff_jours * JOUR_SECS
-
-            print("evenement wkday %s -> %s" % (self.__jour, timestamp_horaire))
+            print("prg wkday %s heure %s:%s => %s" % (self.__jour, self.__heure, self.__minute, timestamp_horaire))
+        else:
+            # Tous les jours
+            print("prg heure %s:%s => %s" % (self.__heure, self.__minute, timestamp_horaire))
 
         return TransitionTimestampEffet(self.__etat, timestamp_horaire)
 
