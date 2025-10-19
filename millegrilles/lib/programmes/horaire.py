@@ -63,6 +63,7 @@ class HoraireMinuteEffet:
         timestamp_now = time.time()
         year_now, month_now, day_now, hour_now, minute_now, second_now, dow_now, yd_now = time.gmtime(timestamp_now)
 
+        # Find the time with timezone for this program. Uses "current day" then applies timezone.
         if self.__solaire:
             if config_solaire is None or config_solaire.get(self.__solaire) is None:
                 print('Config solaire absente, skip')
@@ -76,14 +77,6 @@ class HoraireMinuteEffet:
                 # Appliquer offset en minutes (e.g. dawn + 15 minutes)
                 timestamp_horaire = timestamp_horaire + 60 * self.__minute
 
-            if inverse:
-                if timestamp_horaire > timestamp_now:
-                    # Retirer le timestamp de 24h (evenement solaire precedent du meme type)
-                    timestamp_horaire = timestamp_horaire - JOUR_SECS
-            else:
-                if timestamp_horaire < timestamp_now:
-                    # Augmenter le timestamp de 24h (prochain evenement solaire du meme type)
-                    timestamp_horaire = timestamp_horaire + JOUR_SECS
         elif isinstance(self.__heure, int) and isinstance(self.__minute, int):
             # Appliquer heure et minute en fonction du timezone offset
             timestamp_horaire = time.mktime((year_now, month_now, day_now, self.__heure, self.__minute, 0, None, None))
@@ -91,41 +84,62 @@ class HoraireMinuteEffet:
             # Appliquer timezone offset
             # print("offset recu %s, appliquer a %s" % (timezone_offset, timestamp_horaire))
             timestamp_horaire = timestamp_horaire - timezone_offset # + offset_local
-
-            if inverse:
-                if timestamp_horaire > timestamp_now:
-                    # Diminuer le timestamp de 24h (heure identique jour precedent)
-                    timestamp_horaire -= JOUR_SECS
-            else:
-                if timestamp_horaire < timestamp_now:
-                    # Augmenter le timestamp de 24h (prochaine heure identique)
-                    timestamp_horaire += JOUR_SECS
         else:
             raise ValueError("horaire vals incompatibles : %s" % self)
 
+        # Adjust for inverse and day of week
         if isinstance(self.__jour, int):
-            # Jour desire
             jour_prog = int(self.__jour)
-
-            # Trouver le prochain jour de la semaine correspondant
-            diff_jours = jour_prog - dow_now
-            if inverse is True:
-                if diff_jours > 0:
-                    # On a le nombre de jours a retirer (e.g. vendredi(4) - mardi(1) => 3, on veut -4 jours depuis le dernier vendredi
-                    diff_jours = -1 * (7-diff_jours)
-                elif diff_jours < 0:
-                    # On a deja le nombre de jours depuis le dernier mardi : mardi(1) - vendredi(4) = -3,
-                    pass
-            elif inverse is False and diff_jours < 0:
-                # Ajouter une semaine au nombre negatif, donne le nombre de jours a ajouter
-                diff_jours += 7
-
-            # print("Ajustement de %d jours" % diff_jours)
-            timestamp_horaire += diff_jours * JOUR_SECS
-            print("prg wkday %s heure %s:%s => %s" % (self.__jour, self.__heure, self.__minute, timestamp_horaire))
+            day_offset = jour_prog - dow_now
+            if inverse:
+                if day_offset > 0 or timestamp_horaire > timestamp_now:
+                    day_offset -= 7  # Offset number of days to be negative
+            elif not inverse:
+                if day_offset < 0 or timestamp_horaire < timestamp_now:
+                    day_offset += 7  # Offset number of days to be positive
         else:
-            # Tous les jours
-            print("prg heure %s:%s => %s" % (self.__heure, self.__minute, timestamp_horaire))
+            if inverse and timestamp_horaire > timestamp_now:  # Find if the time in that day has already passed
+                day_offset = -1
+            elif not inverse and timestamp_horaire < timestamp_now:  # Find if the time in that day is not yet passed
+                day_offset = 1
+            else:
+                day_offset = 0
+
+        timestamp_horaire = int(timestamp_horaire + day_offset * JOUR_SECS)
+        print("prg wkday %s heure %s:%s => %s" % (self.__jour, self.__heure, self.__minute, timestamp_horaire))
+
+        # if inverse:
+        #     if timestamp_horaire > timestamp_now:
+        #         # Diminuer le timestamp de 24h (heure identique jour precedent)
+        #         timestamp_horaire -= JOUR_SECS
+        # else:
+        #     if timestamp_horaire < timestamp_now:
+        #         # Augmenter le timestamp de 24h (prochaine heure identique)
+        #         timestamp_horaire += JOUR_SECS
+
+        # if isinstance(self.__jour, int):
+        #     # Jour desire
+        #     jour_prog = int(self.__jour)
+        #
+        #     # Trouver le prochain jour de la semaine correspondant
+        #     diff_jours = jour_prog - dow_now
+        #     if inverse is True:
+        #         if diff_jours > 0:
+        #             # On a le nombre de jours a retirer (e.g. vendredi(4) - mardi(1) => 3, on veut -4 jours depuis le dernier vendredi
+        #             diff_jours = -1 * (7-diff_jours)
+        #         elif diff_jours < 0:
+        #             # On a deja le nombre de jours depuis le dernier mardi : mardi(1) - vendredi(4) = -3,
+        #             pass
+        #     elif inverse is False and diff_jours < 0:
+        #         # Ajouter une semaine au nombre negatif, donne le nombre de jours a ajouter
+        #         diff_jours += 7
+        #
+        #     # print("Ajustement de %d jours" % diff_jours)
+        #     timestamp_horaire += diff_jours * JOUR_SECS
+        #     print("prg wkday %s heure %s:%s => %s" % (self.__jour, self.__heure, self.__minute, timestamp_horaire))
+        # else:
+        #     # Tous les jours
+        #     print("prg heure %s:%s => %s" % (self.__heure, self.__minute, timestamp_horaire))
 
         return TransitionTimestampEffet(self.__etat, timestamp_horaire)
 
