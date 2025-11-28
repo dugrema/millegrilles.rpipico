@@ -93,11 +93,11 @@ class HoraireMinuteEffet:
             day_offset = jour_prog - dow_now
             if inverse:
                 if timestamp_horaire > timestamp_now:
-                    if day_offset == 0:
+                    if day_offset >= 0:
                         day_offset -= 7  # Move to last week
             elif not inverse:
                 if timestamp_horaire < timestamp_now:
-                    if day_offset == 0:
+                    if day_offset <= 0:
                         day_offset += 7  # Move to next week
         else:
             if inverse and timestamp_horaire > timestamp_now:  # Find if the time in that day has already passed
