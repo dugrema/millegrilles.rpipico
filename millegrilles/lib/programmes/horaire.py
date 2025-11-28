@@ -61,7 +61,11 @@ class HoraireMinuteEffet:
             raise ValueError('tz offset manquant')
 
         timestamp_now = time.time()
-        year_now, month_now, day_now, hour_now, minute_now, second_now, dow_now, yd_now = time.gmtime(timestamp_now)
+
+        # Get the day/hour for current timezone
+        timestamp_tz = timestamp_now + timezone_offset
+        year_now, month_now, day_now, hour_now, minute_now, second_now, dow_now, yd_now = time.gmtime(timestamp_tz)
+        # print("NOW %d-%d-%d %d:%d:%d (DOW: %d) (YTD: %d)" % (year_now, month_now, day_now, hour_now, minute_now, second_now, dow_now, yd_now))
 
         # Find the time with timezone for this program. Uses "current day" then applies timezone.
         if self.__solaire:
@@ -80,10 +84,7 @@ class HoraireMinuteEffet:
         elif isinstance(self.__heure, int) and isinstance(self.__minute, int):
             # Appliquer heure et minute en fonction du timezone offset
             timestamp_horaire = time.mktime((year_now, month_now, day_now, self.__heure, self.__minute, 0, None, None))
-
-            # Appliquer timezone offset
-            # print("offset recu %s, appliquer a %s" % (timezone_offset, timestamp_horaire))
-            timestamp_horaire = timestamp_horaire - timezone_offset # + offset_local
+            timestamp_horaire -= timezone_offset
         else:
             raise ValueError("horaire vals incompatibles : %s" % self)
 
@@ -92,23 +93,20 @@ class HoraireMinuteEffet:
             jour_prog = int(self.__jour)
             day_offset = jour_prog - dow_now
             if inverse:
-                if timestamp_horaire > timestamp_now:
-                    if day_offset >= 0:
-                        day_offset -= 7  # Move to last week
+                if day_offset > 0 or timestamp_horaire >= timestamp_now:
+                    day_offset -= 7  # Move to last week
             elif not inverse:
-                if timestamp_horaire < timestamp_now:
-                    if day_offset <= 0:
-                        day_offset += 7  # Move to next week
+                if day_offset < 0 or timestamp_horaire <= timestamp_now:
+                    day_offset += 7  # Move to next week
         else:
-            if inverse and timestamp_horaire > timestamp_now:  # Find if the time in that day has already passed
+            if inverse and timestamp_horaire >= timestamp_now:  # Find if the time in that day has already passed
                 day_offset = -1
-            elif not inverse and timestamp_horaire < timestamp_now:  # Find if the time in that day is not yet passed
+            elif not inverse and timestamp_horaire <= timestamp_now:  # Find if the time in that day is not yet passed
                 day_offset = 1
             else:
                 day_offset = 0
 
         timestamp_horaire = int(timestamp_horaire + day_offset * JOUR_SECS)
-        print("prg wkday %s heure %s:%s => %s" % (self.__jour, self.__heure, self.__minute, timestamp_horaire))
 
         # if inverse:
         #     if timestamp_horaire > timestamp_now:
@@ -118,6 +116,8 @@ class HoraireMinuteEffet:
         #     if timestamp_horaire < timestamp_now:
         #         # Augmenter le timestamp de 24h (prochaine heure identique)
         #         timestamp_horaire += JOUR_SECS
+
+        print("prg wkday %s heure %s:%s => %s" % (self.__jour, self.__heure, self.__minute, timestamp_horaire))
 
         # if isinstance(self.__jour, int):
         #     # Jour desire
