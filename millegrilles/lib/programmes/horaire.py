@@ -3,6 +3,7 @@ import uasyncio as asyncio
 
 from handler_programmes import ProgrammeActif
 from millegrilles.config import get_tz_offset, get_horaire_solaire
+from .time_scheduler import next_epoch_time, previous_epoch_time
 
 
 JOUR_SECS = const(86400)
@@ -53,95 +54,80 @@ class HoraireMinuteEffet:
         self.__etat = etat
         self.__heure = heure
         self.__minute = minute
-        self.__jour = jour
+        self.__jour = jour if isinstance(jour, int) else None
         self.__solaire = solaire
 
     def appliquer(self, timezone_offset: int, config_solaire: dict = None, inverse=False) -> TransitionTimestampEffet:
-        if timezone_offset is None:
-            raise ValueError('tz offset manquant')
-
-        timestamp_now = time.time()
-
-        # Get the day/hour for current timezone
-        timestamp_tz = timestamp_now + timezone_offset
-        year_now, month_now, day_now, hour_now, minute_now, second_now, dow_now, yd_now = time.gmtime(timestamp_tz)
-        # print("NOW %d-%d-%d %d:%d:%d (DOW: %d) (YTD: %d)" % (year_now, month_now, day_now, hour_now, minute_now, second_now, dow_now, yd_now))
-
-        # Find the time with timezone for this program. Uses "current day" then applies timezone.
-        if self.__solaire:
-            if config_solaire is None or config_solaire.get(self.__solaire) is None:
-                print('Config solaire absente, skip')
-                return None
-
-            # Note : horaire solaire est exprime en heure/minute UTC
-            hour, minute = config_solaire[self.__solaire]
-            timestamp_horaire = time.mktime((year_now, month_now, day_now, hour, minute, 0, None, None))
-
-            if isinstance(self.__minute, int):
-                # Appliquer offset en minutes (e.g. dawn + 15 minutes)
-                timestamp_horaire = timestamp_horaire + 60 * self.__minute
-
-        elif isinstance(self.__heure, int) and isinstance(self.__minute, int):
-            # Appliquer heure et minute en fonction du timezone offset
-            timestamp_horaire = time.mktime((year_now, month_now, day_now, self.__heure, self.__minute, 0, None, None))
-            timestamp_horaire -= timezone_offset
-        else:
-            raise ValueError("horaire vals incompatibles : %s" % self)
-
-        # Adjust for inverse and day of week
-        if isinstance(self.__jour, int):
-            jour_prog = int(self.__jour)
-            day_offset = jour_prog - dow_now
-            if inverse:
-                if day_offset > 0 or timestamp_horaire >= timestamp_now:
-                    day_offset -= 7  # Move to last week
-            elif not inverse:
-                if day_offset < 0 or timestamp_horaire <= timestamp_now:
-                    day_offset += 7  # Move to next week
-        else:
-            if inverse and timestamp_horaire >= timestamp_now:  # Find if the time in that day has already passed
-                day_offset = -1
-            elif not inverse and timestamp_horaire <= timestamp_now:  # Find if the time in that day is not yet passed
-                day_offset = 1
-            else:
-                day_offset = 0
-
-        timestamp_horaire = int(timestamp_horaire + day_offset * JOUR_SECS)
-
-        # if inverse:
-        #     if timestamp_horaire > timestamp_now:
-        #         # Diminuer le timestamp de 24h (heure identique jour precedent)
-        #         timestamp_horaire -= JOUR_SECS
+        # timestamp_now = time.time()
+        #
+        # # Get the day/hour for current timezone
+        # timestamp_tz = timestamp_now + timezone_offset
+        # year_now, month_now, day_now, hour_now, minute_now, second_now, dow_now, yd_now = time.gmtime(timestamp_tz)
+        # # print("NOW %d-%d-%d %d:%d:%d (DOW: %d) (YTD: %d)" % (year_now, month_now, day_now, hour_now, minute_now, second_now, dow_now, yd_now))
+        #
+        # # Find the time with timezone for this program. Uses "current day" then applies timezone.
+        # if self.__solaire:
+        #     if config_solaire is None or config_solaire.get(self.__solaire) is None:
+        #         print('Config solaire absente, skip')
+        #         return None
+        #
+        #     # Note : horaire solaire est exprime en heure/minute UTC
+        #     hour, minute = config_solaire[self.__solaire]
+        #     timestamp_horaire = time.mktime((year_now, month_now, day_now, hour, minute, 0, None, None))
+        #
+        #     if isinstance(self.__minute, int):
+        #         # Appliquer offset en minutes (e.g. dawn + 15 minutes)
+        #         timestamp_horaire = timestamp_horaire + 60 * self.__minute
+        #
+        # elif isinstance(self.__heure, int) and isinstance(self.__minute, int):
+        #     # Appliquer heure et minute en fonction du timezone offset
+        #     timestamp_horaire = time.mktime((year_now, month_now, day_now, self.__heure, self.__minute, 0, None, None))
+        #     timestamp_horaire -= timezone_offset
         # else:
-        #     if timestamp_horaire < timestamp_now:
-        #         # Augmenter le timestamp de 24h (prochaine heure identique)
-        #         timestamp_horaire += JOUR_SECS
+        #     raise ValueError("horaire vals incompatibles : %s" % self)
+        #
+        # # Adjust for inverse and day of week
+        # if isinstance(self.__jour, int):
+        #     jour_prog = int(self.__jour)
+        #     day_offset = jour_prog - dow_now
+        #     if inverse:
+        #         if day_offset > 0 or timestamp_horaire >= timestamp_now:
+        #             day_offset -= 7  # Move to last week
+        #     elif not inverse:
+        #         if day_offset < 0 or timestamp_horaire <= timestamp_now:
+        #             day_offset += 7  # Move to next week
+        # else:
+        #     if inverse and timestamp_horaire >= timestamp_now:  # Find if the time in that day has already passed
+        #         day_offset = -1
+        #     elif not inverse and timestamp_horaire <= timestamp_now:  # Find if the time in that day is not yet passed
+        #         day_offset = 1
+        #     else:
+        #         day_offset = 0
+        #
+        # timestamp_horaire = int(timestamp_horaire + day_offset * JOUR_SECS)
+
+        if self.__solaire:
+            timezone_offset = 0  # Solar based times are already in UTC
+            hour, minute = config_solaire[self.__solaire]
+            if isinstance(self.__minute, int):
+                # Use timezone offset to apply (e.g. dawn + 15 minutes)
+                if inverse:
+                    timezone_offset = self.__minute * 60
+                else:
+                    timezone_offset = self.__minute * -60
+        elif timezone_offset is None:
+            raise ValueError('tz offset manquant')
+        else:
+            hour = self.__heure
+            minute = self.__minute
+
+        if inverse:
+            timestamp_horaire = previous_epoch_time(hour, minute, self.__jour, timezone_offset=timezone_offset)
+
+        else:
+            timestamp_horaire = next_epoch_time(hour, minute, self.__jour, timezone_offset=timezone_offset)
 
         print("prg wkday %s heure %s:%s => %s" % (self.__jour, self.__heure, self.__minute, timestamp_horaire))
-
-        # if isinstance(self.__jour, int):
-        #     # Jour desire
-        #     jour_prog = int(self.__jour)
-        #
-        #     # Trouver le prochain jour de la semaine correspondant
-        #     diff_jours = jour_prog - dow_now
-        #     if inverse is True:
-        #         if diff_jours > 0:
-        #             # On a le nombre de jours a retirer (e.g. vendredi(4) - mardi(1) => 3, on veut -4 jours depuis le dernier vendredi
-        #             diff_jours = -1 * (7-diff_jours)
-        #         elif diff_jours < 0:
-        #             # On a deja le nombre de jours depuis le dernier mardi : mardi(1) - vendredi(4) = -3,
-        #             pass
-        #     elif inverse is False and diff_jours < 0:
-        #         # Ajouter une semaine au nombre negatif, donne le nombre de jours a ajouter
-        #         diff_jours += 7
-        #
-        #     # print("Ajustement de %d jours" % diff_jours)
-        #     timestamp_horaire += diff_jours * JOUR_SECS
-        #     print("prg wkday %s heure %s:%s => %s" % (self.__jour, self.__heure, self.__minute, timestamp_horaire))
-        # else:
-        #     # Tous les jours
-        #     print("prg heure %s:%s => %s" % (self.__heure, self.__minute, timestamp_horaire))
 
         return TransitionTimestampEffet(self.__etat, timestamp_horaire)
 

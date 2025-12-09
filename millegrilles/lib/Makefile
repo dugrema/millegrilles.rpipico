@@ -34,7 +34,8 @@ SRC_DEVICES = \
 SRC_PROGRAMMES = \
     programmes/environnement.mpy \
     programmes/horaire.mpy \
-    programmes/notifications.mpy
+    programmes/notifications.mpy \
+    programmes/time_scheduler.mpy
 
 
 %.mpy: %.py
