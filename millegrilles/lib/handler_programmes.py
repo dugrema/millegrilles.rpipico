@@ -69,7 +69,7 @@ class ProgrammesHandler:
                 print("Programme %s demarre" % programme_id)
             except ImportError as e:
                 print("Erreur import programme %s : %s" % (programme_id, e))
-            except (KeyError, ValueError, AttributeError) as e:
+            except (KeyError, ValueError, AttributeError, IndexError) as e:
                 print("Erreur config programme %s : %s" % (programme_id, e))
                 print_exception(e)
 
