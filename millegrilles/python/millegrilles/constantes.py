@@ -59,5 +59,7 @@ CONST_CHAMP_INSTANCES = const('instances')
 CONST_CHAMPS_SOLAIRE = const(('dawn', 'sunrise', 'noon', 'sunset', 'dusk'))
 CONST_SOLAIRE_CHANGEMENT = const(120)
 
+CONST_WEBSOCKET_DISCONNECT_TIMEOUT = const(3_600)
+
 
 CONST_SHORT_MIN = const(-32768)

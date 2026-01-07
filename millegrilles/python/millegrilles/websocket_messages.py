@@ -5,7 +5,7 @@ from binascii import hexlify
 from json import dumps, loads, load, dump
 from gc import collect
 from sys import print_exception
-from micropython import mem_info
+from micropython import mem_info, const
 
 from uwebsockets.client import connect
 from millegrilles.certificat import get_expiration_certificat_local
@@ -370,6 +370,7 @@ class PollingThread:
         print("Expiration thread %s (exp cert %s)" % (expiration_thread, expiration_certificat))
 
         self.__appareil.set_websocket_pret()
+        was_connected = False
         while expiration_thread > time.time() and self.__memory_error < 10:
             try:
                 print("Expiration thread dans %s " % (expiration_thread - time.time()))
@@ -377,6 +378,8 @@ class PollingThread:
                 # Connecter
                 try:
                     await self.connecter()
+                    was_connected = True
+                    self.__appareil.set_websocket_connected()
                 except AssertionError:
                     # Erreur connexion (e.g. status code 502)
                     self.__url_relai = None
@@ -408,12 +411,12 @@ class PollingThread:
                         await asyncio.sleep_ms(1)
                     elif self.__last_message_ts < now - (CONST_EXPIRATION_CONFIG+300):
                         # This is an attempt to force a reboot if the connection is not working properly
-                        raise Exception('WS thread message timeout')
+                        raise Exception(const('WS thread message timeout'))
 
                     try:
-                        print("debut ws poll")
+                        print(const("debut ws poll"))
                         await self._poll()
-                        print("fin ws poll OK")
+                        print(const("fin ws poll OK"))
                         # Reset erreurs
                         self.__nie_count = 0
                         self.__memory_error = 0
@@ -424,7 +427,7 @@ class PollingThread:
                         break  # Break inner loop
                     except OSError as e:
                         if e.errno == -104:
-                            print("Connexion websocket fermee (serveur)")
+                            print(const("Connexion websocket fermee (serveur)"))
                             self.__nie_count += 1
                             break  # Break inner loop
                         elif e.errno == 12:
@@ -441,8 +444,8 @@ class PollingThread:
                     now = time.time()
 
             finally:
-                self.__appareil.reset_websocket_pret()
-                print("Close websocket")
+                self.__appareil.reset_websocket_pret(was_connected)
+                print(const("Close websocket"))
                 mem_info()
                 try:
                     self.__websocket.close()
@@ -455,9 +458,9 @@ class PollingThread:
                         raise e
                 self.__websocket = None
                 collect()
-                print("Collect")
+                print(const("Collect"))
                 mem_info()
-                print("--- Socket closed --- ")
+                print(const("--- Socket closed --- "))
             
     async def _poll(self):
         try:

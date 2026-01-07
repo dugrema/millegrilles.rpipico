@@ -39,7 +39,8 @@ from millegrilles.config import \
      get_timezone_transition, transition_timezone, sauvegarder_relais
 
 from millegrilles.constantes import  CONST_MODE_INIT, CONST_MODE_RECUPERER_CA, CONST_MODE_CHARGER_URL_RELAIS, \
-     CONST_MODE_SIGNER_CERTIFICAT, CONST_MODE_POLLING, CONST_PATH_FICHIER_DISPLAY
+     CONST_MODE_SIGNER_CERTIFICAT, CONST_MODE_POLLING, CONST_PATH_FICHIER_DISPLAY, CONST_WEBSOCKET_DISCONNECT_TIMEOUT
+
 
 CONST_INFO_SEP = const(' ---- INFO ----')
 CONST_NB_ERREURS_RESET = const(10)
@@ -84,6 +85,7 @@ class Runner:
         self.__lectures_event = asyncio.Event()  # Utilise pour attendre une maj de lectures
         self.__rtc_pret = asyncio.Event()       # Indique que WIFI et l'heure interne (RTC) sont prets.
         self.__websocket_pret = asyncio.Event() # Indique que l'appareil est connecte et pret.
+        self.__websocket_disconnected = None    # Utilise pour detecter probleme de reconnexion, timestamp epoch secs
         self.__url_relais = None
         self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
         
@@ -108,8 +110,14 @@ class Runner:
         if self.__websocket_pret.is_set() is not True:
             self.__websocket_pret.set()
 
-    def reset_websocket_pret(self):
+    def set_websocket_connected(self):
+        self.__websocket_disconnected = None
+
+    def reset_websocket_pret(self, was_connected):
         self.__websocket_pret.clear()
+        # Troubleshoot disconnections
+        if was_connected:
+            self.__websocket_disconnected = time.time()
 
     @property
     def rtc_pret(self) -> asyncio.Event:
@@ -425,6 +433,12 @@ class Runner:
                 reboot(const("__entretien_cycle wifi deconnecte"))
             else:
                 print(const("__entretien_cycle wifi OK false, last ok: %s") % self.__etat_wifi.last_ping_ok)
+
+            if self.__websocket_disconnected:
+                if time.time() - self.__websocket_disconnected > CONST_WEBSOCKET_DISCONNECT_TIMEOUT:
+                    const_timeout_msg = const("__entretien_cycle Websocket disconnect timeout")
+                    print(const_timeout_msg)
+                    reboot(const_timeout_msg)
 
         except Exception as e:
             print(const("__entretien_cycle Erreur entretien: %s") % e)
