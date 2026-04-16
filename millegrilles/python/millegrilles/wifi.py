@@ -1,21 +1,25 @@
-import network
 import struct
-import uasyncio as asyncio
 import time
-
 from gc import collect
 from sys import print_exception
+
+import network
+import uasyncio as asyncio
+from millegrilles.constantes import (
+    CONST_CHAMP_IP,
+    CONST_CHAMP_WIFI_CHANNEL,
+    CONST_CHAMP_WIFI_SSID,
+    CONST_UTF8,
+)
+
 from micropython import const
 
-from millegrilles.constantes import CONST_CHAMP_WIFI_SSID, CONST_CHAMP_WIFI_CHANNEL, CONST_UTF8, CONST_CHAMP_IP
 from . import uping
-
 
 CONST_EXPIRATION_ERREUR = const(10 * 60)  # Expiration apres une deconnexion
 
 
 class StatusWifi:
-
     def __init__(self):
         self.connecte = False
         self.ip = None
@@ -27,7 +31,7 @@ class StatusWifi:
             await asyncio.sleep(60)
 
     async def is_wifi_ok(self):
-        """ Verifier etat avec antenne """
+        """Verifier etat avec antenne"""
         wlan = network.WLAN(network.STA_IF)
 
         self.connecte = wlan.isconnected()
@@ -75,7 +79,7 @@ class StatusWifi:
         return True
 
     def err_expire(self):
-        """ @returns True si la connexion ne fonctionne plus depuis un certain temps. """
+        """@returns True si la connexion ne fonctionne plus depuis un certain temps."""
         if self.last_ping_ok is None:
             # La connexion n'a jamais ete etablie
             return False
@@ -84,14 +88,18 @@ class StatusWifi:
 
     @property
     def ok(self):
-        return self.last_ping_ok and time.time() - self.last_ping_ok < CONST_EXPIRATION_ERREUR
+        return (
+            self.last_ping_ok
+            and time.time() - self.last_ping_ok < CONST_EXPIRATION_ERREUR
+        )
 
     def reset_timeout(self):
         self.last_ping_ok = None
 
 
 def detecter_wifi():
-    from network import WLAN, STA_IF
+    from network import STA_IF, WLAN
+
     wlan = WLAN(STA_IF)
     scan_result = wlan.scan()
 
@@ -105,17 +113,17 @@ def detecter_wifi():
 async def connect_wifi(ssid: str, password: str, tentatives=3):
     from gc import collect
 
-    CONST_SSID_MANQUANT = const('SSID manquant')
-    CONST_PASSWORD_MANQUANT = const('password manquant')
-    CONST_WIFI_CONNECT_TO = const('WIFI connect to %s')
-    CONST_WIFI_ATTENDRE = const('WIFI connect to %s')
+    CONST_SSID_MANQUANT = const("SSID manquant")
+    CONST_PASSWORD_MANQUANT = const("password manquant")
+    CONST_WIFI_CONNECT_TO = const("WIFI connect to %s")
+    CONST_WIFI_ATTENDRE = const("WIFI connect to %s")
     CONST_WIFI_STATUS_FAILED = const("WLAN status %s, connection failed on %s")
     CONST_WIFI_ERR1 = const("non connecte")
 
     # print("connect_wifi ssid %s pass %s" % (ssid, password))
-    if not isinstance(ssid, str) or ssid == '':
+    if not isinstance(ssid, str) or ssid == "":
         raise ValueError(CONST_SSID_MANQUANT)
-    if not isinstance(password, str) or ssid == '':
+    if not isinstance(password, str) or ssid == "":
         raise ValueError(CONST_PASSWORD_MANQUANT)
 
     wlan = network.WLAN(network.STA_IF)
@@ -168,7 +176,7 @@ def get_etat_wifi():
 
 
 def map_ip_bytes(ip):
-    return bytes(map(int, (ip).split('.')))
+    return bytes(map(int, (ip).split(".")))
 
 
 def get_wifi_detail():
@@ -188,11 +196,25 @@ def pack_info_wifi():
     """
     val = get_wifi_detail()
     connected, status, ssid, channel, client_ip, client_mask, gw_ip, dns_ip = val
-    vals = [connected, status, channel, map_ip_bytes(client_ip), map_ip_bytes(client_mask), map_ip_bytes(gw_ip), map_ip_bytes(dns_ip)]
-    CHAMP_PACK_WIFI = const('<BBB4s4s4s4s')  # 19 bytes
+    vals = [
+        connected,
+        status,
+        channel,
+        map_ip_bytes(client_ip),
+        map_ip_bytes(client_mask),
+        map_ip_bytes(gw_ip),
+        map_ip_bytes(dns_ip),
+    ]
+    CHAMP_PACK_WIFI = const("<BBB4s4s4s4s")  # 19 bytes
     status_1 = struct.pack(CHAMP_PACK_WIFI, *vals)
     status_2 = ssid.encode(CONST_UTF8)[:20]  # 20 bytes
     return status_1, status_2
+
+
+def disconnect_wifi():
+    wlan = network.WLAN(network.STA_IF)
+    wlan.disconnect()
+    wlan.active(False)
 
 
 class ErreurConnexionWifi(Exception):

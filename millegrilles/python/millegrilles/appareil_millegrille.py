@@ -1,55 +1,80 @@
 # Programme appareil millegrille
 import json
-import time
-
-import machine
 import os
 import sys
-import uasyncio as asyncio
+import time
+
 # import urequests
-
 from gc import collect
-from micropython import mem_info, const
 
-from millegrilles import const_leds
-from millegrilles import mgmessages
-from millegrilles.wifi import StatusWifi
+import machine
+import uasyncio as asyncio
+from handler_devices import DeviceHandler
+from handler_programmes import ProgrammesHandler
+from millegrilles import const_leds, feed_display, mgmessages
+from millegrilles.certificat import PATH_CERT
+from millegrilles.certificat import entretien_certificat as __entretien_certificat
+from millegrilles.chiffrage import ChiffrageMessages
+
+# from millegrilles.watchdog import watchdog_thread
+# from dev import config
+from millegrilles.config import (
+    detecter_mode_operation,
+    get_relais,
+    get_timezone_transition,
+    get_tz_offset,
+    get_workaround_rebootinterval,
+    initialisation,
+    initialiser_wifi,
+    sauvegarder_relais,
+    set_time,
+    transition_timezone,
+)
+from millegrilles.constantes import (
+    CONST_MODE_CHARGER_URL_RELAIS,
+    CONST_MODE_INIT,
+    CONST_MODE_POLLING,
+    CONST_MODE_RECUPERER_CA,
+    CONST_MODE_SIGNER_CERTIFICAT,
+    CONST_PATH_FICHIER_DISPLAY,
+    CONST_WEBSOCKET_DISCONNECT_TIMEOUT,
+)
+from millegrilles.garbage_collector import (
+    garbage_collection_thread,
+    garbage_collection_update,
+)
 from millegrilles.ledblink import led_executer_sequence
-
-from millegrilles import feed_display
+from millegrilles.message_inscription import (
+    charger_fiche,
+    parse_url,
+    recuperer_ca,
+    run_inscription,
+)
+from millegrilles.message_inscription import (
+    verifier_renouveler_certificat as __verifier_renouveler_certificat,
+)
 
 # from mgbluetooth import BluetoothHandler
 from millegrilles.mgbluetooth import BluetoothHandler
-
 from millegrilles.websocket_messages import PollingThread
-from handler_devices import DeviceHandler
-from handler_programmes import ProgrammesHandler
-from millegrilles.certificat import entretien_certificat as __entretien_certificat, PATH_CERT
-from millegrilles.message_inscription import run_inscription, recuperer_ca, \
-     verifier_renouveler_certificat as __verifier_renouveler_certificat, parse_url, charger_fiche
-from millegrilles.chiffrage import ChiffrageMessages
-
 from millegrilles.webutils import reboot
-from millegrilles.garbage_collector import garbage_collection_thread, garbage_collection_update
-# from millegrilles.watchdog import watchdog_thread
+from millegrilles.wifi import StatusWifi
 
-# from dev import config
-from millegrilles.config import \
-     set_time, detecter_mode_operation, get_tz_offset, initialisation, initialiser_wifi, get_relais, \
-     get_timezone_transition, transition_timezone, sauvegarder_relais
+from micropython import const, mem_info
 
-from millegrilles.constantes import  CONST_MODE_INIT, CONST_MODE_RECUPERER_CA, CONST_MODE_CHARGER_URL_RELAIS, \
-     CONST_MODE_SIGNER_CERTIFICAT, CONST_MODE_POLLING, CONST_PATH_FICHIER_DISPLAY, CONST_WEBSOCKET_DISCONNECT_TIMEOUT
-
-
-CONST_INFO_SEP = const(' ---- INFO ----')
+CONST_INFO_SEP = const(" ---- INFO ----")
 CONST_NB_ERREURS_RESET = const(10)
 CONST_HTTP_TIMEOUT_DEFAULT = const(60)
 _CONST_INTERVALLE_REFRESH_FICHE = const(1 * 60 * 60)
 CONST_DUREE_THREAD_POLLING = const(24 * 60 * 60)
 
 # Initialiser classe de buffer
-BUFFER_MESSAGE = mgmessages.BufferMessage(16*1024)
+BUFFER_MESSAGE = mgmessages.BufferMessage(16 * 1024)
+
+
+INITIAL_TIME = (
+    time.time()
+)  # Save the initial time value for uptime before __start_time is initialized
 
 
 async def entretien_certificat():
@@ -58,7 +83,7 @@ async def entretien_certificat():
     except Exception as e:
         print("Erreur entretien certificat")
         sys.print_exception(e)
-    
+
     return False
 
 
@@ -71,7 +96,6 @@ async def verifier_renouveler_certificat(url_relai: str):
 
 
 class Runner:
-    
     def __init__(self):
         self._mode_operation = 0
         self._device_handler = DeviceHandler(self)
@@ -80,24 +104,39 @@ class Runner:
 
         self._lectures_courantes = dict()
         self._lectures_externes = dict()
-        self.__emit_event = asyncio.Event()    # Indique que l'etat a ete modifie, doit etre emis
-        self.__stale_event = asyncio.Event()   # Indique que l'etat interne doit etre mis a jour
-        self.__lectures_event = asyncio.Event()  # Utilise pour attendre une maj de lectures
-        self.__rtc_pret = asyncio.Event()       # Indique que WIFI et l'heure interne (RTC) sont prets.
-        self.__websocket_pret = asyncio.Event() # Indique que l'appareil est connecte et pret.
-        self.__websocket_disconnected = None    # Utilise pour detecter probleme de reconnexion, timestamp epoch secs
+        self.__emit_event = (
+            asyncio.Event()
+        )  # Indique que l'etat a ete modifie, doit etre emis
+        self.__stale_event = (
+            asyncio.Event()
+        )  # Indique que l'etat interne doit etre mis a jour
+        self.__lectures_event = (
+            asyncio.Event()
+        )  # Utilise pour attendre une maj de lectures
+        self.__rtc_pret = (
+            asyncio.Event()
+        )  # Indique que WIFI et l'heure interne (RTC) sont prets.
+        self.__websocket_pret = (
+            asyncio.Event()
+        )  # Indique que l'appareil est connecte et pret.
+        self.__websocket_disconnected = (
+            None  # Utilise pour detecter probleme de reconnexion, timestamp epoch secs
+        )
         self.__url_relais = None
         self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
-        
+
         self.__etat_wifi = StatusWifi()
         self.__prochain_entretien_certificat = 0
         self.__prochain_refresh_fiche = 0
         self.__timezone_offset = None
         self.__erreurs_memory = 0  # Nombre de MemoryErrors depuis succes
-        self.__erreurs_enomem = 0  # Nombre de Errno12 ENOMEM (ussl.wrap_socket) depuis succes
+        self.__erreurs_enomem = (
+            0  # Nombre de Errno12 ENOMEM (ussl.wrap_socket) depuis succes
+        )
         self.__override_display = None
         self.__override_display_expiration = None
         self.__display_actif = False
+        self.__start_time = None  # Sets the start time on first successful ntp sync
 
         # Information de chiffrage
         self.__chiffrage_messages = ChiffrageMessages()
@@ -130,7 +169,7 @@ class Runner:
     @property
     def emit_event(self):
         return self.__emit_event
-    
+
     @property
     def stale_event(self):
         return self.__stale_event
@@ -145,14 +184,14 @@ class Runner:
     @property
     def chiffrage_messages(self) -> ChiffrageMessages:
         return self.__chiffrage_messages
-    
+
     async def configurer_devices(self):
         self.__ui_lock = asyncio.Lock()
         await self._device_handler.load(self.__ui_lock)
-    
+
     async def configurer_programmes(self):
         await self._programmes_handler.initialiser()
-    
+
     def recevoir_lectures(self, lectures):
         self._lectures_courantes = lectures
         self.__lectures_event.set()
@@ -161,7 +200,7 @@ class Runner:
         # print("recevoir_lectures: %s" % lectures)
         self._lectures_externes.update(lectures)
         print("Lectures externes maj\n%s" % self._lectures_externes)
-        
+
     @property
     def mode_operation(self):
         return self._mode_operation
@@ -169,29 +208,29 @@ class Runner:
     @property
     def lectures_courantes(self):
         return self._lectures_courantes
-    
+
     @property
     def lectures_externes(self):
         return self._lectures_externes
-    
+
     @property
     def timezone(self):
         if self.__rtc_pret.is_set() is not True:
             return None
         return get_tz_offset()
-    
+
     @property
     def ui_lock(self):
         return self.__ui_lock
-    
+
     @property
     def wifi_ok(self):
         return self.__rtc_pret.is_set()
-    
+
     @property
     def display_actif(self):
         return self.__display_actif
-    
+
     def get_device(self, device_id):
         print("Charger device %s" % device_id)
         devices = self._device_handler.devices
@@ -204,10 +243,10 @@ class Runner:
     def reset_erreurs(self):
         self.__erreurs_memory = 0
         self.__erreurs_enomem = 0
-    
+
     async def ajouter_programme(self, configuration: dict):
         await self._programmes_handler.ajouter_programme(configuration)
-    
+
     async def supprimer_programme(self, programme_id: str):
         await self._programmes_handler.arreter_programme(programme_id)
 
@@ -217,11 +256,14 @@ class Runner:
             # Extraire liste de senseurs utilises pour l'affichage
             for display in self.get_configuration_display().values():
                 try:
-                    for ligne in display['lignes']:
+                    for ligne in display["lignes"]:
                         # print("Config appareils ligne : %s" % ligne)
                         try:
-                            if ligne['variable'] is not None and len(ligne['variable'].split(':')) > 1:
-                                liste_senseurs_programmes.add(ligne['variable'])
+                            if (
+                                ligne["variable"] is not None
+                                and len(ligne["variable"].split(":")) > 1
+                            ):
+                                liste_senseurs_programmes.add(ligne["variable"])
                         except KeyError:
                             pass  # Pas de variable configuree
                 except KeyError:
@@ -234,7 +276,7 @@ class Runner:
             # Extraire liste de senseurs utilises par les programmes
             for senseur_id in self._programmes_handler.get_senseurs():
                 try:
-                    if len(senseur_id.split(':')) > 1:
+                    if len(senseur_id.split(":")) > 1:
                         liste_senseurs_programmes.add(senseur_id)
                 except KeyError:
                     pass  # Pas un senseur externe
@@ -263,23 +305,26 @@ class Runner:
         if refresh is True:
             liste_senseurs_programmes = await self.rafraichir_etat()
         else:
-            print('get_etat Skip refresh')
+            print("get_etat Skip refresh")
             liste_senseurs_programmes = None
 
         etat = {
-            'lectures_senseurs': self._lectures_courantes,
-            'displays': self._device_handler.get_output_devices(),
-            'senseurs': liste_senseurs_programmes,
+            "lectures_senseurs": self._lectures_courantes,
+            "displays": self._device_handler.get_output_devices(),
+            "senseurs": liste_senseurs_programmes,
         }
 
         try:
             notifications = await self._programmes_handler.get_notifications()
             if notifications is not None:
-                etat['notifications'] = notifications
+                etat["notifications"] = notifications
         except Exception as e:
             print("get_etat Error notifications : %s" % e)
 
-        print("get_etat duree %d ms (refresh:%s)" % (time.ticks_diff(time.ticks_ms(), ticks_debut), refresh))
+        print(
+            "get_etat duree %d ms (refresh:%s)"
+            % (time.ticks_diff(time.ticks_ms(), ticks_debut), refresh)
+        )
 
         return etat
 
@@ -297,11 +342,13 @@ class Runner:
                 break  # Certificat existe
             except:
                 pass  # Ok, certificat absent
-            
+
             for url_relai in self.__url_relais:
                 try:
                     print("Signature certificat avec relai %s " % url_relai)
-                    await run_inscription(self, url_relai, self.__ui_lock, buffer=BUFFER_MESSAGE)
+                    await run_inscription(
+                        self, url_relai, self.__ui_lock, buffer=BUFFER_MESSAGE
+                    )
                     certificat_recu = True
                     break
                 except OSError as ose:
@@ -337,12 +384,12 @@ class Runner:
         except (AttributeError, OSError, KeyError, TypeError):
             print("Feed %s inconnu, defaulting" % name)
             return self.feed_default()
-    
+
     def set_display_override(self, override, duree=5):
         print("Set display override %s" % override)
         self.__override_display_expiration = time.time() + duree
         self.__override_display = override
-        
+
     def get_display_override(self):
         if self.__override_display_expiration is not None:
             if self.__override_display_expiration < time.time():
@@ -351,13 +398,15 @@ class Runner:
             else:
                 return self.__override_display
         self.__override_display = None
-    
+
     async def entretien(self, init=False):
         """
         Thread d'entretien
         """
         while True:
-            print(const("appareil_millegrille.entretien Mode %d") % self._mode_operation)
+            print(
+                const("appareil_millegrille.entretien Mode %d") % self._mode_operation
+            )
             # await self.__ui_lock.acquire()
 
             try:
@@ -387,7 +436,7 @@ class Runner:
         try:
             transition_time, transition_offset = get_timezone_transition()
             transition_delta = transition_time - time.time()
-            print('tz transition dans %d secs' % transition_delta)
+            print("tz transition dans %d secs" % transition_delta)
 
             if transition_delta < 180:
                 # On se met en mode d'attente de transition
@@ -432,17 +481,58 @@ class Runner:
                 # Wifi a deja ete connecte correctement, n'arrive pas a se reconnecter.
                 reboot(const("__entretien_cycle wifi deconnecte"))
             else:
-                print(const("__entretien_cycle wifi OK false, last ok: %s") % self.__etat_wifi.last_ping_ok)
-
-            if self.__websocket_disconnected:
-                if time.time() - self.__websocket_disconnected > CONST_WEBSOCKET_DISCONNECT_TIMEOUT:
-                    const_timeout_msg = const("__entretien_cycle Websocket disconnect timeout")
-                    print(const_timeout_msg)
-                    reboot(const_timeout_msg)
+                print(
+                    const("__entretien_cycle wifi OK false, last ok: %s")
+                    % self.__etat_wifi.last_ping_ok
+                )
 
         except Exception as e:
             print(const("__entretien_cycle Erreur entretien: %s") % e)
             sys.print_exception(e)
+
+        try:
+            if self.__websocket_disconnected:
+                if (
+                    time.time() - self.__websocket_disconnected
+                    > CONST_WEBSOCKET_DISCONNECT_TIMEOUT
+                ):
+                    const_timeout_msg = const(
+                        "__entretien_cycle Websocket disconnect timeout"
+                    )
+                    print(const_timeout_msg)
+                    reboot(const_timeout_msg)
+        except Exception as e:
+            print(const("__entretien_cycle Erreur websocket check: %s") % e)
+            sys.print_exception(e)
+
+        try:
+            reboot_interval = get_workaround_rebootinterval()
+            if reboot_interval:
+                # Wait for RTC sync
+                try:
+                    await asyncio.wait_for(self.__rtc_pret.wait(), 3)
+                    # Ensure the start_time is set
+                    if not self.__start_time:
+                        self.__start_time = time.time()
+                    start_time = self.__start_time
+                except asyncio.TimeoutError:
+                    start_time = INITIAL_TIME
+
+                uptime = time.time() - start_time
+                print("Initial time ", INITIAL_TIME)
+                print("Start time ", self.__start_time)
+                print("Uptime ", uptime)
+                print("Reboot interval ", reboot_interval)
+                if uptime > reboot_interval:
+                    print("Reboot time")
+                    reboot(False)  # False: Do not log reason (saves CMOS)
+                else:
+                    print("Not reboot time", uptime)
+        except Exception as e:
+            print("Error processing reboot interval")
+            sys.print_exception(e)
+
+        print(const("__entretien_cycle Done"))
 
     async def charger_urls(self):
         collect()
@@ -450,37 +540,45 @@ class Runner:
 
         if self.__rtc_pret.is_set() is True:
             try:
-                refresh = self.__prochain_refresh_fiche == 0 or self.__prochain_refresh_fiche <= time.time()
+                refresh = (
+                    self.__prochain_refresh_fiche == 0
+                    or self.__prochain_refresh_fiche <= time.time()
+                )
                 collect()
                 await asyncio.sleep(0)  # Yield
 
                 relais = get_relais()
-                print('charger_urls pre-refresh %s' % relais)
+                print("charger_urls pre-refresh %s" % relais)
                 if refresh:
                     try:
                         fiche, certificat = await charger_fiche(buffer=BUFFER_MESSAGE)
                         if fiche is not None:
                             relais = sauvegarder_relais(fiche)
-                            print('charger_url relais fiche sauvegardee %s' % relais)
+                            print("charger_url relais fiche sauvegardee %s" % relais)
                             await asyncio.sleep(0)
                     except Exception as e:
-                        print("Erreur chargement fiche, utiliser relais connus : %s" % str(e))
+                        print(
+                            "Erreur chargement fiche, utiliser relais connus : %s"
+                            % str(e)
+                        )
                         sys.print_exception(e)
 
-                print('charger_urls relais %s' % relais)
+                print("charger_urls relais %s" % relais)
                 self.set_relais(relais)
 
                 if refresh is True:
-                    self.__prochain_refresh_fiche = _CONST_INTERVALLE_REFRESH_FICHE + time.time()
+                    self.__prochain_refresh_fiche = (
+                        _CONST_INTERVALLE_REFRESH_FICHE + time.time()
+                    )
             except Exception:
-                print('charger_urls erreur')
+                print("charger_urls erreur")
                 sys.print_exception(e)
         else:
-            print('charger_urls rtc non pret')
+            print("charger_urls rtc non pret")
 
     def get_configuration_display(self):
         try:
-            with open(CONST_PATH_FICHIER_DISPLAY, 'rb') as fichier:
+            with open(CONST_PATH_FICHIER_DISPLAY, "rb") as fichier:
                 return json.load(fichier)
         except OSError:
             pass  # Fichier absent
@@ -489,10 +587,10 @@ class Runner:
         if relais is not None:
             self.__url_relais = relais
         print("URL relais : %s" % self.__url_relais)
-        
+
     def pop_relais(self):
         return self.__url_relais.pop()
-    
+
     async def _polling(self):
         """
         Main thread d'execution du polling/commandes
@@ -512,7 +610,7 @@ class Runner:
 
     async def __initialisation(self):
         await initialisation()
-        
+
     async def __recuperer_ca(self):
         await recuperer_ca(buffer=BUFFER_MESSAGE)
 
@@ -524,7 +622,9 @@ class Runner:
         # Set garbage collection params
         await garbage_collection_update()
 
-        await led_executer_sequence(const_leds.CODE_MAIN_DEMARRAGE, executions=1, ui_lock=self.__ui_lock)
+        await led_executer_sequence(
+            const_leds.CODE_MAIN_DEMARRAGE, executions=1, ui_lock=self.__ui_lock
+        )
         while True:
             try:
                 self._mode_operation = await detecter_mode_operation()
@@ -541,9 +641,12 @@ class Runner:
                 if self._mode_operation == CONST_MODE_INIT:
                     await self.__initialisation()
                 elif self.__rtc_pret.is_set() is False:
-                    await led_executer_sequence(const_leds.CODE_WIFI_NON_CONNECTE, 1, self.__ui_lock)
+                    await led_executer_sequence(
+                        const_leds.CODE_WIFI_NON_CONNECTE, 1, self.__ui_lock
+                    )
                     try:
                         await asyncio.wait_for(self.__rtc_pret.wait(), 30)
+                        self.__start_time = time.time()
                     except asyncio.TimeoutError:
                         pass
                     continue
@@ -556,8 +659,12 @@ class Runner:
                     await self._polling()
                     continue
                 else:
-                    print(const("Mode operation non supporte : %d") % self._mode_operation)
-                    await led_executer_sequence(const_leds.CODE_MAIN_OPERATION_INCONNUE, executions=None)
+                    print(
+                        const("Mode operation non supporte : %d") % self._mode_operation
+                    )
+                    await led_executer_sequence(
+                        const_leds.CODE_MAIN_OPERATION_INCONNUE, executions=None
+                    )
 
             except OSError as e:
                 if e.errno == 12:
@@ -565,7 +672,10 @@ class Runner:
                     if self.__erreurs_enomem >= CONST_NB_ERREURS_RESET:
                         print(const("ENOMEM count:%d, reset") % self.__erreurs_enomem)
                         await led_executer_sequence(
-                            const_leds.CODE_ERREUR_MEMOIRE, executions=1, ui_lock=self.__ui_lock)
+                            const_leds.CODE_ERREUR_MEMOIRE,
+                            executions=1,
+                            ui_lock=self.__ui_lock,
+                        )
                         reboot(e)
 
                     print(const("Erreur memoire no %d") % self.__erreurs_enomem)
@@ -581,7 +691,9 @@ class Runner:
                     sys.print_exception(e)
                     collect()
                     self.afficher_info()
-                    self.__prochain_refresh_fiche = time.time()  # Forcer refresh de la fiche
+                    self.__prochain_refresh_fiche = (
+                        time.time()
+                    )  # Forcer refresh de la fiche
                     await asyncio.sleep(20)
 
             except MemoryError as e:
@@ -605,17 +717,21 @@ class Runner:
                 collect()
                 sys.print_exception(e)
                 self.afficher_info()
-                self.__prochain_refresh_fiche = time.time()  # Forcer refresh de la fiche
+                self.__prochain_refresh_fiche = (
+                    time.time()
+                )  # Forcer refresh de la fiche
 
             # Erreur execution ou changement runlevel
-            await led_executer_sequence(const_leds.CODE_MAIN_ERREUR_GENERALE, 2, self.__ui_lock)
-    
+            await led_executer_sequence(
+                const_leds.CODE_MAIN_ERREUR_GENERALE, 2, self.__ui_lock
+            )
+
     async def run(self):
         self.afficher_info()
-        
+
         # Charger configuration
         await self.configurer_devices()
-        
+
         await self.configurer_programmes()
 
         # Demarrer thread entretien (wifi, date, configuration)
@@ -624,7 +740,8 @@ class Runner:
 
         # Task devices
         devices_task = self._device_handler.run(
-            self.__ui_lock, self.recevoir_lectures, self.get_feeds, 20_000)
+            self.__ui_lock, self.recevoir_lectures, self.get_feeds, 20_000
+        )
 
         # Task bluetooth
         bluetooth_task = self._bluetooth_handler.run()
@@ -643,7 +760,14 @@ class Runner:
 
         err = None
         try:
-            await asyncio.gather(entretien_task, devices_task, bluetooth_task, wifi_task, main_task, garbage_collection_task)
+            await asyncio.gather(
+                entretien_task,
+                devices_task,
+                bluetooth_task,
+                wifi_task,
+                main_task,
+                garbage_collection_task,
+            )
             print("A thread stopped - rebooting")
         except Exception as e:
             err = e
@@ -666,7 +790,7 @@ class Runner:
         print(CONST_CPU % machine.freq())
         print(CONST_MEMOIRE)
         mem_info()
-        print(CONST_INFO_SEP + '\n')
+        print(CONST_INFO_SEP + "\n")
 
 
 async def main():
@@ -675,5 +799,5 @@ async def main():
     await runner.run()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     asyncio.run(main())

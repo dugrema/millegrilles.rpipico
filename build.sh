@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# set -eo
+set -eo
 
 REP_BASE=`pwd`
 REP_BUILD="${REP_BASE}/build"
@@ -19,12 +19,12 @@ rm "${REP_BUILD}/firmware.uf2" || true
 #echo "MILLEGRILLES_VERSION=const('2024.0.5')" > ${REP_MILLEGRILLES_PYTHON}/millegrilles/version.py
 rm -r "${REP_RP2}/modules/millegrilles" || true
 cd "${REP_MILLEGRILLES_PYTHON}"
-make clean; make all
+make clean || true; make all
 cp -r "${REP_MILLEGRILLES_PYTHON}/build/millegrilles" "${REP_RP2}/modules/"
 
 # Prepary mpy libs
 cd "${REP_MILLEGRILLES_LIB}"
-make clean; make all
+make clean || true; make all
 cp -r ${REP_MILLEGRILLES_LIB}/build/* "${REP_RP2}/modules/"
 
 # Move dans rep RP2
@@ -32,7 +32,7 @@ cd "$REP_RP2"
 
 if [ -z $NOCLEAN ]; then
   echo "Cleaning project by default"
-  make clean
+  make clean || true
 fi
 make
 

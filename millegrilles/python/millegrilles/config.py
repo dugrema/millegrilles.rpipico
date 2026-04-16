@@ -25,6 +25,7 @@ from millegrilles.constantes import (
     CONST_CHAMP_TRANSITION_OFFSET,
     CONST_CHAMP_TRANSITION_TIME,
     CONST_CHAMP_USER_ID,
+    CONST_CHAMP_WORKAROUND_REBOOTINTERVAL,
     CONST_CHAMPS_SOLAIRE,
     CONST_HTTP_TIMEOUT_DEFAULT,
     CONST_MODE_CHARGER_URL_RELAIS,
@@ -40,6 +41,7 @@ from millegrilles.constantes import (
     CONST_PATH_SOLAIRE,
     CONST_PATH_TIMEINFO,
     CONST_PATH_TZOFFSET,
+    CONST_PATH_WORKAROUNDS,
     CONST_READ_BINARY,
     CONST_SOLAIRE_CHANGEMENT,
     CONST_WRITE_BINARY,
@@ -690,3 +692,11 @@ async def resolve_ntp_server():
     #    return socket.gethostbyname("ntp.local")
     # except:
     #    return CONST_DEFAULT_NTP
+
+
+def get_workaround_rebootinterval():
+    try:
+        with open(CONST_PATH_WORKAROUNDS, CONST_READ_BINARY) as fichier:
+            return load(fichier)[CONST_CHAMP_WORKAROUND_REBOOTINTERVAL]
+    except (KeyError, OSError, ValueError):
+        return None

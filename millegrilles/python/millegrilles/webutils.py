@@ -18,21 +18,30 @@ def reboot(e=None):
     Redemarre. Conserve une trace dans les fichiers exception.log et reboot.log.
     """
     import time
-    from machine import reset
     from sys import print_exception
 
+    from machine import reset
+
     print("Rebooting")
-    date_line = 'Date %s (%s)' % (str(time.gmtime()), time.time())
+    date_line = "Date %s (%s)" % (str(time.gmtime()), time.time())
 
-    if e is not None:
-        with open('exception.log', 'w') as logfile:
-            logfile.write('%s\n\n---\nCaused by:\n' % date_line)
-            print_exception(e, logfile)
-            logfile.write('\n')
-    else:
-        e = 'N/A'
+    if e is not False:
+        if e is not None:
+            with open("exception.log", "w") as logfile:
+                logfile.write("%s\n\n---\nCaused by:\n" % date_line)
+                print_exception(e, logfile)
+                logfile.write("\n")
+        else:
+            e = "N/A"
 
-    with open('reboot.log', 'a') as logfile:
-        logfile.write('%s (Cause: %s)\n' % (date_line, str(e)))
+        with open("reboot.log", "a") as logfile:
+            logfile.write("%s (Cause: %s)\n" % (date_line, str(e)))
+
+    try:
+        from millegrilles.wifi import disconnect_wifi
+
+        disconnect_wifi()  # Disconnect wifi to ensure redetection on reboot
+    except Exception:
+        pass
 
     reset()

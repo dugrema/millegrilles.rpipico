@@ -18,6 +18,8 @@ CONST_PATH_WIFI_NEW = const("wifi.new.json")
 
 CONST_PATH_NTP = const("ntp.txt")
 
+CONST_PATH_WORKAROUNDS = const("workarounds.json")
+
 
 # Modes operation
 CONST_MODE_INIT = const(1)
@@ -60,6 +62,9 @@ CONST_CHAMP_INSTANCES = const("instances")
 # Configuration solaire
 CONST_CHAMPS_SOLAIRE = const(("dawn", "sunrise", "noon", "sunset", "dusk"))
 CONST_SOLAIRE_CHANGEMENT = const(120)
+
+# Workarounds
+CONST_CHAMP_WORKAROUND_REBOOTINTERVAL = const("rebootInterval")
 
 CONST_WEBSOCKET_DISCONNECT_TIMEOUT = const(3_600)
 
