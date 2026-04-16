@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -eo
+# set -eo
 
 REP_BASE=`pwd`
 REP_BUILD="${REP_BASE}/build"
