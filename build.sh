@@ -19,7 +19,9 @@ rm "${REP_BUILD}/firmware.uf2" || true
 #echo "MILLEGRILLES_VERSION=const('2024.0.5')" > ${REP_MILLEGRILLES_PYTHON}/millegrilles/version.py
 rm -r "${REP_RP2}/modules/millegrilles" || true
 cd "${REP_MILLEGRILLES_PYTHON}"
-make clean || true; make all
+make clean || true
+set -eo
+make all
 cp -r "${REP_MILLEGRILLES_PYTHON}/build/millegrilles" "${REP_RP2}/modules/"
 
 # Prepary mpy libs
