@@ -1,14 +1,14 @@
-from uasyncio import run
-from time import sleep_ms
-from machine import Pin, reset
 from sys import print_exception
+from time import sleep_ms
 
-LED_ONBOARD = Pin('WL_GPIO0', machine.Pin.OUT)
-
+from machine import Pin, reset
 from millegrilles.version import MILLEGRILLES_VERSION
+from uasyncio import run
+
+LED_ONBOARD = Pin("WL_GPIO0", machine.Pin.OUT)
 
 # Initialiser bus
-print('Version %s' % MILLEGRILLES_VERSION)
+print("Version %s" % MILLEGRILLES_VERSION)
 sleep_ms(500)
 
 
@@ -22,6 +22,7 @@ def flash_led(cycles=6):
 
 def root():
     from millegrilles.appareil_millegrille import main
+
     # from appareil_millegrille import main
     run(main())
 

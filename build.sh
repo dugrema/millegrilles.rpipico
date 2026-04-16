@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -eo
+
 REP_BASE=`pwd`
 REP_BUILD="${REP_BASE}/build"
 REP_RP2="${REP_BASE}/micropython/ports/rp2"
@@ -11,7 +13,7 @@ export BOARD=RPI_PICO_W
 export USER_C_MODULES="${REP_MG_SRC}/micropython.cmake"
 
 mkdir -p build
-rm "${REP_BUILD}/firmware.uf2"
+rm "${REP_BUILD}/firmware.uf2" || true
 
 # Preparer mpy PYTHON
 #echo "MILLEGRILLES_VERSION=const('2024.0.5')" > ${REP_MILLEGRILLES_PYTHON}/millegrilles/version.py
