@@ -76,16 +76,25 @@ class BluetoothHandler:
 
         # self.__pubkey_auth = None  # Cle publique authentifiee de la connexion courante
 
+    @property
+    def watchdog(self):
+        return self.__runner.watchdog
+
     async def __initialiser(self):
+        self.watchdog.feed()
         collect()
         self.preparer_gatt_server()
+        self.watchdog.feed()
         collect()
-        await asyncio.sleep(0)  # Yield
+        self.watchdog.yield_duration(0)
+        # await asyncio.sleep(0)  # Yield
 
         self.load_profil_config()
-        await asyncio.sleep(0)  # Yield
+        # await asyncio.sleep(0)  # Yield
+        self.watchdog.yield_duration(0)
         collect()
-        await asyncio.sleep(0)  # Yield
+        # await asyncio.sleep(0)  # Yield
+        self.watchdog.yield_duration(1)
 
         await self.initialiser_devices_lectures()
 
@@ -480,7 +489,7 @@ class BluetoothHandler:
 
         # Verifier le certificat et la signature du message.
         # Une erreur est lancee si la signature ou le certificat sont invalides.
-        info_certificat = await verifier_message(params, buffer=BUFFER_COMMANDE_BLUETOOTH)
+        info_certificat = await verifier_message(self.watchdog, params, buffer=BUFFER_COMMANDE_BLUETOOTH)
         print("BLE Auth info : ", info_certificat)
 
         if info_certificat['user_id'] != get_user_id():

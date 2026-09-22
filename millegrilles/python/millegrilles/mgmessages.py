@@ -62,18 +62,22 @@ def message_stringify(message, buffer=None):
         return buffer.get_data()
 
 
-async def verifier_message(message: dict, buffer=None, err_ca_ok=False):
+async def verifier_message(watchdog, message: dict, buffer=None, err_ca_ok=False):
     # Valider le certificat - raise Exception si erreur
     pubkey = message['pubkey']
 
     try:
-        await asyncio.sleep_ms(1)
+        # await asyncio.sleep_ms(1)
+        await watchdog.yield_duration(1)
         ticks_debut = time.ticks_ms()
-        info_certificat = await certificat.valider_certificats(message['certificat'], fingerprint=pubkey, err_ca_ok=err_ca_ok)  #, fingerprint=message['pubkey'])
+        info_certificat = await certificat.valider_certificats(watchdog, message['certificat'], fingerprint=pubkey, err_ca_ok=err_ca_ok)  #, fingerprint=message['pubkey'])
+        watchdog.feed()
         print("verifier_message verifier certificat %s duree %d" % (pubkey, time.ticks_diff(time.ticks_ms(), ticks_debut)))
         del message['certificat']
-        await asyncio.sleep_ms(1)
+        # asyncio.sleep_ms(1)
+        await watchdog.yield_duration(1)
     except KeyError as ke:
+        watchdog.feed()
         if err_ca_ok is True:
             info_certificat = True
         else:
@@ -83,16 +87,22 @@ async def verifier_message(message: dict, buffer=None, err_ca_ok=False):
     signature = message['sig']
     id_message = message['id']
     # Raise une exception si la signature est invalide
-    verifier_signature_2023_5(id_message, signature, pubkey)
-    await asyncio.sleep_ms(1)
+    await watchdog.yield_duration(1)
+    verifier_signature_2023_5(watchdog, id_message, signature, pubkey)
+    # await asyncio.sleep_ms(1)
+    watchdog.feed()
+    await watchdog.yield_duration(1)
 
     # Hacher le message, comparer id
-    id_calcule = await hacher_message_2023_5(message, buffer=buffer)
+    watchdog.feed()
+    id_calcule = await hacher_message_2023_5(watchdog, message, buffer=buffer)
+    watchdog.feed()
     if id_calcule != id_message:
         print('Mismatch, id_calcule : %s, id_message : %s' % (id_calcule, id_message))
         raise Exception('Mismatch id message')
 
-    await asyncio.sleep_ms(1)
+    # await asyncio.sleep_ms(1)
+    await watchdog.yield_duration(1)
 
     return info_certificat
 
@@ -225,8 +235,9 @@ class BufferMessage(IOBase):
 # sig = ed25519.sign(pubkey, id)
 # valeurs binaires proviennent de binascii.hexlify(BIN).decode('utf-8')
 
-async def signer_message_2023_5(id_message: str, cle_privee=None):
+async def signer_message_2023_5(watchdog, id_message: str, cle_privee=None):
     cle_publique = None
+    watchdog.feed()
     if cle_privee is None:
         # Charger la cle locale
         try:
@@ -245,46 +256,62 @@ async def signer_message_2023_5(id_message: str, cle_privee=None):
                     cle_publique = cle_privee[32:]
                     cle_privee = cle_privee[:32]
 
+    await watchdog.yield_duration(1)
     ticks_debut = time.ticks_ms()
     if cle_publique is None:
         # Deriver la cle publique a partir de la cle privee
         cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
+        watchdog.feed()
+        await watchdog.yield_duration(1)
     print("Cle publique : %s" % binascii.hexlify(cle_publique))
     print("signer_message_2023_5 ed25519generatepubkey duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
-    await asyncio.sleep_ms(1)
+    # await asyncio.sleep_ms(1)
+    await watchdog.yield_duration(1)
 
     hachage = binascii.unhexlify(id_message)
+    watchdog.feed()
 
     ticks_debut = time.ticks_ms()
+    watchdog.feed()
     signature = oryx_crypto.ed25519sign(cle_privee, cle_publique, hachage)
+    watchdog.feed()
     print("__signer_message_2 ed25519sign duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
 
-    await asyncio.sleep_ms(1)
+    # await asyncio.sleep_ms(1)
+    await watchdog.yield_duration(1)
     #signature = multibase.encode('base64', signature)
     signature = binascii.hexlify(signature).decode('utf-8')
     
     return signature
 
 
-def verifier_signature_2023_5(id_message: str, signature: str, cle_publique: str):
+def verifier_signature_2023_5(watchdog, id_message: str, signature: str, cle_publique: str):
     """ Verifie la signature d'un message. Lance une exception en cas de signature invalide. """
     hachage = binascii.unhexlify(id_message)
     cle_publique = binascii.unhexlify(cle_publique)
     signature = binascii.unhexlify(signature)
     ticks_debut = time.ticks_ms()
+    watchdog.feed()
     oryx_crypto.ed25519verify(cle_publique, signature, hachage)
+    watchdog.feed()
     print("__verifier_signature ed25519verify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
 
 
-async def hacher_message_2023_5(message: dict, buffer=None):
+async def hacher_message_2023_5(watchdog, message: dict, buffer=None):
     ticks_debut = time.ticks_ms()
-    await asyncio.sleep_ms(1)
+    # await asyncio.sleep_ms(1)
+    await watchdog.yield_duration(1)
     message_array = preparer_array_hachage_2023_5(message)
-    await asyncio.sleep_ms(1)
+    watchdog.feed()
+    # await asyncio.sleep_ms(1)
+    await watchdog.yield_duration(1)
 
+    watchdog.feed()
     hachage = oryx_crypto.blake2s(message_stringify(message_array, buffer=buffer))
+    watchdog.feed()
     print("hacher_message stringify+blake2s duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
-    await asyncio.sleep_ms(1)
+    # await asyncio.sleep_ms(1)
+    await watchdog.yield_duration(1)
 
     return binascii.hexlify(hachage).decode('utf-8')
 
@@ -306,14 +333,17 @@ def preparer_array_hachage_2023_5(message) -> list:
         message_array.append(message['pre-migration'])
     
     if kind > 7:
-        raise Error('kind message non supporte' % kind)
+        raise Error('kind message non supporte %s' % kind)
 
     return message_array
 
 
-async def formatter_message(message: dict, kind: int, domaine=None, action=None, partition=None, cle_privee=None, buffer=None, ajouter_certificat=True):
+async def formatter_message(watchdog, message: dict, kind: int, domaine=None, action=None, partition=None, cle_privee=None, buffer=None, ajouter_certificat=True):
     """ Formatte un message avec estampille, hachage (id) et signature (sig) """
-    
+    print("Formatter message")
+    if not isinstance(message, dict):
+        raise Exception("Not dict")
+
     if cle_privee is not None:
         # Calculer pubkey
         pubkey = binascii.hexlify(oryx_crypto.ed25519generatepubkey(cle_privee)).decode('utf-8')
@@ -321,8 +351,13 @@ async def formatter_message(message: dict, kind: int, domaine=None, action=None,
         pubkey = binascii.hexlify(certificat.charger_cle_publique()).decode('utf-8')
 
     # Serialiser le contenu en string
+    watchdog.feed()
+    print("prep 1")
     contenu = prep_message_1(message)
+    watchdog.feed()
+    print("prep stringify")
     contenu = message_stringify(contenu).decode('utf-8')
+    await watchdog.yield_duration(1)
 
     enveloppe_message = {
         'pubkey': pubkey,
@@ -343,15 +378,18 @@ async def formatter_message(message: dict, kind: int, domaine=None, action=None,
 
     if kind > 6:
         raise Exception('kind %d non supporte' % kind)
-    
-    hachage_message = await hacher_message_2023_5(enveloppe_message, buffer)
+
+    print("hacher")
+    hachage_message = await hacher_message_2023_5(watchdog, enveloppe_message, buffer)
     enveloppe_message['id'] = hachage_message
-    
-    signature = await signer_message_2023_5(hachage_message, cle_privee)
+
+    print("signer")
+    signature = await signer_message_2023_5(watchdog, hachage_message, cle_privee)
     enveloppe_message['sig'] = signature
     
-    if ajouter_certificat is True:
+    if ajouter_certificat:
         enveloppe_message['certificat'] = certificat.split_pem(certificat.get_certificat_local(), format_str=True)
+        watchdog.feed()
 
+    print("Formatter message done")
     return enveloppe_message
-

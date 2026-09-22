@@ -145,7 +145,7 @@ def get_certificat_local():
         return None
 
 
-async def valider_certificats(pem_certs: list, date_validation=None, is_der=False, fingerprint=None, err_ca_ok=False):
+async def valider_certificats(watchdog, pem_certs: list, date_validation=None, is_der=False, fingerprint=None, err_ca_ok=False):
     """ Valide la chaine de certificats, incluant le dernier avec le CA.
         @return Information du certificat leaf
         @raises Exception Si la chaine est invalide. """
@@ -177,7 +177,8 @@ async def valider_certificats(pem_certs: list, date_validation=None, is_der=Fals
     # Conserver l'information du certificat leaf
     x509_info = oryx_crypto.x509certificatinfo(cert)
     fingerprint = calculer_fingerprint(cert)
-    asyncio.sleep_ms(10)  # Yield
+    # asyncio.sleep_ms(10)  # Yield
+    await watchdog.yield_duration(10)
 
     enveloppe = {
         'fingerprint': fingerprint,
@@ -194,14 +195,16 @@ async def valider_certificats(pem_certs: list, date_validation=None, is_der=Fals
         parent = pem_certs.pop(0)
         if is_der is False:
             parent = oryx_crypto.x509readpemcertificate(parent)
-        asyncio.sleep_ms(10)  # Yield
+        # asyncio.sleep_ms(10)  # Yield
+        await watchdog.yield_duration(10)
         oryx_crypto.x509validercertificate(cert, parent, date_validation)
         cert = parent  # Poursuivre la chaine
     else:
         try:
             with open(PATH_CA_CERT, 'rb') as fichier:
                 parent = fichier.read()
-            asyncio.sleep_ms(10)  # Yield
+            # asyncio.sleep_ms(10)  # Yield
+            await watchdog.yield_duration(10)
             oryx_crypto.x509validercertificate(cert, parent, date_validation)
         except OSError as e:
             if e.errno == 2:

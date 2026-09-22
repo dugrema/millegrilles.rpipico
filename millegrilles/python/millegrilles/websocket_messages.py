@@ -1,11 +1,13 @@
+import _thread
 import time
 import uasyncio as asyncio
 
-from binascii import hexlify
 from json import dumps, loads, load, dump
 from gc import collect
 from sys import print_exception
+
 from micropython import mem_info, const
+from millegrilles.watchdog import Watchdog
 
 from uwebsockets.client import connect
 from millegrilles.certificat import get_expiration_certificat_local
@@ -18,6 +20,9 @@ from millegrilles.message_inscription import verifier_renouveler_certificat_ws, 
 # from handler_commandes import traiter_commande
 from millegrilles.handler_commandes import traiter_commande
 
+# ws_connection = None
+# ws_error = None
+# stop_feeding = True
 
 PATHNAME_POLL = const('/poll')
 PATHNAME_REQUETE = const('/requete')
@@ -39,10 +44,12 @@ class HttpErrorException(Exception):
     pass
 
 
-async def __preparer_message(chiffrage_messages, timeout_http, generer_etat, buffer, refresh=True):
+async def __preparer_message(watchdog, chiffrage_messages, timeout_http, generer_etat, buffer, refresh=True):
     # Genrer etat
     if generer_etat is not None:
+        watchdog.feed()
         etat = await generer_etat(refresh=refresh)
+        watchdog.feed()
     else:
         etat = {'lectures_senseurs': {}}
         
@@ -52,14 +59,19 @@ async def __preparer_message(chiffrage_messages, timeout_http, generer_etat, buf
     if chiffrage_messages.pret is True:
         # Chiffrer le message
         print('preparer_message chiffrer')
+        watchdog.feed()
         etat = await chiffrage_messages.chiffrer(etat)
+        watchdog.feed()
         etat['routage'] = {'action': 'etatAppareilRelai'}
     else:
         # Signer message
-        etat = await formatter_message(etat, kind=2, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil', buffer=buffer)
+        etat = await formatter_message(watchdog, etat, kind=2, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil', buffer=buffer)
 
+    watchdog.feed()
     buffer.clear()
+    watchdog.feed()
     dump(etat, buffer)
+    watchdog.feed()
 
     return buffer
 
@@ -100,19 +112,24 @@ async def poll(appareil, websocket, emit_event, buffer, timeout_http=60, generer
             emettre = True
         else:
             # Intervalle polling socket
-            await asyncio.sleep_ms(50)
+            # await asyncio.sleep_ms(50)
+            await appareil.watchdog.yield_duration(50)
 
         if emettre is True:
+            print("Emettre")
             emettre = False
             deja_emis = True
             chiffrage_messages = appareil.chiffrage_messages
-            buffer = await __preparer_message(chiffrage_messages, timeout_http, generer_etat, buffer, refresh=refresh)
+            appareil.watchdog.feed()
+            buffer = await __preparer_message(appareil.watchdog, chiffrage_messages, timeout_http, generer_etat, buffer, refresh=refresh)
+            appareil.watchdog.feed()
             print("poll Send data, taille etat: %d" % len(buffer))
             websocket.send(buffer.get_data())
-            await asyncio.sleep_ms(1)  # Yield
+            # await asyncio.sleep_ms(1)  # Yield
+            await appareil.watchdog.yield_duration(1)
 
 
-async def requete_configuration_displays(chiffrage_messages, websocket, buffer):
+async def requete_configuration_displays(watchdog, chiffrage_messages, websocket, buffer):
     #requete = await signer_message(
     #    dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY)
     message = dict()
@@ -122,7 +139,7 @@ async def requete_configuration_displays(chiffrage_messages, websocket, buffer):
     #     requete = await chiffrage_messages.chiffrer(message)
     #     requete['routage'] = {'action': CONST_REQUETE_DISPLAY}
     # else:
-    requete = await formatter_message(message, kind=1,
+    requete = await formatter_message(watchdog, message, kind=1,
                                       domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY,
                                       buffer=buffer, ajouter_certificat=True)
     buffer.set_text(dumps(requete))
@@ -137,28 +154,30 @@ async def requete_configuration_displays(chiffrage_messages, websocket, buffer):
     websocket.send(buffer.get_data())
 
 
-async def requete_configuration_programmes(chiffrage_messages, websocket, buffer):
+async def requete_configuration_programmes(watchdog, chiffrage_messages, websocket, buffer):
     #requete = await signer_message(
     #    dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_PROGRAMMES)
-    requete = await formatter_message(dict(), kind=1,
+    requete = await formatter_message(watchdog, dict(), kind=1,
                                       domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_PROGRAMMES,
                                       buffer=buffer, ajouter_certificat=True)
     buffer.set_text(dumps(requete))
     requete = None
 
     # Cleanup memoire
-    await asyncio.sleep_ms(1)
+    # await asyncio.sleep_ms(1)
+    await watchdog.yield_duration(1)
     collect()
-    await asyncio.sleep_ms(1)
+    # await asyncio.sleep_ms(1)
+    await watchdog.yield_duration(1)
     
     print('requete_configuration_programmes')
     websocket.send(buffer.get_data())
 
 
-async def requete_fiche_publique(websocket, buffer):
+async def requete_fiche_publique(watchdog, websocket, buffer):
     #requete = await signer_message(
     #    dict(), domaine='senseurspassifs_relai', action=CONST_REQUETE_FICHE_PUBLIQUE)
-    requete = await formatter_message(dict(), kind=1,
+    requete = await formatter_message(watchdog, dict(), kind=1,
                                       domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_FICHE_PUBLIQUE,
                                       buffer=buffer, ajouter_certificat=True)
     buffer.set_text(dumps(requete))
@@ -172,31 +191,36 @@ async def requete_fiche_publique(websocket, buffer):
     websocket.send(buffer.get_data())
 
 
-async def requete_relais_web(chiffrage_messages, websocket, buffer):
+async def requete_relais_web(watchdog, chiffrage_messages, websocket, buffer):
     #requete = await signer_message(
     #    dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_RELAIS_WEB, buffer=buffer)
 
+    watchdog.feed()
     if chiffrage_messages.pret is True:
         # Chiffrer le message
         requete = await chiffrage_messages.chiffrer(dict())
+        watchdog.feed()
         requete['routage'] = {'action': CONST_REQUETE_RELAIS_WEB}
     else:
-        requete = await formatter_message(dict(), kind=1,
+        print('Requete relais web')
+        requete = await formatter_message(watchdog, dict(), kind=1,
                                           domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_RELAIS_WEB,
                                           buffer=buffer, ajouter_certificat=True)
+    await watchdog.yield_duration(1)
     buffer.clear()
     dump(requete, buffer)
+    watchdog.feed()
     requete = None
 
     # Cleanup memoire
-    await asyncio.sleep_ms(1)
+    await watchdog.yield_duration(1)
     collect()
-    await asyncio.sleep_ms(1)
-    
+    await watchdog.yield_duration(1)
+
     websocket.send(buffer.get_data())
 
 
-async def charger_timeinfo(chiffrage_messages, websocket, buffer, refresh: False):
+async def charger_timeinfo(watchdog, chiffrage_messages, websocket, buffer, refresh: False):
 
     offset = None
     try:
@@ -237,7 +261,7 @@ async def charger_timeinfo(chiffrage_messages, websocket, buffer, refresh: False
         requete = await chiffrage_messages.chiffrer(requete)
         requete['routage'] = {'action': 'getTimezoneInfo'}
     else:
-        requete = await generer_message_timeinfo(timezone_str)
+        requete = await generer_message_timeinfo(watchdog, timezone_str)
 
     buffer.set_text(dumps(requete))
 
@@ -249,14 +273,14 @@ async def charger_timeinfo(chiffrage_messages, websocket, buffer, refresh: False
     websocket.send(buffer.get_data())
 
 
-async def verifier_signature(reponse, buffer):
-    return await verifier_message(reponse, buffer)
+async def verifier_signature(watchdog, reponse, buffer):
+    return await verifier_message(watchdog, reponse, buffer)
 
 
 class PollingThread:
 
     def __init__(self, appareil, buffer, duree_thread):
-        self.__appareil = appareil
+        self.__appareil = appareil          # appareil_millegrille.Appareil
         self.__timeout_http = 60
         self.__duree_thread = duree_thread
 
@@ -281,6 +305,7 @@ class PollingThread:
         self.__timeout_http = get_http_timeout()
         
     async def connecter(self):
+        global ws_connection, ws_error, stop_feeding
         self.__load_initial = True
         self.__refresh_step = 0
         self.__errnumber = 0
@@ -298,8 +323,33 @@ class PollingThread:
         url_connexion = self.__url_relai + '/ws'
         url_connexion = url_connexion.replace('https://', 'wss://')
         print("URL connexion websocket %s" % url_connexion)
-        self.__websocket = connect(url_connexion)
+        # stop_feeding = False
+        # _thread.start_new_thread(feed_watchdog_core1, (self.__appareil.watchdog,))
+        async with self.__appareil.watchdog:
+            self.__websocket = connect(url_connexion)
         self.__websocket.setblocking(False)
+            # self.__appareil.watchdog.stop_core1()
+        # stop_feeding = True
+        # _thread.start_new_thread(connect_wss_core1, (url_connexion,))
+        # loop_count = 0
+        # while ws_connection is None and ws_error is None and loop_count < 50:
+        #     await asyncio.sleep(200)
+        #     loop_count += 1
+        # if ws_connection is not None:
+        #     print("WS OK")
+        #     self.__websocket = ws_connection
+        #     ws_connection = None
+        #     self.__websocket.setblocking(False)
+        # elif ws_error:
+        #     print("WS error")
+        #     print(ws_error)
+        #     e = ws_error
+        #     ws_error = None
+        #     raise e
+        # else:
+        #     print("WS timeout")
+        #     raise Exception("Timeout trying to connect")
+
         print("websocket connecte")
         mem_info()
         
@@ -312,10 +362,11 @@ class PollingThread:
         if self.__url_relai is None:
             raise Exception('URL relai None')
 
-    def _refresh_config(self):
+    async def _refresh_config(self):
         # Forcer un refresh de la liste de relais (via fiche MilleGrille)
         print("Refresh config %d" % self.__refresh_step)
 
+        watchdog = self.__appareil.watchdog
         chiffrage_messages = self.__appareil.chiffrage_messages
 
         if self.__refresh_step <= 1:
@@ -326,12 +377,13 @@ class PollingThread:
         if self.__refresh_step <= 2:
             self.__refresh_step = 3
             # Recharger la configuration des displays
-            await requete_configuration_displays(chiffrage_messages, self.__websocket, buffer=self.__buffer)
+            await requete_configuration_displays(watchdog, chiffrage_messages, self.__websocket, buffer=self.__buffer)
             return
 
         if self.__refresh_step <= 3:
             self.__refresh_step = 4
             await charger_timeinfo(
+                watchdog,
                 chiffrage_messages,
                 self.__websocket,
                 buffer=self.__buffer,
@@ -341,19 +393,19 @@ class PollingThread:
         if self.__refresh_step <= 4:
             self.__refresh_step = 5
             # Recharger la configuration des programmes
-            await requete_configuration_programmes(chiffrage_messages, self.__websocket, buffer=self.__buffer)
+            await requete_configuration_programmes(watchdog, chiffrage_messages, self.__websocket, buffer=self.__buffer)
             return
         
         if self.__refresh_step <= 5:
             self.__refresh_step = 6
             # Verifier si le certificat doit etre renouvelle
-            await verifier_renouveler_certificat_ws(self.__websocket, buffer=self.__buffer)
+            await verifier_renouveler_certificat_ws(watchdog, self.__websocket, buffer=self.__buffer)
             return
 
         if self.__refresh_step <= 6:
             self.__refresh_step = 7
             # Verifier si le certificat doit etre renouvelle
-            await requete_relais_web(chiffrage_messages, self.__websocket, buffer=self.__buffer)
+            await requete_relais_web(watchdog, chiffrage_messages, self.__websocket, buffer=self.__buffer)
             return
 
         # Succes - ajuster prochain refresh
@@ -372,6 +424,7 @@ class PollingThread:
         self.__appareil.set_websocket_pret()
         was_connected = False
         while expiration_thread > time.time() and self.__memory_error < 10:
+            await self.__appareil.watchdog.yield_duration(1)
             try:
                 print("Expiration thread dans %s " % (expiration_thread - time.time()))
                 
@@ -384,12 +437,14 @@ class PollingThread:
                     # Erreur connexion (e.g. status code 502)
                     self.__url_relai = None
                     self.entretien_url_relai()
+                    await self.__appareil.watchdog.yield_duration(1)
                     continue
                 except OSError as e:
                     if e.errno == 104:
                         # ECONNRESET
                         self.__nie_count += 1
-                        await asyncio.sleep_ms(500)
+                        # await asyncio.sleep_ms(500)
+                        await self.__appareil.watchdog.yield_duration(500)
                         continue  # Retry
                     elif e.errno in (103, -2):
                         # Erreur connexion (e.g. ECONNABORTED, refused)
@@ -398,24 +453,30 @@ class PollingThread:
                         continue
                     else:
                         raise e
+                finally:
+                    await self.__appareil.watchdog.yield_duration(1)
                     
                 # Boucle polling sur connexion websocket
                 now = time.time()
                 while expiration_thread > now and self.__memory_error < 10:
+                    await self.__appareil.watchdog.yield_duration(1)
                     print("Expiration thread dans %s " % (expiration_thread - now))
 
                     if now > self.__prochain_refresh_config:
                         await self._refresh_config()
-                        await asyncio.sleep_ms(1)
+                        # await asyncio.sleep_ms(1)
+                        await self.__appareil.watchdog.yield_duration(1)
                         collect()
-                        await asyncio.sleep_ms(1)
+                        await self.__appareil.watchdog.yield_duration(1)
                     elif self.__last_message_ts < now - (CONST_EXPIRATION_CONFIG+300):
                         # This is an attempt to force a reboot if the connection is not working properly
                         raise Exception(const('WS thread message timeout'))
 
                     try:
                         print(const("debut ws poll"))
+                        self.__appareil.watchdog.feed()
                         await self._poll()
+                        self.__appareil.watchdog.feed()
                         print(const("fin ws poll OK"))
                         # Reset erreurs
                         self.__nie_count = 0
@@ -439,11 +500,14 @@ class PollingThread:
                     except MemoryError as e:
                         self.__memory_error += 1
                         collect()
+                    finally:
+                        self.__appareil.watchdog.feed()
 
                     # Update now
                     now = time.time()
 
             finally:
+                self.__appareil.watchdog.feed()
                 self.__appareil.reset_websocket_pret(was_connected)
                 print(const("Close websocket"))
                 mem_info()
@@ -473,7 +537,8 @@ class PollingThread:
                 self.__appareil.get_etat,
             )
             
-            await asyncio.sleep_ms(1)  # Yield
+            # await asyncio.sleep_ms(1)  # Yield
+            await self.__appareil.watchdog.yield_duration(1)
 
             if reponse is not None and len(reponse) > 0:
                 # Remettre memoryview dans buffer - ajuste len
@@ -481,12 +546,15 @@ class PollingThread:
                 reponse = None
 
                 # Cleanup memoire - tout est copie dans le buffer
-                await asyncio.sleep_ms(1)  # Yield
+                # await asyncio.sleep_ms(1)  # Yield
+                await self.__appareil.watchdog.yield_duration(1)
                 collect()
-                await asyncio.sleep_ms(3)  # Yield
+                # await asyncio.sleep_ms(3)  # Yield
+                await self.__appareil.watchdog.yield_duration(1)
 
                 try:
                     reponse = loads(self.__buffer.get_data())
+                    self.__appareil.watchdog.feed()
                     if reponse:
                         # Keep track of messages - proxy to identify problems with the app server/connection
                         self.__last_message_ts = time.time()
@@ -496,7 +564,8 @@ class PollingThread:
                     #with open('err.txt', 'wb') as fichiers:
                     #    fichiers.write(self.__buffer.get_data()[:len_buffer])
                 else:
-                    await asyncio.sleep_ms(5)  # Yield
+                    # await asyncio.sleep_ms(5)  # Yield
+                    await self.__appareil.watchdog.yield_duration(5)
                     len_buffer = len(self.__buffer.get_data())
                     print("Message websocket recu (len %d)" % len_buffer)
                     try:
@@ -506,27 +575,35 @@ class PollingThread:
 
                             # Dechiffrer le message
                             try:
+                                await self.__appareil.watchdog.yield_duration(1)
                                 reponse = self.__appareil.chiffrage_messages.dechiffrer(message_chiffre)
+                                self.__appareil.watchdog.feed()
                             except Exception as e:
                                 print('err Desactiver chiffrage : %s' % e)
                                 self.__appareil.chiffrage_messages.clear()
                                 raise e  # Fallback sur message signe
+                            finally:
+                                await self.__appareil.watchdog.yield_duration(1)
 
                             print("message websocket dechiffre OK")
                             # Le message dechiffre est en bytes, charger avec json
                             reponse = loads(reponse)
+                            self.__appareil.watchdog.feed()
 
                             # On peut se fier au message dechiffre sans valider le reste du contenu
                             info_certificat = reponse['enveloppe']
                             reponse = {'routage': routage, 'contenu': reponse['contenu']}
                         except Exception:
                             # On n'a pas de message chiffre ou echec dechiffrage. Valider le message au complet.
-                            info_certificat = await verifier_signature(reponse, self.__buffer)
+                            self.__appareil.watchdog.feed()
+                            info_certificat = await verifier_signature(self.__appareil.watchdog, reponse, self.__buffer)
 
                         # Cleanup
-                        await asyncio.sleep_ms(2)  # Yield
+                        # await asyncio.sleep_ms(2)  # Yield
+                        await self.__appareil.watchdog.yield_duration(2)
 
                         await traiter_commande(self.__buffer, self.__websocket, self.__appareil, reponse, info_certificat)
+                        self.__appareil.watchdog.feed()
                     except KeyError as e:
                         print("Erreur reception KeyError %s" % str(e))
                         print("ERR Message\n%s" % reponse)
@@ -535,7 +612,8 @@ class PollingThread:
             reponse = None
             # await asyncio.sleep_ms(5)  # Yield
             # collect()
-            await asyncio.sleep_ms(5)  # Yield
+            # await asyncio.sleep_ms(5)  # Yield
+            await self.__appareil.watchdog.yield_duration(5)
             
             # Run polling completee, reset erreurs
             self.__errnumber = 0
@@ -553,18 +631,41 @@ class PollingThread:
         if chiffrage_messages.doit_renouveler_secret() is False:
             return
 
+        watchdog = self.__appareil.watchdog
+        watchdog.feed()
         cle_publique = chiffrage_messages.generer_cle()
+        await watchdog.yield_duration(1)
         message = {'peer': cle_publique, 'version': CONST_VERSION}
 
         print('echanger_secret public %s' % message)
 
-        requete = await formatter_message(message, kind=2,
+        requete = await formatter_message(self.__appareil.watchdog, message, kind=2,
                                           domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI,
                                           action=CONST_COMMANDE_ECHANGE_CLES,
                                           buffer=self.__buffer, ajouter_certificat=True)
+        watchdog.feed()
         self.__buffer.clear()
         dump(requete, self.__buffer)
         requete = None
-        await asyncio.sleep_ms(1)  # Yield
+        # await asyncio.sleep_ms(1)  # Yield
+        await watchdog.yield_duration(1)
 
         self.__websocket.send(self.__buffer.get_data())
+
+
+# def connect_wss_core1(url):
+#     global ws_connection, ws_error
+#     print("Core1 WS start url ", end="")
+#     print(url)
+#
+#     # Reset from previous attempt
+#     ws_connection = None
+#     ws_error = None
+#
+#     try:
+#         ws_connection = connect(url)
+#         print("Core1 connected")
+#     except Exception as e:
+#         ws_error = e
+#         print("Core1 error")
+#     print("Core1 WS done")

@@ -16,7 +16,7 @@ from millegrilles.certificat import PATH_CERT
 from millegrilles.certificat import entretien_certificat as __entretien_certificat
 from millegrilles.chiffrage import ChiffrageMessages
 
-# from millegrilles.watchdog import watchdog_thread
+from millegrilles.watchdog import Watchdog  # watchdog_thread
 # from dev import config
 from millegrilles.config import (
     detecter_mode_operation,
@@ -46,13 +46,13 @@ from millegrilles.garbage_collector import (
 from millegrilles.ledblink import led_executer_sequence
 from millegrilles.message_inscription import (
     charger_fiche,
-    parse_url,
+#    parse_url,
     recuperer_ca,
     run_inscription,
 )
-from millegrilles.message_inscription import (
-    verifier_renouveler_certificat as __verifier_renouveler_certificat,
-)
+# from millegrilles.message_inscription import (
+#     verifier_renouveler_certificat as __verifier_renouveler_certificat,
+# )
 
 # from mgbluetooth import BluetoothHandler
 from millegrilles.mgbluetooth import BluetoothHandler
@@ -87,12 +87,12 @@ async def entretien_certificat():
     return False
 
 
-async def verifier_renouveler_certificat(url_relai: str):
-    try:
-        return await __verifier_renouveler_certificat(url_relai)
-    except Exception as e:
-        print("Erreur verif renouveler certificat")
-        sys.print_exception(e)
+# async def verifier_renouveler_certificat(watchdog, url_relai: str):
+#     try:
+#         return await __verifier_renouveler_certificat(watchdog, url_relai)
+#     except Exception as e:
+#         print("Erreur verif renouveler certificat")
+#         sys.print_exception(e)
 
 
 class Runner:
@@ -101,6 +101,7 @@ class Runner:
         self._device_handler = DeviceHandler(self)
         self._programmes_handler = ProgrammesHandler(self)
         self._bluetooth_handler = BluetoothHandler(self)
+        self._watchdog = Watchdog()
 
         self._lectures_courantes = dict()
         self._lectures_externes = dict()
@@ -157,6 +158,16 @@ class Runner:
         # Troubleshoot disconnections
         if was_connected:
             self.__websocket_disconnected = time.time()
+
+    @property
+    def watchdog(self):
+        return self._watchdog
+
+    def feed_watchdog(self):
+        self._watchdog.feed()
+
+    def feed_watchdog_yield(self, duration):
+        self._watchdog.yield_duration(duration)
 
     @property
     def rtc_pret(self) -> asyncio.Event:
@@ -288,7 +299,7 @@ class Runner:
 
         if len(liste_senseurs_programmes) == 0:
             liste_senseurs_programmes = None
-
+        await self.watchdog.yield_duration(10)
         try:
             await asyncio.wait_for(self.__lectures_event.wait(), 5)
         except TimeoutError:
@@ -551,7 +562,7 @@ class Runner:
                 print("charger_urls pre-refresh %s" % relais)
                 if refresh:
                     try:
-                        fiche, certificat = await charger_fiche(buffer=BUFFER_MESSAGE)
+                        fiche, certificat = await charger_fiche(self.watchdog, buffer=BUFFER_MESSAGE)
                         if fiche is not None:
                             relais = sauvegarder_relais(fiche)
                             print("charger_url relais fiche sauvegardee %s" % relais)
@@ -612,7 +623,7 @@ class Runner:
         await initialisation()
 
     async def __recuperer_ca(self):
-        await recuperer_ca(buffer=BUFFER_MESSAGE)
+        await recuperer_ca(self.watchdog, buffer=BUFFER_MESSAGE)
 
     async def __main(self):
         self._mode_operation = await detecter_mode_operation()
@@ -750,6 +761,7 @@ class Runner:
         wifi_task = self.__etat_wifi.wifi_thread()
 
         # Watchdog thread
+        watchdog_task = self._watchdog.run()
         # watchdog_task = watchdog_thread()
 
         # Executer main loop
@@ -767,6 +779,7 @@ class Runner:
                 wifi_task,
                 main_task,
                 garbage_collection_task,
+                watchdog_task,
             )
             print("A thread stopped - rebooting")
         except Exception as e:

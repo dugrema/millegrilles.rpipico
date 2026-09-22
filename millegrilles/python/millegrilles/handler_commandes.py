@@ -10,6 +10,7 @@ from millegrilles.config import set_configuration_display, update_configuration_
 from millegrilles.certificat import get_userid_local
 from millegrilles.message_inscription import recevoir_certificat
 from millegrilles.mgmessages import formatter_message
+from millegrilles.watchdog import Watchdog
 
 
 async def traiter_commande(buffer, websocket, appareil, commande: dict, info_certificat: dict):
@@ -48,7 +49,7 @@ async def traiter_commande(buffer, websocket, appareil, commande: dict, info_cer
     elif action == 'signerAppareil':
         try:
             certificat = json.loads(commande['contenu'])['certificat']
-            await recevoir_certificat(certificat)
+            await recevoir_certificat(appareil.watchdog, certificat)
         except KeyError as e:
             print("Erreur reception certificat KeyError %s" % str(e))
     elif action == 'fichePublique':
@@ -58,7 +59,7 @@ async def traiter_commande(buffer, websocket, appareil, commande: dict, info_cer
     elif action == 'commandeAppareil':
         await recevoir_commande_appareil(appareil, commande, info_certificat)
     elif action == 'echangerSecret':
-        await recevoir_echanger_secret(buffer, websocket, appareil, commande, info_certificat)
+        await recevoir_echanger_secret(appareil.watchdog, buffer, websocket, appareil, commande, info_certificat)
     elif action == 'resetSecret':
         await recevoir_reset_secret(appareil)
     elif action == 'majConfigurationAppareil':
@@ -179,7 +180,7 @@ async def appareil_set_switch_value(appareil, senseur_id, value):
     appareil.trigger_stale_event()
 
 
-async def recevoir_echanger_secret(buffer, websocket, appareil, reponse, info_certificat):
+async def recevoir_echanger_secret(watchdog, buffer, websocket, appareil, reponse, info_certificat):
     print("recevoir_echanger_secret Info certificat : %s" % info_certificat)
     print("recevoir_echanger_secret reponse : %s" % reponse)
 
@@ -192,7 +193,7 @@ async def recevoir_echanger_secret(buffer, websocket, appareil, reponse, info_ce
     # Emettre un message de confirmation - sert de permission pour relayer l'etat non signe de l'appareil
     conf = {'fingerprint': fingerprint}
     message_inscription = await formatter_message(
-        conf, kind=2, action='confirmerRelai', domaine='SenseursPassifs',
+        watchdog, conf, kind=2, action='confirmerRelai', domaine='SenseursPassifs',
         buffer=buffer, ajouter_certificat=True)
 
     buffer.clear()
@@ -210,6 +211,7 @@ async def recevoir_reset_secret(appareil):
 
 
 async def recevoir_maj_configuration_appareil(appareil, buffer, websocket, commande):
+    watchdog = appareil.watchdog
     try:
         reponse = json.loads(commande['contenu'])
         print("maj appareil event %s" % reponse)
@@ -231,10 +233,14 @@ async def recevoir_maj_configuration_appareil(appareil, buffer, websocket, comma
 
     # Chiffrer le message
     requete = {'timezone': timezone}
+    await watchdog.yield_duration(1)
     requete = await chiffrage_messages.chiffrer(requete)
+    watchdog.feed()
     requete['routage'] = {'action': 'getTimezoneInfo'}
 
     buffer.set_text(json.dumps(requete))
+    await watchdog.yield_duration(1)
 
     # Emettre requete
     websocket.send(buffer.get_data())
+    watchdog.feed()

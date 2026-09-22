@@ -3,7 +3,7 @@ from .mgmessages import signer_message
 CONST_NB_LECTURES_TEMP = 10
 
 # Generateur d'etat interne
-async def generer_etat(timeout_http=60):
+async def generer_etat(watchdog, timeout_http=60):
     import wifi
     import time
     timestamp = time.time()
@@ -22,7 +22,8 @@ async def generer_etat(timeout_http=60):
         },
         'timeout_http': timeout_http,
     }
-    return await signer_message(etat, domaine='SenseursPassifs', action='etatAppareil')
+    print("Generer etat")
+    return await signer_message(watchdog, etat, domaine='SenseursPassifs', action='etatAppareil')
 
 
 async def lire_temperature_interne():

@@ -35,7 +35,7 @@ CONST_CSR_BEGIN = const('-----BEGIN CERTIFICATE REQUEST-----')
 CONST_CSR_END = const('-----END CERTIFICATE REQUEST-----')
 
 
-async def generer_message_inscription(buffer, action='inscrire', domaine=None):
+async def generer_message_inscription(watchdog, buffer, action='inscrire', domaine=None):
     # Generer message d'inscription
     message_inscription = {
         "uuid_appareil": NOM_APPAREIL,
@@ -46,10 +46,11 @@ async def generer_message_inscription(buffer, action='inscrire', domaine=None):
     #message_inscription = await signer_message(
     #    message_inscription, action=action, domaine=domaine, buffer=buffer)
     message_inscription = await formatter_message(
-        message_inscription, kind=1, action=action, domaine=domaine,
+        watchdog, message_inscription, kind=1, action=action, domaine=domaine,
         buffer=buffer, ajouter_certificat=False)
-    
+
     buffer.clear()
+    watchdog.feed()
     json.dump(message_inscription, buffer)
     # message_inscription = None
     
@@ -107,12 +108,12 @@ async def post_inscription(url, buffer):
         reponse.close()
 
 
-async def valider_reponse(status_code: int, reponse: dict, buffer=None):
+async def valider_reponse(watchdog, status_code: int, reponse: dict, buffer=None):
     
     if status_code not in[200, 202]:
         print("Erreur inscription : %s" % reponse.get('err'))
     else:    
-        info_certificat = await verifier_message(reponse, buffer=buffer)
+        info_certificat = await verifier_message(watchdog, reponse, buffer=buffer)
         print("reponse valide, info certificat:\n%s" % info_certificat)
         roles = info_certificat.get('roles') or list()
         exchanges = info_certificat.get('exchanges') or list()
@@ -139,11 +140,11 @@ async def valider_reponse(status_code: int, reponse: dict, buffer=None):
     return False
 
 
-async def recevoir_certificat(certificat):
+async def recevoir_certificat(watchdog, certificat):
     # Valider le certificat
     ts = time.time()
     print("Recevoir cert avec date : %s" % ts)
-    info_certificat = await valider_certificats(certificat.copy(), ts)
+    info_certificat = await valider_certificats(watchdog, certificat.copy(), ts)
     print("Certificat recu valide, info : %s" % info_certificat)
     await sleep_ms(10)  # Yield
     
@@ -199,30 +200,40 @@ async def run_challenge(appareil, challenge, ui_lock=None):
 async def run_inscription(appareil, url_relai: str, ui_lock, buffer):
     url_inscription = url_relai + CONST_PATH_INSCRIPTION
     certificat_recu = False
+    watchdog = appareil.watchdog
     try:
         # Faire une demande d'inscription
-        await generer_message_inscription(buffer)
-        
+        await generer_message_inscription(watchdog, buffer)
+
         # Garbage collect
-        await sleep_ms(1)
+        # await sleep_ms(1)
+        await watchdog.watchdog_yield(1)
         collect()
-        await sleep_ms(20)
-        
+        appareil.feed_watchdog()
+        # await sleep_ms(20)
+        await watchdog.yield_duration(20)
+
+        watchdog.feed()
         status_code, buffer_reponse = await post_inscription(url_inscription, buffer)
-        
+        watchdog.feed()
+
         # Garbage collect
-        await sleep_ms(1)  # Yield
+        # await sleep_ms(1)  # Yield
+        await watchdog.yield_duration(1)
         collect()
-        await sleep_ms(20)  # Yield
+        await watchdog.yield_duration(20)
+        # await sleep_ms(20)  # Yield
         
         reponse_dict = json.loads(buffer_reponse.get_data())
-        
-        if await valider_reponse(status_code, reponse_dict, buffer=buffer) is True:
+
+        if await valider_reponse(watchdog, status_code, reponse_dict, buffer=buffer) is True:
             # Extraire le certificat si fourni dans contenu
             buffer.set_text(reponse_dict['contenu'])
             reponse_dict = None
+            await watchdog.yield_duration(1)
             collect()
-            await sleep_ms(1)  # Yield
+            await watchdog.yield_duration(1)
+            # await sleep_ms(1)  # Yield
             reponse_dict = json.loads(buffer.get_data())
             
             try:
@@ -230,7 +241,7 @@ async def run_inscription(appareil, url_relai: str, ui_lock, buffer):
             except KeyError:
                 pass  # On n'a pas recu le certificat
             else:
-                certificat_recu = await recevoir_certificat(certificat)
+                certificat_recu = await recevoir_certificat(watchdog, certificat)
             
             # Extraire challenge/confirmation et executer si present
             try:
@@ -252,63 +263,65 @@ async def run_inscription(appareil, url_relai: str, ui_lock, buffer):
     return certificat_recu
 
 
-async def verifier_renouveler_certificat(url_relai: str, buffer):
-    print("Verifier renouveler cert url %s" % url_relai)
-    
-    date_expiration, _ = get_expiration_certificat_local()
-    if time.time() > (date_expiration - CONST_RENOUVELLEMENT_DELAI):
-       print("Cert renouvellement atteint")
-    else:
-        print("Cert valide jusqu'a %s" % date_expiration)
-        return False
-    
-    await generer_message_inscription(buffer, action='signerAppareil', domaine='SenseursPassifs')
+# async def verifier_renouveler_certificat(watchdog, url_relai: str, buffer):
+#     print("Verifier renouveler cert url %s" % url_relai)
+#
+#     date_expiration, _ = get_expiration_certificat_local()
+#     if time.time() > (date_expiration - CONST_RENOUVELLEMENT_DELAI):
+#        print("Cert renouvellement atteint")
+#     else:
+#         print("Cert valide jusqu'a %s" % date_expiration)
+#         return False
+#
+#     await generer_message_inscription(watchdog, buffer, action='signerAppareil', domaine='SenseursPassifs')
+#
+#     # Garbage collect
+#     # sleep_ms(1)  # Yield
+#     await watchdog.yield_duration(1)
+#     collect()
+#     # sleep_ms(1)  # Yield
+#     await watchdog.yield_duration(1)
+#
+#     reponse = await requests.post(
+#         url_relai + PATHNAME_RENOUVELER,
+#         data=buffer.get_data(),
+#         headers={'Content-Type': 'application/json'}
+#     )
+#
+#     try:
+#         status_code = reponse.status_code
+#         print("Reponse renouveler certificat %s" % status_code)
+#         await reponse.read_text_into(buffer)
+#     finally:
+#         reponse.close()
+#         reponse = None
+#
+#     # Garbage collect
+#     sleep_ms(1)  # Yield
+#     collect()
+#     sleep_ms(1)  # Yield
+#
+#     # reponse_dict = await reponse.json()
+#     reponse_dict = json.loads(buffer.get_data())
+#
+#     # Extraire contenu de la reponse, cleanup
+#     if await valider_reponse(status_code, reponse_dict, buffer=buffer) is True:
+#         buffer.set_text(reponse_dict['contenu'])
+#         reponse_dict = None
+#         collect()
+#         await sleep_ms(1)  # Yield
+#         reponse_dict = json.loads(buffer.get_data())
+#
+#         # Extraire le certificat si fourni
+#         try:
+#             certificat = reponse_dict['certificat']
+#         except KeyError:
+#             pass  # On n'a pas recu le certificat
+#         else:
+#             await recevoir_certificat(watchdog, certificat)
 
-    # Garbage collect
-    sleep_ms(1)  # Yield
-    collect()
-    sleep_ms(1)  # Yield
 
-    reponse = await requests.post(
-        url_relai + PATHNAME_RENOUVELER,
-        data=buffer.get_data(),
-        headers={'Content-Type': 'application/json'}
-    )
-    
-    try:
-        status_code = reponse.status_code
-        print("Reponse renouveler certificat %s" % status_code)
-        await reponse.read_text_into(buffer)
-    finally:
-        reponse.close()
-        reponse = None
-        
-    # Garbage collect
-    sleep_ms(1)  # Yield
-    collect()
-    sleep_ms(1)  # Yield
-
-    # reponse_dict = await reponse.json()
-    reponse_dict = json.loads(buffer.get_data())
-
-    # Extraire contenu de la reponse, cleanup
-    if await valider_reponse(status_code, reponse_dict, buffer=buffer) is True:
-        buffer.set_text(reponse_dict['contenu'])
-        reponse_dict = None
-        collect()
-        await sleep_ms(1)  # Yield
-        reponse_dict = json.loads(buffer.get_data())
-        
-        # Extraire le certificat si fourni
-        try:
-            certificat = reponse_dict['certificat']
-        except KeyError:
-            pass  # On n'a pas recu le certificat
-        else:
-            await recevoir_certificat(certificat)
-
-
-async def verifier_renouveler_certificat_ws(websocket, buffer):
+async def verifier_renouveler_certificat_ws(watchdog, websocket, buffer):
     date_expiration, _ = get_expiration_certificat_local()
     print("Date expiration certificat local : %s" % date_expiration)
     if time.time() > (date_expiration - CONST_RENOUVELLEMENT_DELAI):
@@ -317,25 +330,28 @@ async def verifier_renouveler_certificat_ws(websocket, buffer):
         print("Cert valide jusqu'a %s" % date_expiration)
         return False
     
-    await generer_message_inscription(buffer, action='signerAppareil', domaine='SenseursPassifs')
+    await generer_message_inscription(watchdog, buffer, action='signerAppareil', domaine='SenseursPassifs')
 
     # Garbage collect
-    sleep_ms(1)  # Yield
+    # sleep_ms(1)  # Yield
+    await watchdog.yield_duration(1)
     collect()
-    sleep_ms(1)  # Yield
+    # sleep_ms(1)  # Yield
+    await watchdog.yield_duration(1)
 
     websocket.send(buffer.get_data())
 
     # Reponse recue via websocket_messages
+    return True
 
 
-async def recuperer_ca(buffer=None):
+async def recuperer_ca(watchdog, buffer=None):
     from millegrilles.certificat import sauvegarder_ca
     
     print("Init millegrille")
     idmg = get_idmg()
     # Charger et valider la fiche - (no_validation est pour le certificat seulement)
-    fiche, certificat = await charger_fiche(no_validation=True, buffer=buffer)
+    fiche, certificat = await charger_fiche(watchdog, no_validation=True, buffer=buffer)
     # del fiche['_millegrille']
     
     if fiche['idmg'] != idmg:
@@ -348,7 +364,7 @@ async def recuperer_ca(buffer=None):
     
     # Valider le certificat avec le CA et conserver relais
     #info_cert = await verifier_message(fiche)
-    info_cert = await valider_certificats(certificat)
+    info_cert = await valider_certificats(watchdog, certificat)
     print("Verifier roles cert fiche : %s" % info_cert['roles'])
     if 'core' not in info_cert['roles']:
        raise Exception("Fiche signee par mauvais role")
@@ -357,7 +373,7 @@ async def recuperer_ca(buffer=None):
     sauvegarder_relais(fiche)
 
 
-async def charger_fiche(no_validation=False, buffer=None):
+async def charger_fiche(watchdog, no_validation=False, buffer=None):
     liste_urls = set()
     relais = get_relais()
     if len(relais) == 0:
@@ -368,73 +384,84 @@ async def charger_fiche(no_validation=False, buffer=None):
         liste_urls.add(proto + '//' + host)
 
     recu_ok = False
-    for url_instance in liste_urls:
-        fiche_url = url_instance + '/fiche.json'
-        print("charger_fiche url %s" % fiche_url)
+    async with watchdog:
+        for url_instance in liste_urls:
+            fiche_url = url_instance + '/fiche.json'
+            print("charger_fiche url %s" % fiche_url)
 
-        # Downloader la fiche
-        # print("Recuperer fiche a %s" % fiche_url)
-        await sleep_ms(1)  # Yield
-        fiche_json = None
-        try:
-            # reponse = await requests.get(fiche_url, lock=ui_lock)
-            reponse = urequests.get(fiche_url)
-        except OSError as e:
-            if e.errno in (103, 104, -2):
-                # ECONNABORTED ou connexion refusee/serveur introuvable, essayer prochain relai
-                print("errno %s connexion %s" % (e.errno, fiche_url))
-                continue
-            else:
-                raise e
-            
-        try:
-            await sleep_ms(1)  # Yield
-            if reponse.status_code != 200:
-                # raise Exception("fiche http status:%d" % reponse.status_code)
-                print("Erreur fiche %s status = %s" % (fiche_url, reponse.status_code))
-                continue
-            
-            # await reponse.read_text_into(buffer)
-            buffer.set_bytes(reponse.content)
-            reponse = None
-            recu_ok = True
-            break  # Ok
-        except AttributeError:
-            # Verifier si on a eu un redirect sur https (generateur)
+            # Downloader la fiche
+            # print("Recuperer fiche a %s" % fiche_url)
+            # await watchdog.yield_duration(1)
+            # await sleep_ms(1)  # Yield
             try:
-                reponse.__next__()
-                print('Erreur fiche https')
-            except Exception:
-                print('Erreur chargement fiche (1)')
-                continue
-        except Exception as e:
-            print('Erreur chargement fiche (2)')
-            print_exception(e)
-            continue
-        finally:
-            # print("charger_fiche fermer reponse")
-            # reponse.close()
-            # reponse = None
+                # reponse = await requests.get(fiche_url, lock=ui_lock)
+                reponse = urequests.get(fiche_url)
+                watchdog.feed()
+            except OSError as e:
+                if e.errno in (103, 104, -2):
+                    # ECONNABORTED ou connexion refusee/serveur introuvable, essayer prochain relai
+                    print("errno %s connexion %s" % (e.errno, fiche_url))
+                    continue
+                else:
+                    raise e
 
-            # Cleanup memoire
-            collect()
-            await sleep_ms(1)  # Yield
+            try:
+                # await sleep_ms(1)  # Yield
+                await watchdog.yield_duration(1)
+                if reponse.status_code != 200:
+                    # raise Exception("fiche http status:%d" % reponse.status_code)
+                    print("Erreur fiche %s status = %s" % (fiche_url, reponse.status_code))
+                    continue
+
+                # await reponse.read_text_into(buffer)
+                buffer.set_bytes(reponse.content)
+                watchdog.feed()
+                reponse = None
+                recu_ok = True
+                break  # Ok
+            except AttributeError:
+                # Verifier si on a eu un redirect sur https (generateur)
+                try:
+                    reponse.__next__()
+                    print('Erreur fiche https')
+                except Exception:
+                    print('Erreur chargement fiche (1)')
+                    continue
+            except Exception as e:
+                print('Erreur chargement fiche (2)')
+                print_exception(e)
+                continue
+            finally:
+                # print("charger_fiche fermer reponse")
+                # reponse.close()
+                # reponse = None
+
+                # Cleanup memoire
+                # await watchdog.yield_duration(1)
+                collect()
+                # watchdog.feed()
+                # await sleep_ms(1)  # Yield
+                await watchdog.yield_duration(1)
 
     if recu_ok is True:
         # collect()
         # await sleep_ms(1)  # Yield
         try:
+            watchdog.feed()
             message_fiche = loads(buffer.get_data())
         except Exception as e:
             print('Erreur parse fiche')
             with open('fiche.err', 'wb') as fiche:
                 fiche.write(buffer.get_data())
             raise e
+        finally:
+            watchdog.feed()
 
         print("Fiche recue id %s" % message_fiche['id'])
         certificat = message_fiche.get('certificat')
         if no_validation is False:
-            info_cert = await verifier_message(message_fiche, buffer=buffer)
+            await watchdog.yield_duration(1)
+            info_cert = await verifier_message(watchdog, message_fiche, buffer=buffer)
             if 'core' not in info_cert['roles']:
                 raise Exception('Fiche a un mauvais certificat')
             certificat = None  # Certificat valide, cleanup
@@ -454,18 +481,20 @@ async def charger_fiche(no_validation=False, buffer=None):
     return None, None
 
 
-async def generer_message_timeinfo(timezone_str: str):
+async def generer_message_timeinfo(watchdog, timezone_str: str):
     # Generer message d'inscription
     message_inscription = {
         "timezone": timezone_str,
     }
     # message_inscription = await signer_message(message_inscription, action='getTimezoneInfo')
-    message_inscription = await formatter_message(message_inscription, kind=1, action='getTimezoneInfo', ajouter_certificat=False)
+    message_inscription = await formatter_message(watchdog, message_inscription, kind=1, action='getTimezoneInfo', ajouter_certificat=False)
     
     # Garbage collect
-    await sleep_ms(200)
+    # await sleep_ms(200)
+    await watchdog.yield_duration(200)
     collect()
-    await sleep_ms(1)
+    # await sleep_ms(1)
+    await watchdog.yield_duration(1)
 
     return message_inscription
 
