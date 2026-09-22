@@ -17,7 +17,8 @@ class Watchdog:
         else:
             from machine import WDT
             self.__wdt = WDT(timeout=8388)  # Max value pour watchdog
-        pass
+
+        self.__usage_count = 0
 
     def feed(self):
         if not self.__wdt:
@@ -39,7 +40,7 @@ class Watchdog:
                 self.__wdt.feed()
             await asyncio.sleep_ms(10)
 
-    def start_core1(self):
+    def __start_core1(self):
         global using_core1, core1_stopped
         if not self.__wdt:
             return
@@ -48,7 +49,7 @@ class Watchdog:
         if core1_stopped:
             _thread.start_new_thread(feed_watchdog_core1, (self.__wdt,))
 
-    def stop_core1(self):
+    def __stop_core1(self):
         global using_core1
         if not self.__wdt:
             return
@@ -59,25 +60,26 @@ class Watchdog:
 
     # This class acts as a manager (with watchdog)
     def __enter__(self):
-        self.start_core1()
+        if self.__usage_count == 0:
+            self.__start_core1()
+        self.__usage_count += 1
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.stop_core1()
         if self.__wdt:
             self.__wdt.feed()
+        self.__usage_count -= 1
+        if self.__usage_count <= 0:
+            self.__usage_count = 0
+            self.__stop_core1()
         return False
 
     # Note: asyncio manager does the same thing as blocking for now, future proofing
     async def __aenter__(self):
-        self.start_core1()
-        return self
+        return self.__enter__()
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self.stop_core1()
-        if self.__wdt:
-            self.__wdt.feed()
-        return False
+        return self.__aexit__(exc_type, exc_val, exc_tb)
 
 
 def feed_watchdog_core1(wdt):

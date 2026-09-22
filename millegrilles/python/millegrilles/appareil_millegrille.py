@@ -163,11 +163,11 @@ class Runner:
     def watchdog(self):
         return self._watchdog
 
-    def feed_watchdog(self):
-        self._watchdog.feed()
+    # def feed_watchdog(self):
+    #     self._watchdog.feed()
 
-    def feed_watchdog_yield(self, duration):
-        self._watchdog.yield_duration(duration)
+    # def feed_watchdog_yield(self, duration):
+    #     self._watchdog.yield_duration(duration)
 
     @property
     def rtc_pret(self) -> asyncio.Event:

@@ -200,65 +200,66 @@ async def run_challenge(appareil, challenge, ui_lock=None):
 async def run_inscription(appareil, url_relai: str, ui_lock, buffer):
     url_inscription = url_relai + CONST_PATH_INSCRIPTION
     certificat_recu = False
-    watchdog = appareil.watchdog
-    try:
-        # Faire une demande d'inscription
-        await generer_message_inscription(watchdog, buffer)
+    # watchdog = appareil.watchdog
+    async with appareil.watchdog as watchdog:
+        try:
+            # Faire une demande d'inscription
+            await generer_message_inscription(watchdog, buffer)
 
-        # Garbage collect
-        # await sleep_ms(1)
-        await watchdog.watchdog_yield(1)
-        collect()
-        appareil.feed_watchdog()
-        # await sleep_ms(20)
-        await watchdog.yield_duration(20)
-
-        watchdog.feed()
-        status_code, buffer_reponse = await post_inscription(url_inscription, buffer)
-        watchdog.feed()
-
-        # Garbage collect
-        # await sleep_ms(1)  # Yield
-        await watchdog.yield_duration(1)
-        collect()
-        await watchdog.yield_duration(20)
-        # await sleep_ms(20)  # Yield
-        
-        reponse_dict = json.loads(buffer_reponse.get_data())
-
-        if await valider_reponse(watchdog, status_code, reponse_dict, buffer=buffer) is True:
-            # Extraire le certificat si fourni dans contenu
-            buffer.set_text(reponse_dict['contenu'])
-            reponse_dict = None
+            # Garbage collect
+            # await sleep_ms(1)
             await watchdog.yield_duration(1)
             collect()
-            await watchdog.yield_duration(1)
+            watchdog.feed()
+            # await sleep_ms(20)
+            await watchdog.yield_duration(20)
+
+            watchdog.feed()
+            status_code, buffer_reponse = await post_inscription(url_inscription, buffer)
+            watchdog.feed()
+
+            # Garbage collect
             # await sleep_ms(1)  # Yield
-            reponse_dict = json.loads(buffer.get_data())
-            
-            try:
-                certificat = reponse_dict['certificat']
-            except KeyError:
-                pass  # On n'a pas recu le certificat
-            else:
-                certificat_recu = await recevoir_certificat(watchdog, certificat)
-            
-            # Extraire challenge/confirmation et executer si present
-            try:
-                challenge = reponse_dict['challenge']
-            except KeyError:
-                pass
-            else:
+            await watchdog.yield_duration(1)
+            collect()
+            await watchdog.yield_duration(20)
+            # await sleep_ms(20)  # Yield
+
+            reponse_dict = json.loads(buffer_reponse.get_data())
+
+            if await valider_reponse(watchdog, status_code, reponse_dict, buffer=buffer) is True:
+                # Extraire le certificat si fourni dans contenu
+                buffer.set_text(reponse_dict['contenu'])
+                reponse_dict = None
+                await watchdog.yield_duration(1)
+                collect()
+                await watchdog.yield_duration(1)
+                # await sleep_ms(1)  # Yield
+                reponse_dict = json.loads(buffer.get_data())
+
                 try:
-                    await run_challenge(appareil, challenge, ui_lock)
-                except Exception:
-                    pass  # OK
-                
-    except OSError:
-        raise
-    except Exception as e:
-        print("Erreur reception certificat")
-        print_exception(e)
+                    certificat = reponse_dict['certificat']
+                except KeyError:
+                    pass  # On n'a pas recu le certificat
+                else:
+                    certificat_recu = await recevoir_certificat(watchdog, certificat)
+
+                # Extraire challenge/confirmation et executer si present
+                try:
+                    challenge = reponse_dict['challenge']
+                except KeyError:
+                    pass
+                else:
+                    try:
+                        await run_challenge(appareil, challenge, ui_lock)
+                    except Exception:
+                        pass  # OK
+
+        except OSError:
+            raise
+        except Exception as e:
+            print("Erreur reception certificat")
+            print_exception(e)
         
     return certificat_recu
 
