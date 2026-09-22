@@ -2,20 +2,32 @@ import _thread
 import time
 import uasyncio as asyncio
 
+from millegrilles.config import get_workaround_disable_watchdog
+
 using_core1 = False
 core1_stopped = True
 
 class Watchdog:
     def __init__(self):
-        from machine import WDT
-        self.__wdt = WDT(timeout=8388)  # Max value pour watchdog
+        disabled = get_workaround_disable_watchdog() is True
+        print("Watchdog ", end="")
+        print(not disabled)
+        if disabled:
+            self.__wdt = None
+        else:
+            from machine import WDT
+            self.__wdt = WDT(timeout=8388)  # Max value pour watchdog
         pass
 
     def feed(self):
+        if not self.__wdt:
+            return
         self.__wdt.feed()
         pass
 
     async def yield_duration(self, duration_ms):
+        if not self.__wdt:
+            return
         self.__wdt.feed()
         if duration_ms:
             await asyncio.sleep_ms(duration_ms)
@@ -23,18 +35,27 @@ class Watchdog:
 
     async def run(self):
         while True:
-            self.__wdt.feed()
+            if self.__wdt:
+                self.__wdt.feed()
             await asyncio.sleep_ms(10)
 
     def start_core1(self):
         global using_core1, core1_stopped
+        if not self.__wdt:
+            return
+
         using_core1 = True
         if core1_stopped:
             _thread.start_new_thread(feed_watchdog_core1, (self.__wdt,))
 
     def stop_core1(self):
         global using_core1
+        if not self.__wdt:
+            return
         using_core1 = False
+
+    def kill(self):
+        self.__wdt = None  # Destroy reference, dog will bite
 
     # This class acts as a manager (with watchdog)
     def __enter__(self):
@@ -43,7 +64,8 @@ class Watchdog:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop_core1()
-        self.__wdt.feed()
+        if self.__wdt:
+            self.__wdt.feed()
         return False
 
     # Note: asyncio manager does the same thing as blocking for now, future proofing
@@ -53,7 +75,8 @@ class Watchdog:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         self.stop_core1()
-        self.__wdt.feed()
+        if self.__wdt:
+            self.__wdt.feed()
         return False
 
 

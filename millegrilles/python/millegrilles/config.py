@@ -11,8 +11,6 @@ from millegrilles.const_leds import CODE_CONFIG_INITIALISATION
 from millegrilles.constantes import (
     CONST_CHAMP_APPLICATIONSV2,
     CONST_CHAMP_DOMAINES,
-    CONST_CHAMP_HTTP_INSTANCE,
-    CONST_CHAMP_HTTP_TIMEOUT,
     CONST_CHAMP_HTTPS,
     CONST_CHAMP_IDMG,
     CONST_CHAMP_INSTANCES,
@@ -26,9 +24,9 @@ from millegrilles.constantes import (
     CONST_CHAMP_TRANSITION_TIME,
     CONST_CHAMP_USER_ID,
     CONST_CHAMP_WORKAROUND_REBOOTINTERVAL,
+    CONST_CHAMP_WORKAROUND_DISABLEWATCHDOG,
     CONST_CHAMPS_SOLAIRE,
     CONST_HTTP_TIMEOUT_DEFAULT,
-    CONST_MODE_CHARGER_URL_RELAIS,
     CONST_MODE_INIT,
     CONST_MODE_POLLING,
     CONST_MODE_RECUPERER_CA,
@@ -39,7 +37,6 @@ from millegrilles.constantes import (
     CONST_PATH_RELAIS,
     CONST_PATH_RELAIS_NEW,
     CONST_PATH_SOLAIRE,
-    CONST_PATH_TIMEINFO,
     CONST_PATH_TZOFFSET,
     CONST_PATH_WORKAROUNDS,
     CONST_READ_BINARY,
@@ -700,3 +697,10 @@ def get_workaround_rebootinterval():
             return load(fichier)[CONST_CHAMP_WORKAROUND_REBOOTINTERVAL]
     except (KeyError, OSError, ValueError):
         return None
+
+def get_workaround_disable_watchdog():
+    try:
+        with open(CONST_PATH_WORKAROUNDS, CONST_READ_BINARY) as fichier:
+            return load(fichier)[CONST_CHAMP_WORKAROUND_DISABLEWATCHDOG]
+    except (KeyError, OSError, ValueError):
+        return False

@@ -738,6 +738,10 @@ class Runner:
             )
 
     async def run(self):
+        # Watchdog thread
+        watchdog_task = self._watchdog.run()
+        self._watchdog.feed()
+
         self.afficher_info()
 
         # Charger configuration
@@ -759,10 +763,6 @@ class Runner:
 
         # Verification wifi
         wifi_task = self.__etat_wifi.wifi_thread()
-
-        # Watchdog thread
-        watchdog_task = self._watchdog.run()
-        # watchdog_task = watchdog_thread()
 
         # Executer main loop
         # main_task = asyncio.create_task(self.__main())
