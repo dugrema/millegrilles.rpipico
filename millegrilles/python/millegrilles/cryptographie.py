@@ -1,3 +1,4 @@
+import _thread
 import binascii
 # import json
 # import math
@@ -48,7 +49,8 @@ class Cryptographie:
         id_message = message['id']
         # Raise une exception si la signature est invalide
         await self.__watchdog.yield_duration(1)
-        self.verifier_signature_2023_5(id_message, signature, pubkey)
+        # self.verifier_signature_2023_5(id_message, signature, pubkey)
+        await self.verifier_signature(id_message, signature, pubkey)
         # await asyncio.sleep_ms(1)
         self.__watchdog.feed()
         await self.__watchdog.yield_duration(1)
@@ -91,7 +93,10 @@ class Cryptographie:
         ticks_debut = time.ticks_ms()
         if cle_publique is None:
             # Deriver la cle publique a partir de la cle privee
+            ticks_debut_pk = time.ticks_ms()
             cle_publique = oryx_crypto.ed25519generatepubkey(cle_privee)
+            print("sign ed25519generatepubkey duree ", end="")
+            print(time.ticks_diff(time.ticks_ms(), ticks_debut_pk))
             self.__watchdog.feed()
             await self.__watchdog.yield_duration(1)
         print("Cle publique : %s" % binascii.hexlify(cle_publique))
@@ -115,16 +120,25 @@ class Cryptographie:
 
         return signature
 
-    def verifier_signature_2023_5(self, id_message: str, signature: str, cle_publique: str):
-        """ Verifie la signature d'un message. Lance une exception en cas de signature invalide. """
+    # def verifier_signature_2023_5(self, id_message: str, signature: str, cle_publique: str):
+    #     """ Verifie la signature d'un message. Lance une exception en cas de signature invalide. """
+    #     hachage = binascii.unhexlify(id_message)
+    #     cle_publique = binascii.unhexlify(cle_publique)
+    #     signature = binascii.unhexlify(signature)
+    #     ticks_debut = time.ticks_ms()
+    #     self.__watchdog.feed()
+    #     oryx_crypto.ed25519verify(cle_publique, signature, hachage)
+    #     self.__watchdog.feed()
+    #     print("__verifier_signature ed25519verify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+
+    async def verifier_signature(self, id_message: str, signature: str, cle_publique: str):
         hachage = binascii.unhexlify(id_message)
         cle_publique = binascii.unhexlify(cle_publique)
         signature = binascii.unhexlify(signature)
         ticks_debut = time.ticks_ms()
-        self.__watchdog.feed()
-        oryx_crypto.ed25519verify(cle_publique, signature, hachage)
-        self.__watchdog.feed()
-        print("__verifier_signature ed25519verify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+        await self.__watchdog.yield_duration(1)
+        await verifier_signature_spawn(self.__watchdog, cle_publique, signature, hachage)    # Raises error if invalid
+        print("verifier_signature ed25519verify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
 
     async def hacher_message_2023_5(self, message: dict, buffer=None):
         ticks_debut = time.ticks_ms()
@@ -136,7 +150,8 @@ class Cryptographie:
         await self.__watchdog.yield_duration(1)
 
         self.__watchdog.feed()
-        hachage = oryx_crypto.blake2s(message_stringify(message_array, buffer=buffer))
+        # hachage = oryx_crypto.blake2s(message_stringify(message_array, buffer=buffer))
+        hachage = await hacher_blake2s_spawn(self.__watchdog, message_stringify(message_array, buffer=buffer))
         self.__watchdog.feed()
         print("hacher_message stringify+blake2s duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
         # await asyncio.sleep_ms(1)
@@ -174,7 +189,11 @@ class Cryptographie:
 
         if cle_privee is not None:
             # Calculer pubkey
-            pubkey = binascii.hexlify(oryx_crypto.ed25519generatepubkey(cle_privee)).decode('utf-8')
+            ticks_debut = time.ticks_ms()
+            pk_tmp = oryx_crypto.ed25519generatepubkey(cle_privee)
+            print("format ed25519generatepubkey duree ", end="")
+            print(time.ticks_diff(time.ticks_ms(), ticks_debut))
+            pubkey = binascii.hexlify(pk_tmp).decode('utf-8')
         else:
             pubkey = binascii.hexlify(certificat.charger_cle_publique()).decode('utf-8')
 
@@ -221,3 +240,96 @@ class Cryptographie:
 
         print("Formatter message done")
         return enveloppe_message
+
+# Core1 handlers with fallback
+
+RETURNVALUE_HACHAGE = None
+
+
+async def hacher_blake2s_spawn(watchdog, message_bytes):
+    global RETURNVALUE_HACHAGE
+
+    try:
+        _thread.start_new_thread(hacher_blake2s_thread, (message_bytes,))
+    except Exception as e:
+        # Core1 alerady in use, fallback to run code here
+        print("hacherb2s: Core1 busy ")
+        print(e)
+        watchdog.feed()
+        hachage = oryx_crypto.blake2s(message_bytes)
+        watchdog.feed()
+    else:
+        timeout = 0
+        while RETURNVALUE_HACHAGE is None and timeout < 100:
+            timeout += 1
+            await asyncio.sleep_ms(100)
+        hachage = RETURNVALUE_HACHAGE
+        RETURNVALUE_HACHAGE = None
+        if hachage is None:
+            raise Exception('Timeout')
+        elif not hachage:
+            raise Exception('Error getting digest')
+
+    return hachage
+
+
+def hacher_blake2s_thread(message_bytes):
+    global RETURNVALUE_HACHAGE
+
+    if RETURNVALUE_HACHAGE:
+        raise Error('hacherb2s already running')
+
+    # Run code
+    try:
+        # Raises error if signature is invalid
+        hachage = oryx_crypto.blake2s(message_bytes)
+        RETURNVALUE_HACHAGE = hachage
+    except Exception:
+        RETURNVALUE_HACHAGE = False
+
+
+RETURNVALUE_VERIFIER_SIGNATURE = None
+
+
+async def verifier_signature_spawn(watchdog, cle_publique, signature, hachage):
+    global RETURNVALUE_VERIFIER_SIGNATURE
+
+    try:
+        _thread.start_new_thread(verifier_signature_thread, (cle_publique, signature, hachage))
+    except Exception as e:
+        # Core1 alerady in use, fallback to run code here
+        print("verifysig: Core1 busy ")
+        print(e)
+        watchdog.feed()
+        # Raises error if signature is invalid
+        oryx_crypto.ed25519verify(cle_publique, signature, hachage)
+        watchdog.feed()
+    else:
+        timeout = 0
+        while RETURNVALUE_VERIFIER_SIGNATURE is None and timeout < 15:
+            timeout += 1
+            await asyncio.sleep_ms(100)
+        is_valid = RETURNVALUE_VERIFIER_SIGNATURE
+        RETURNVALUE_VERIFIER_SIGNATURE = None
+        if is_valid is None:
+            raise Exception('Timeout')
+        elif not is_valid:
+            raise Exception('Invalid signature')
+        return is_valid
+
+
+def verifier_signature_thread(cle_publique, signature, hachage):
+    global RETURNVALUE_VERIFIER_SIGNATURE
+
+    if RETURNVALUE_VERIFIER_SIGNATURE:
+        raise Error('verifysig already running')
+
+    # Run code
+    try:
+        # Raises error if signature is invalid
+        oryx_crypto.ed25519verify(cle_publique, signature, hachage)
+        RETURNVALUE_VERIFIER_SIGNATURE = True
+    except Exception:
+        RETURNVALUE_VERIFIER_SIGNATURE = False
+
+

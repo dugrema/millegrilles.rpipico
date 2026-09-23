@@ -47,9 +47,12 @@ class HttpErrorException(Exception):
 async def __preparer_message(cryptographie, watchdog, chiffrage_messages, timeout_http, generer_etat, buffer, refresh=True):
     # Genrer etat
     if generer_etat is not None:
+        ticks_debut = time.ticks_ms()
         watchdog.feed()
         etat = await generer_etat(refresh=refresh)
         watchdog.feed()
+        print("preparer_message etat duree ", end="")
+        print(time.ticks_diff(time.ticks_ms(), ticks_debut))
     else:
         etat = {'lectures_senseurs': {}}
         
@@ -67,11 +70,14 @@ async def __preparer_message(cryptographie, watchdog, chiffrage_messages, timeou
         # Signer message
         etat = await cryptographie.formatter_message(etat, kind=2, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil', buffer=buffer)
 
+    ticks_debut = time.ticks_ms()
     watchdog.feed()
     buffer.clear()
     watchdog.feed()
     dump(etat, buffer)
     watchdog.feed()
+    print("preparer_message dump duree ", end="")
+    print(time.ticks_diff(time.ticks_ms(), ticks_debut))
 
     return buffer
 

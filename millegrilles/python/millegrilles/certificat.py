@@ -1,3 +1,4 @@
+import _thread
 import binascii
 import struct
 
@@ -197,7 +198,11 @@ async def valider_certificats(watchdog, pem_certs: list, date_validation=None, i
             parent = oryx_crypto.x509readpemcertificate(parent)
         # asyncio.sleep_ms(10)  # Yield
         await watchdog.yield_duration(10)
-        oryx_crypto.x509validercertificate(cert, parent, date_validation)
+        ticks_debut = time.ticks_ms()
+        # oryx_crypto.x509validercertificate(cert, parent, date_validation)
+        await x509validercertificate_spawn(watchdog, cert, parent, date_validation)
+        print("x509validercertificate duree ")
+        print(time.ticks_diff(time.ticks_ms(), ticks_debut))
         cert = parent  # Poursuivre la chaine
     else:
         try:
@@ -205,7 +210,11 @@ async def valider_certificats(watchdog, pem_certs: list, date_validation=None, i
                 parent = fichier.read()
             # asyncio.sleep_ms(10)  # Yield
             await watchdog.yield_duration(10)
-            oryx_crypto.x509validercertificate(cert, parent, date_validation)
+            ticks_debut = time.ticks_ms()
+            # oryx_crypto.x509validercertificate(cert, parent, date_validation)
+            await x509validercertificate_spawn(watchdog, cert, parent, date_validation)
+            print("x509validercertificate duree ")
+            print(time.ticks_diff(time.ticks_ms(), ticks_debut))
         except OSError as e:
             if e.errno == 2:
                 if err_ca_ok is True:
@@ -414,3 +423,45 @@ async def entretien_certificat():
 
 def cache_sort_key(elem):
     return elem[CONST_CACHE_ACCES]
+
+
+RETURN_VALUE_CERTIFICATE = None
+
+async def x509validercertificate_spawn(watchdog, cert, parent, date_validation):
+    global RETURN_VALUE_CERTIFICATE
+
+    try:
+        _thread.start_new_thread(x509validercertificate_thread, (cert, parent, date_validation))
+    except Exception as e:
+        # Core1 alerady in use, fallback to run code here
+        print("x509valid: Core1 busy ")
+        print(e)
+        watchdog.feed()
+        oryx_crypto.x509validercertificate(cert, parent, date_validation)
+        watchdog.feed()
+    else:
+        timeout = 0
+        while RETURN_VALUE_CERTIFICATE is None and timeout < 15:
+            timeout += 1
+            await asyncio.sleep_ms(100)
+        is_valid = RETURN_VALUE_CERTIFICATE
+        RETURN_VALUE_CERTIFICATE = None
+        if is_valid is None:
+            raise Exception('Timeout')
+        elif not is_valid:
+            raise Exception('Invalid signature')
+        return is_valid
+
+def x509validercertificate_thread(cert, parent, date_validation):
+    global RETURN_VALUE_CERTIFICATE
+
+    if RETURN_VALUE_CERTIFICATE:
+        raise Error('x509valid already running')
+
+    # Run code
+    try:
+        # Raises error if signature is invalid
+        oryx_crypto.x509validercertificate(cert, parent, date_validation)
+        RETURN_VALUE_CERTIFICATE = True
+    except Exception:
+        RETURN_VALUE_CERTIFICATE = False

@@ -384,64 +384,64 @@ async def charger_fiche(cryptographie, watchdog, no_validation=False, buffer=Non
         liste_urls.add(proto + '//' + host)
 
     recu_ok = False
-    async with watchdog:
-        for url_instance in liste_urls:
-            fiche_url = url_instance + '/fiche.json'
-            print("charger_fiche url %s" % fiche_url)
+    for url_instance in liste_urls:
+        fiche_url = url_instance + '/fiche.json'
+        print("charger_fiche url %s" % fiche_url)
 
-            # Downloader la fiche
-            # print("Recuperer fiche a %s" % fiche_url)
-            # await watchdog.yield_duration(1)
-            # await sleep_ms(1)  # Yield
-            try:
-                # reponse = await requests.get(fiche_url, lock=ui_lock)
+        # Downloader la fiche
+        # print("Recuperer fiche a %s" % fiche_url)
+        # await watchdog.yield_duration(1)
+        # await sleep_ms(1)  # Yield
+        try:
+            # reponse = await requests.get(fiche_url, lock=ui_lock)
+            async with watchdog:
                 reponse = urequests.get(fiche_url)
-                watchdog.feed()
-            except OSError as e:
-                if e.errno in (103, 104, -2):
-                    # ECONNABORTED ou connexion refusee/serveur introuvable, essayer prochain relai
-                    print("errno %s connexion %s" % (e.errno, fiche_url))
-                    continue
-                else:
-                    raise e
-
-            try:
-                # await sleep_ms(1)  # Yield
-                await watchdog.yield_duration(1)
-                if reponse.status_code != 200:
-                    # raise Exception("fiche http status:%d" % reponse.status_code)
-                    print("Erreur fiche %s status = %s" % (fiche_url, reponse.status_code))
-                    continue
-
-                # await reponse.read_text_into(buffer)
-                buffer.set_bytes(reponse.content)
-                watchdog.feed()
-                reponse = None
-                recu_ok = True
-                break  # Ok
-            except AttributeError:
-                # Verifier si on a eu un redirect sur https (generateur)
-                try:
-                    reponse.__next__()
-                    print('Erreur fiche https')
-                except Exception:
-                    print('Erreur chargement fiche (1)')
-                    continue
-            except Exception as e:
-                print('Erreur chargement fiche (2)')
-                print_exception(e)
+            watchdog.feed()
+        except OSError as e:
+            if e.errno in (103, 104, -2):
+                # ECONNABORTED ou connexion refusee/serveur introuvable, essayer prochain relai
+                print("errno %s connexion %s" % (e.errno, fiche_url))
                 continue
-            finally:
-                # print("charger_fiche fermer reponse")
-                # reponse.close()
-                # reponse = None
+            else:
+                raise e
 
-                # Cleanup memoire
-                # await watchdog.yield_duration(1)
-                collect()
-                # watchdog.feed()
-                # await sleep_ms(1)  # Yield
-                await watchdog.yield_duration(1)
+        try:
+            # await sleep_ms(1)  # Yield
+            await watchdog.yield_duration(1)
+            if reponse.status_code != 200:
+                # raise Exception("fiche http status:%d" % reponse.status_code)
+                print("Erreur fiche %s status = %s" % (fiche_url, reponse.status_code))
+                continue
+
+            # await reponse.read_text_into(buffer)
+            buffer.set_bytes(reponse.content)
+            watchdog.feed()
+            reponse = None
+            recu_ok = True
+            break  # Ok
+        except AttributeError:
+            # Verifier si on a eu un redirect sur https (generateur)
+            try:
+                reponse.__next__()
+                print('Erreur fiche https')
+            except Exception:
+                print('Erreur chargement fiche (1)')
+                continue
+        except Exception as e:
+            print('Erreur chargement fiche (2)')
+            print_exception(e)
+            continue
+        finally:
+            # print("charger_fiche fermer reponse")
+            # reponse.close()
+            # reponse = None
+
+            # Cleanup memoire
+            # await watchdog.yield_duration(1)
+            collect()
+            # watchdog.feed()
+            # await sleep_ms(1)  # Yield
+            await watchdog.yield_duration(1)
 
     if recu_ok is True:
         # collect()

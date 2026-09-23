@@ -73,7 +73,11 @@ class ChiffrageMessages:
 
         # ticks_debut = time.ticks_ms()
         nonce = rnd_bytes(12)
+        ticks_debut = time.ticks_ms()
         tag = oryx_crypto.cipherchacha20poly1305encrypt(self.__secret_echange, nonce, message)
+        print("chiffrer duree ", end="")
+        print(time.ticks_diff(time.ticks_ms(), ticks_debut))
+
         tag = b2a_base64(tag).decode('utf-8')[:-1]
         nonce = b2a_base64(nonce).decode('utf-8')[:-1]
         # print("chiffrer duree %d ms" % time.ticks_diff(time.ticks_ms(), ticks_debut))
@@ -91,6 +95,9 @@ class ChiffrageMessages:
         ciphertext = a2b_base64(message['ciphertext'])
 
         # Le contenu est dechiffre _en-place_ dans ciphertext
+        ticks_debut = time.ticks_ms()
         oryx_crypto.cipherchacha20poly1305decrypt(self.__secret_echange, nonce_tag, ciphertext)
+        print("dechiffrer duree ", end="")
+        print(time.ticks_diff(time.ticks_ms(), ticks_debut))
 
         return ciphertext  # Contient le plaintext

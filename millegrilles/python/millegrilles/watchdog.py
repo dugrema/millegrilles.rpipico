@@ -79,7 +79,7 @@ class Watchdog:
         return self.__enter__()
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        return self.__aexit__(exc_type, exc_val, exc_tb)
+        return self.__exit__(exc_type, exc_val, exc_tb)
 
 
 def feed_watchdog_core1(wdt):
@@ -88,7 +88,7 @@ def feed_watchdog_core1(wdt):
     print("Core 1 is dog food")
     while using_core1:
         wdt.feed()
-        time.sleep(2)
+        time.sleep_ms(250)
     core1_stopped = True
     print("Core 1 done")
 
