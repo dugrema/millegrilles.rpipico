@@ -1,8 +1,6 @@
 import json
-import os
 import time
 import urequests
-import sys
 
 from binascii import hexlify
 from machine import unique_id
@@ -10,16 +8,13 @@ from os import rename, remove
 from sys import print_exception
 from uasyncio import sleep, sleep_ms
 from gc import collect
-from json import load, loads, dump, dumps
+from json import loads
 
 from millegrilles import urequests2 as requests
 from millegrilles.certificat import valider_certificats, \
      generer_cle_secrete, charger_cle_privee, charger_cle_publique, \
-     get_expiration_certificat_local, generer_cle_secrete, sauvegarder_ca, \
-     PATH_CERT, PATH_CLE_PRIVEE, PATHNAME_RENOUVELER
-from millegrilles.mgmessages import formatter_message, verifier_message
-from millegrilles.config import get_user_id, get_timezone, get_idmg, sauvegarder_relais, \
-    set_timezone_offset, get_relais
+     get_expiration_certificat_local, PATH_CERT, PATH_CLE_PRIVEE
+from millegrilles.config import get_user_id, get_idmg, sauvegarder_relais, get_relais
 
 from millegrilles.webutils import parse_url
 
@@ -263,64 +258,6 @@ async def run_inscription(appareil, url_relai: str, ui_lock, buffer):
         
     return certificat_recu
 
-
-# async def verifier_renouveler_certificat(watchdog, url_relai: str, buffer):
-#     print("Verifier renouveler cert url %s" % url_relai)
-#
-#     date_expiration, _ = get_expiration_certificat_local()
-#     if time.time() > (date_expiration - CONST_RENOUVELLEMENT_DELAI):
-#        print("Cert renouvellement atteint")
-#     else:
-#         print("Cert valide jusqu'a %s" % date_expiration)
-#         return False
-#
-#     await generer_message_inscription(watchdog, buffer, action='signerAppareil', domaine='SenseursPassifs')
-#
-#     # Garbage collect
-#     # sleep_ms(1)  # Yield
-#     await watchdog.yield_duration(1)
-#     collect()
-#     # sleep_ms(1)  # Yield
-#     await watchdog.yield_duration(1)
-#
-#     reponse = await requests.post(
-#         url_relai + PATHNAME_RENOUVELER,
-#         data=buffer.get_data(),
-#         headers={'Content-Type': 'application/json'}
-#     )
-#
-#     try:
-#         status_code = reponse.status_code
-#         print("Reponse renouveler certificat %s" % status_code)
-#         await reponse.read_text_into(buffer)
-#     finally:
-#         reponse.close()
-#         reponse = None
-#
-#     # Garbage collect
-#     sleep_ms(1)  # Yield
-#     collect()
-#     sleep_ms(1)  # Yield
-#
-#     # reponse_dict = await reponse.json()
-#     reponse_dict = json.loads(buffer.get_data())
-#
-#     # Extraire contenu de la reponse, cleanup
-#     if await valider_reponse(status_code, reponse_dict, buffer=buffer) is True:
-#         buffer.set_text(reponse_dict['contenu'])
-#         reponse_dict = None
-#         collect()
-#         await sleep_ms(1)  # Yield
-#         reponse_dict = json.loads(buffer.get_data())
-#
-#         # Extraire le certificat si fourni
-#         try:
-#             certificat = reponse_dict['certificat']
-#         except KeyError:
-#             pass  # On n'a pas recu le certificat
-#         else:
-#             await recevoir_certificat(watchdog, certificat)
-
 async def verifier_renouveler_certificat_ws(cryptographie, watchdog, websocket, buffer):
     date_expiration, _ = get_expiration_certificat_local()
     print("Date expiration certificat local : %s" % date_expiration)
@@ -363,7 +300,6 @@ async def recuperer_ca(cryptographie, watchdog, buffer=None):
     sauvegarder_ca(fiche['ca'], idmg)
     
     # Valider le certificat avec le CA et conserver relais
-    #info_cert = await cryptographie.verifier_message(fiche)
     info_cert = await valider_certificats(watchdog, certificat)
     print("Verifier roles cert fiche : %s" % info_cert['roles'])
     if 'core' not in info_cert['roles']:
@@ -486,74 +422,11 @@ async def generer_message_timeinfo(cryptographie, watchdog, timezone_str: str):
     message_inscription = {
         "timezone": timezone_str,
     }
-    # message_inscription = await signer_message(message_inscription, action='getTimezoneInfo')
     message_inscription = await cryptographie.formatter_message(message_inscription, kind=1, action='getTimezoneInfo', ajouter_certificat=False)
     
     # Garbage collect
-    # await sleep_ms(200)
     await watchdog.yield_duration(200)
     collect()
-    # await sleep_ms(1)
     await watchdog.yield_duration(1)
 
     return message_inscription
-
-
-# async def charger_timeinfo(url_relai: str, buffer, refresh: False):
-#
-#     offset_info = None
-#     try:
-#         with open('tzoffset.json', 'rb') as fichier:
-#             offset_info = load(fichier)
-#             if refresh is False:
-#                 return offset_info['offset']
-#     except OSError:
-#         print('tzoffset.json absent')
-#     except KeyError:
-#         print('tzoffset.json erreur contenu')
-#
-#     print("Charger information timezone %s" % url_relai)
-#     timezone_str = get_timezone()
-#     if timezone_str is not None:
-#         buffer.set_text(dumps(await generer_message_timeinfo(timezone_str)))
-#
-#         await sleep_ms(1)  # Yield
-#         collect()
-#         await sleep_ms(1)  # Yield
-#
-#         reponse = await requests.post(
-#             url_relai + '/' + CONST_PATH_TIMEINFO,
-#             data=buffer.get_data(),
-#             headers={'Content-Type': 'application/json'}
-#         )
-#
-#         try:
-#             await reponse.read_text_into(buffer)
-#             reponse = None
-#
-#             await sleep_ms(1)  # Yield
-#             collect()
-#             await sleep_ms(1)  # Yield
-#
-#             # data = await reponse.json()
-#             data = loads(buffer.get_data())
-#             print("TZ info : %s" % data)
-#             offset = data['timezone_offset']
-#             timezone_str = data.get('timezone') or timezone_str
-#
-#             if offset_info is None or offset_info['offset'] != offset:
-#                 # with open('tzoffset.json', 'wb') as fichier:
-#                 #     dump({'offset': offset, 'timezone': timezone_str}, fichier)
-#                 set_timezone_offset(offset, timezone=timezone_str)
-#
-#             return offset
-#         except KeyError:
-#             return None
-#         finally:
-#             if reponse is not None:
-#                 reponse.close()
-#     else:
-#         if offset_info is None:
-#             set_timezone_offset(0, timezone='UTC')
-#             # with open('tzoffset.json', 'wb') as fichier:
-#             #     dump({'offset': 0}, fichier)
