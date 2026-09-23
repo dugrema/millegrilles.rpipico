@@ -116,17 +116,6 @@ class Cryptographie:
 
         return signature
 
-    # def verifier_signature_2023_5(self, id_message: str, signature: str, cle_publique: str):
-    #     """ Verifie la signature d'un message. Lance une exception en cas de signature invalide. """
-    #     hachage = binascii.unhexlify(id_message)
-    #     cle_publique = binascii.unhexlify(cle_publique)
-    #     signature = binascii.unhexlify(signature)
-    #     ticks_debut = time.ticks_ms()
-    #     self.__watchdog.feed()
-    #     oryx_crypto.ed25519verify(cle_publique, signature, hachage)
-    #     self.__watchdog.feed()
-    #     print("__verifier_signature ed25519verify duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
-
     async def verifier_signature(self, id_message: str, signature: str, cle_publique: str):
         hachage = binascii.unhexlify(id_message)
         cle_publique = binascii.unhexlify(cle_publique)
@@ -327,5 +316,3 @@ def verifier_signature_thread(cle_publique, signature, hachage):
         RETURNVALUE_VERIFIER_SIGNATURE = True
     except Exception:
         RETURNVALUE_VERIFIER_SIGNATURE = False
-
-
