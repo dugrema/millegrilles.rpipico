@@ -1,10 +1,7 @@
 # Test PEM
-#import binascii
 import json
 import math
-#import time
 import uasyncio as asyncio
-# import oryx_crypto
 
 from io import IOBase
 from collections import OrderedDict

@@ -1,5 +1,3 @@
-from .mgmessages import signer_message
-
 CONST_NB_LECTURES_TEMP = 10
 
 # Generateur d'etat interne

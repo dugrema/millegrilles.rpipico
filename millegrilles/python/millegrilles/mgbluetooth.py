@@ -13,7 +13,7 @@ from millegrilles.message_inscription import NOM_APPAREIL
 from millegrilles.wifi import pack_info_wifi
 from millegrilles import constantes
 from millegrilles.config import get_nom_appareil, get_user_id, get_idmg
-from millegrilles.mgmessages import BufferMessage, verifier_message
+from millegrilles.mgmessages import BufferMessage
 from millegrilles.chiffrage import ChiffrageMessages
 from millegrilles.certificat import remove_certificate, remove_ca
 

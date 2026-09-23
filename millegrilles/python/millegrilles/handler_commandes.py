@@ -1,16 +1,11 @@
 import asyncio
 import json
 
-from binascii import unhexlify
-
 from millegrilles.config import set_configuration_display, update_configuration_programmes, \
      set_timezone_offset, sauvegarder_relais, sauvegarder_relais_liste, set_horaire_solaire, get_timezone, \
      set_nom_appareil
 
-from millegrilles.certificat import get_userid_local
 from millegrilles.message_inscription import recevoir_certificat
-from millegrilles.mgmessages import formatter_message
-from millegrilles.watchdog import Watchdog
 
 
 async def traiter_commande(buffer, websocket, appareil, commande: dict, info_certificat: dict):
