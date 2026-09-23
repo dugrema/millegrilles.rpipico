@@ -1,0 +1,16 @@
+{
+    "bus": [
+        {"driver": "i2c", "bus": 0, "sda_pin": 8, "scl_pin": 9, "freq": 200000}
+    ],
+    "devices": [
+        {"driver": "devices.rpipico.RPiPicoW", "ble": false},
+        {"driver": "devices.dht.DriverDHT", "model": "DHT11", "pin": 28},
+        {"driver": "devices.onewire.DriverOnewire", "models": ["DS18X20"], "pin": 22, "ble": "1W_"},
+        {"driver": "devices.bmp.DriverBmp180", "bus": 0, "ble": false},
+        {"driver": "devices.ssd1306.Ssd1306", "model": "i2c", "bus": 0, "height": 32, "lines": 4},
+        {"driver": "devices.lcd1602.LCD1602", "model": "i2c", "bus": 0},
+        {"driver": "devices.switch.DriverSwitchPin", "pin": 18},
+        {"driver": "devices.switch.DriverSwitchPin", "pin": 19},
+        {"driver": "devices.button.DriverButtonPin", "pin": 15, "short": {"did": "switch_p18", "action": "toggle"}, "long": {"action": "bleconfig"}}
+    ]
+}

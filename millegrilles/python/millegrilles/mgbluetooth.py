@@ -12,7 +12,7 @@ from gc import collect
 from millegrilles.message_inscription import NOM_APPAREIL
 from millegrilles.wifi import pack_info_wifi
 from millegrilles import constantes
-from millegrilles.config import get_nom_appareil, get_user_id, get_idmg
+from millegrilles.config import get_nom_appareil, get_user_id, get_idmg, get_workaround_enable_bluetooth
 from millegrilles.mgmessages import BufferMessage
 from millegrilles.chiffrage import ChiffrageMessages
 from millegrilles.certificat import remove_certificate, remove_ca
@@ -52,6 +52,7 @@ class BluetoothHandler:
 
     def __init__(self, runner, optionnel=False):
         self.__runner = runner  # Appareil
+        self.__actif = get_workaround_enable_bluetooth()
         self.__optionnel = optionnel
 
         self.__chiffrage_handler = ChiffrageMessages()
@@ -81,6 +82,9 @@ class BluetoothHandler:
         return self.__runner.watchdog
 
     async def __initialiser(self):
+        if not self.__actif:
+            return
+
         self.watchdog.feed()
         collect()
         self.preparer_gatt_server()
@@ -162,23 +166,25 @@ class BluetoothHandler:
         aioble.register_services(self.__etat_service, self.__command_service)
 
     async def run(self):
+        if self.__actif:
+            try:
+                await self.__initialiser()
+                print('BLE start')
 
-        try:
-            await self.__initialiser()
-            print('BLE start')
+                entretien_task = asyncio.create_task(self.entretien())
+                update_etat_task = asyncio.create_task(self.update_etat_task())
+                peripheral_task = asyncio.create_task(self.peripheral_task())
+                command_set_task = asyncio.create_task(self.command_set_task())
 
-            entretien_task = asyncio.create_task(self.entretien())
-            update_etat_task = asyncio.create_task(self.update_etat_task())
-            peripheral_task = asyncio.create_task(self.peripheral_task())
-            command_set_task = asyncio.create_task(self.command_set_task())
-
-            await asyncio.gather(entretien_task, update_etat_task, peripheral_task, command_set_task)
-        except Exception as e:
-            import sys
-            sys.print_exception(e)
-            print("Bluetooth non disponible")
-            if not self.__optionnel:
-                raise e
+                await asyncio.gather(entretien_task, update_etat_task, peripheral_task, command_set_task)
+            except Exception as e:
+                import sys
+                sys.print_exception(e)
+                print("Bluetooth non disponible")
+                if not self.__optionnel:
+                    raise e
+        else:
+            print("Bluetooth desactive")
 
     async def entretien(self):
         try:

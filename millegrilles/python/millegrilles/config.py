@@ -25,6 +25,7 @@ from millegrilles.constantes import (
     CONST_CHAMP_USER_ID,
     CONST_CHAMP_WORKAROUND_REBOOTINTERVAL,
     CONST_CHAMP_WORKAROUND_DISABLEWATCHDOG,
+    CONST_CHAMP_WORKAROUND_ENABLEBLUETOOTH,
     CONST_CHAMPS_SOLAIRE,
     CONST_HTTP_TIMEOUT_DEFAULT,
     CONST_MODE_INIT,
@@ -702,5 +703,12 @@ def get_workaround_disable_watchdog():
     try:
         with open(CONST_PATH_WORKAROUNDS, CONST_READ_BINARY) as fichier:
             return load(fichier)[CONST_CHAMP_WORKAROUND_DISABLEWATCHDOG]
+    except (KeyError, OSError, ValueError):
+        return False
+
+def get_workaround_enable_bluetooth():
+    try:
+        with open(CONST_PATH_WORKAROUNDS, CONST_READ_BINARY) as fichier:
+            return load(fichier)[CONST_CHAMP_WORKAROUND_ENABLEBLUETOOTH] is True
     except (KeyError, OSError, ValueError):
         return False
