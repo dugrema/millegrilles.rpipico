@@ -15,6 +15,7 @@ from millegrilles.certificat import valider_certificats, \
      generer_cle_secrete, charger_cle_privee, charger_cle_publique, \
      get_expiration_certificat_local, PATH_CERT, PATH_CLE_PRIVEE
 from millegrilles.config import get_user_id, get_idmg, sauvegarder_relais, get_relais
+from millegrilles.mgthreads import dump_spawn
 
 from millegrilles.webutils import parse_url
 
@@ -46,7 +47,8 @@ async def generer_message_inscription(cryptographie, watchdog, buffer, action='i
 
     buffer.clear()
     watchdog.feed()
-    json.dump(message_inscription, buffer)
+    # json.dump(message_inscription, buffer)
+    await dump_spawn(watchdog, message_inscription, buffer)
     # message_inscription = None
     
     # return message_inscription
@@ -301,7 +303,7 @@ async def recuperer_ca(cryptographie, watchdog, buffer=None):
     
     # Valider le certificat avec le CA et conserver relais
     info_cert = await valider_certificats(watchdog, certificat)
-    print("Verifier roles cert fiche : %s" % info_cert['roles'])
+    print("Verifier roles cert fiche : %s" % info_cert.get('roles'))
     if 'core' not in info_cert['roles']:
        raise Exception("Fiche signee par mauvais role")
 

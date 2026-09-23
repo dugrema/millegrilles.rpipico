@@ -136,7 +136,7 @@ class Cryptographie:
 
         self.__watchdog.feed()
         # hachage = oryx_crypto.blake2s(message_stringify(message_array, buffer=buffer))
-        hachage = await hacher_blake2s_spawn(self.__watchdog, message_stringify(message_array, buffer=buffer))
+        hachage = await hacher_blake2s_spawn(self.__watchdog, await message_stringify(self.__watchdog, message_array, buffer=buffer))
         self.__watchdog.feed()
         print("hacher_message stringify+blake2s duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
         # await asyncio.sleep_ms(1)
@@ -188,7 +188,8 @@ class Cryptographie:
         contenu = prep_message_1(message)
         self.__watchdog.feed()
         print("prep stringify")
-        contenu = message_stringify(contenu).decode('utf-8')
+        contenu = await message_stringify(self.__watchdog, contenu)
+        contenu = contenu.decode('utf-8')
         await self.__watchdog.yield_duration(1)
 
         enveloppe_message = {

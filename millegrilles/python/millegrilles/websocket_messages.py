@@ -2,11 +2,12 @@ import _thread
 import time
 import uasyncio as asyncio
 
-from json import dumps, loads, load, dump
+from json import dumps, loads, load
 from gc import collect
 from sys import print_exception
 
 from micropython import mem_info, const
+from millegrilles.mgthreads import dump_spawn
 
 from uwebsockets.client import connect
 from millegrilles.certificat import get_expiration_certificat_local
@@ -68,9 +69,10 @@ async def __preparer_message(cryptographie, watchdog, chiffrage_messages, timeou
     ticks_debut = time.ticks_ms()
     watchdog.feed()
     buffer.clear()
-    watchdog.feed()
-    dump(etat, buffer)
-    watchdog.feed()
+    #watchdog.feed()
+    # dump(etat, buffer)
+    await dump_spawn(watchdog, etat, buffer)
+    #watchdog.feed()
     print("preparer_message dump duree ", end="")
     print(time.ticks_diff(time.ticks_ms(), ticks_debut))
 
@@ -182,7 +184,8 @@ async def requete_relais_web(cryptographie, watchdog, chiffrage_messages, websoc
                                           buffer=buffer, ajouter_certificat=True)
     await watchdog.yield_duration(1)
     buffer.clear()
-    dump(requete, buffer)
+    # dump(requete, buffer)
+    await dump_spawn(watchdog, requete, buffer)
     watchdog.feed()
     requete = None
 
@@ -595,7 +598,8 @@ class PollingThread:
                                           buffer=self.__buffer, ajouter_certificat=True)
         watchdog.feed()
         self.__buffer.clear()
-        dump(requete, self.__buffer)
+        #dump(requete, self.__buffer)
+        await dump_spawn(watchdog, requete, self.__buffer)
         requete = None
         await watchdog.yield_duration(1)
 

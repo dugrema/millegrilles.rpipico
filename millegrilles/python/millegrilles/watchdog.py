@@ -38,7 +38,7 @@ class Watchdog:
         while True:
             if self.__wdt:
                 self.__wdt.feed()
-            await asyncio.sleep_ms(10)
+            await asyncio.sleep(1)  # Run once per second - watchdog is ok for 8 secs
 
     def __start_core1(self):
         global using_core1, core1_stopped

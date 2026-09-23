@@ -4,6 +4,7 @@ import _thread
 
 from gc import collect
 from sys import print_exception
+from json import dump
 
 
 class TaskRunner:
@@ -169,3 +170,52 @@ class ThreadExecutor():
         finally:
             print("__wrap_execution done!")
             self.__internal.set()  # Reset execution
+
+
+RESULT_VALUE_DUMP = None
+
+async def dump_spawn(watchdog, message, buffer, separators=None):
+    global RESULT_VALUE_DUMP
+
+    try:
+        _thread.start_new_thread(dump_thread, (message,buffer), {'separators': separators})
+    except Exception as e:
+        # Core1 alerady in use, fallback to run code here
+        print("dump: Core1 busy ")
+        print(e)
+        watchdog.feed()
+        dump(message, buffer, separators=separators)
+        watchdog.feed()
+    else:
+        timeout = 0
+        while RESULT_VALUE_DUMP is None and timeout < 100:
+            timeout += 1
+            await asyncio.sleep_ms(100)
+        value = RESULT_VALUE_DUMP
+        RESULT_VALUE_DUMP = None
+        if value is None:
+            raise Exception('Timeout')
+        elif not value:
+            raise Exception('Error getting json')
+
+        # Transfer value to buffer
+        #buffer.set_text(value)
+
+
+def dump_thread(message, buffer, separators=None):
+    global RESULT_VALUE_DUMP
+
+    ticks_debut = time.ticks_ms()
+    try:
+        # RESULT_VALUE_DUMP = dumps(message)
+        print("dump_thread separators")
+        print(separators)
+        dump(message, buffer, separators=separators)
+        RESULT_VALUE_DUMP = True
+    except Exception as e:
+        print("dump_thread err ", end="")
+        print(e)
+        RESULT_VALUE_DUMP = False
+    else:
+        print("dump_thread duree ", end="")
+        print(time.ticks_diff(time.ticks_ms(), ticks_debut))

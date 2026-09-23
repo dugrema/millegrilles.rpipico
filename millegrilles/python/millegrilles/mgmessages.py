@@ -6,6 +6,9 @@ import uasyncio as asyncio
 from io import IOBase
 from collections import OrderedDict
 
+from millegrilles.mgthreads import dump_spawn
+from millegrilles.watchdog import Watchdog
+
 #from . import certificat
 # -- DEV --
 #from millegrilles import certificat
@@ -49,12 +52,15 @@ def __traiter_value(value):
     return value
 
 
-def message_stringify(message, buffer=None):
+async def message_stringify(watchdog, message, buffer=None):
     if buffer is None:
         return json.dumps(message, separators=(',', ':')).encode('utf-8')
     else:
         buffer.clear()
-        json.dump(message, buffer, separators=(',', ':'))
+        #watchdog.feed()
+        #json.dump(message, buffer, separators=(',', ':'))
+        #watchdog.feed()
+        await dump_spawn(watchdog, message, buffer, separators=(',', ':'))
         return buffer.get_data()
 
 

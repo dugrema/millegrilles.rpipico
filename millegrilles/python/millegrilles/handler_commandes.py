@@ -6,6 +6,7 @@ from millegrilles.config import set_configuration_display, update_configuration_
      set_nom_appareil
 
 from millegrilles.message_inscription import recevoir_certificat
+from millegrilles.mgthreads import dump_spawn
 
 
 async def traiter_commande(buffer, websocket, appareil, commande: dict, info_certificat: dict):
@@ -192,7 +193,8 @@ async def recevoir_echanger_secret(cryptographie, watchdog, buffer, websocket, a
         buffer=buffer, ajouter_certificat=True)
 
     buffer.clear()
-    json.dump(message_inscription, buffer)
+    # json.dump(message_inscription, buffer)
+    await dump_spawn(watchdog, message_inscription, buffer)
     message_inscription = None
     await asyncio.sleep_ms(1)  # Yield
 
