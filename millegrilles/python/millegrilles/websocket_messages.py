@@ -44,7 +44,7 @@ class HttpErrorException(Exception):
     pass
 
 
-async def __preparer_message(watchdog, chiffrage_messages, timeout_http, generer_etat, buffer, refresh=True):
+async def __preparer_message(cryptographie, watchdog, chiffrage_messages, timeout_http, generer_etat, buffer, refresh=True):
     # Genrer etat
     if generer_etat is not None:
         watchdog.feed()
@@ -65,7 +65,7 @@ async def __preparer_message(watchdog, chiffrage_messages, timeout_http, generer
         etat['routage'] = {'action': 'etatAppareilRelai'}
     else:
         # Signer message
-        etat = await formatter_message(watchdog, etat, kind=2, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil', buffer=buffer)
+        etat = await cryptographie.formatter_message(etat, kind=2, domaine=CONST_DOMAINE_SENSEURSPASSIFS, action='etatAppareil', buffer=buffer)
 
     watchdog.feed()
     buffer.clear()
@@ -121,7 +121,7 @@ async def poll(appareil, websocket, emit_event, buffer, timeout_http=60, generer
             deja_emis = True
             chiffrage_messages = appareil.chiffrage_messages
             appareil.watchdog.feed()
-            buffer = await __preparer_message(appareil.watchdog, chiffrage_messages, timeout_http, generer_etat, buffer, refresh=refresh)
+            buffer = await __preparer_message(appareil.cryptographie, appareil.watchdog, chiffrage_messages, timeout_http, generer_etat, buffer, refresh=refresh)
             appareil.watchdog.feed()
             print("poll Send data, taille etat: %d" % len(buffer))
             websocket.send(buffer.get_data())
@@ -129,7 +129,7 @@ async def poll(appareil, websocket, emit_event, buffer, timeout_http=60, generer
             await appareil.watchdog.yield_duration(1)
 
 
-async def requete_configuration_displays(watchdog, chiffrage_messages, websocket, buffer):
+async def requete_configuration_displays(cryptographie, watchdog, chiffrage_messages, websocket, buffer):
     #requete = await signer_message(
     #    dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY)
     message = dict()
@@ -139,7 +139,7 @@ async def requete_configuration_displays(watchdog, chiffrage_messages, websocket
     #     requete = await chiffrage_messages.chiffrer(message)
     #     requete['routage'] = {'action': CONST_REQUETE_DISPLAY}
     # else:
-    requete = await formatter_message(watchdog, message, kind=1,
+    requete = await cryptographie.formatter_message(message, kind=1,
                                       domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY,
                                       buffer=buffer, ajouter_certificat=True)
     buffer.set_text(dumps(requete))
@@ -154,10 +154,10 @@ async def requete_configuration_displays(watchdog, chiffrage_messages, websocket
     websocket.send(buffer.get_data())
 
 
-async def requete_configuration_programmes(watchdog, chiffrage_messages, websocket, buffer):
+async def requete_configuration_programmes(cryptographie, watchdog, chiffrage_messages, websocket, buffer):
     #requete = await signer_message(
     #    dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_PROGRAMMES)
-    requete = await formatter_message(watchdog, dict(), kind=1,
+    requete = await cryptographie.formatter_message(dict(), kind=1,
                                       domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_PROGRAMMES,
                                       buffer=buffer, ajouter_certificat=True)
     buffer.set_text(dumps(requete))
@@ -174,24 +174,24 @@ async def requete_configuration_programmes(watchdog, chiffrage_messages, websock
     websocket.send(buffer.get_data())
 
 
-async def requete_fiche_publique(watchdog, websocket, buffer):
-    #requete = await signer_message(
-    #    dict(), domaine='senseurspassifs_relai', action=CONST_REQUETE_FICHE_PUBLIQUE)
-    requete = await formatter_message(watchdog, dict(), kind=1,
-                                      domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_FICHE_PUBLIQUE,
-                                      buffer=buffer, ajouter_certificat=True)
-    buffer.set_text(dumps(requete))
-    requete = None
+# async def requete_fiche_publique(cryptographie, watchdog, websocket, buffer):
+#     #requete = await signer_message(
+#     #    dict(), domaine='senseurspassifs_relai', action=CONST_REQUETE_FICHE_PUBLIQUE)
+#     requete = await cryptographie.formatter_message(watchdog, dict(), kind=1,
+#                                       domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_FICHE_PUBLIQUE,
+#                                       buffer=buffer, ajouter_certificat=True)
+#     buffer.set_text(dumps(requete))
+#     requete = None
+#
+#     # Cleanup memoire
+#     await asyncio.sleep_ms(1)
+#     collect()
+#     await asyncio.sleep_ms(1)
+#
+#     websocket.send(buffer.get_data())
 
-    # Cleanup memoire
-    await asyncio.sleep_ms(1)
-    collect()
-    await asyncio.sleep_ms(1)
-    
-    websocket.send(buffer.get_data())
 
-
-async def requete_relais_web(watchdog, chiffrage_messages, websocket, buffer):
+async def requete_relais_web(cryptographie, watchdog, chiffrage_messages, websocket, buffer):
     #requete = await signer_message(
     #    dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_RELAIS_WEB, buffer=buffer)
 
@@ -203,7 +203,7 @@ async def requete_relais_web(watchdog, chiffrage_messages, websocket, buffer):
         requete['routage'] = {'action': CONST_REQUETE_RELAIS_WEB}
     else:
         print('Requete relais web')
-        requete = await formatter_message(watchdog, dict(), kind=1,
+        requete = await cryptographie.formatter_message(dict(), kind=1,
                                           domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_RELAIS_WEB,
                                           buffer=buffer, ajouter_certificat=True)
     await watchdog.yield_duration(1)
@@ -220,7 +220,7 @@ async def requete_relais_web(watchdog, chiffrage_messages, websocket, buffer):
     websocket.send(buffer.get_data())
 
 
-async def charger_timeinfo(watchdog, chiffrage_messages, websocket, buffer, refresh: False):
+async def charger_timeinfo(cryptographie, watchdog, chiffrage_messages, websocket, buffer, refresh: False):
 
     offset = None
     try:
@@ -261,7 +261,7 @@ async def charger_timeinfo(watchdog, chiffrage_messages, websocket, buffer, refr
         requete = await chiffrage_messages.chiffrer(requete)
         requete['routage'] = {'action': 'getTimezoneInfo'}
     else:
-        requete = await generer_message_timeinfo(watchdog, timezone_str)
+        requete = await generer_message_timeinfo(cryptographie, watchdog, timezone_str)
 
     buffer.set_text(dumps(requete))
 
@@ -273,8 +273,8 @@ async def charger_timeinfo(watchdog, chiffrage_messages, websocket, buffer, refr
     websocket.send(buffer.get_data())
 
 
-async def verifier_signature(watchdog, reponse, buffer):
-    return await verifier_message(watchdog, reponse, buffer)
+async def verifier_signature(cryptographie, watchdog, reponse, buffer):
+    return await cryptographie.verifier_message(reponse, buffer)
 
 
 class PollingThread:
@@ -377,35 +377,37 @@ class PollingThread:
         if self.__refresh_step <= 2:
             self.__refresh_step = 3
             # Recharger la configuration des displays
-            await requete_configuration_displays(watchdog, chiffrage_messages, self.__websocket, buffer=self.__buffer)
+            await requete_configuration_displays(self.__appareil.cryptographie, watchdog, chiffrage_messages, self.__websocket, buffer=self.__buffer)
             return
 
         if self.__refresh_step <= 3:
             self.__refresh_step = 4
             await charger_timeinfo(
+                self.__appareil.cryptographie,
                 watchdog,
                 chiffrage_messages,
                 self.__websocket,
                 buffer=self.__buffer,
-                refresh=True)
+                refresh=True
+            )
             return
         
         if self.__refresh_step <= 4:
             self.__refresh_step = 5
             # Recharger la configuration des programmes
-            await requete_configuration_programmes(watchdog, chiffrage_messages, self.__websocket, buffer=self.__buffer)
+            await requete_configuration_programmes(self.__appareil.cryptographie, watchdog, chiffrage_messages, self.__websocket, buffer=self.__buffer)
             return
         
         if self.__refresh_step <= 5:
             self.__refresh_step = 6
             # Verifier si le certificat doit etre renouvelle
-            await verifier_renouveler_certificat_ws(watchdog, self.__websocket, buffer=self.__buffer)
+            await verifier_renouveler_certificat_ws(self.__appareil.cryptographie, watchdog, self.__websocket, buffer=self.__buffer)
             return
 
         if self.__refresh_step <= 6:
             self.__refresh_step = 7
             # Verifier si le certificat doit etre renouvelle
-            await requete_relais_web(watchdog, chiffrage_messages, self.__websocket, buffer=self.__buffer)
+            await requete_relais_web(self.__appareil.cryptographie, watchdog, chiffrage_messages, self.__websocket, buffer=self.__buffer)
             return
 
         # Succes - ajuster prochain refresh
@@ -596,7 +598,7 @@ class PollingThread:
                         except Exception:
                             # On n'a pas de message chiffre ou echec dechiffrage. Valider le message au complet.
                             self.__appareil.watchdog.feed()
-                            info_certificat = await verifier_signature(self.__appareil.watchdog, reponse, self.__buffer)
+                            info_certificat = await verifier_signature(self.__appareil.cryptographie, self.__appareil.watchdog, reponse, self.__buffer)
 
                         # Cleanup
                         # await asyncio.sleep_ms(2)  # Yield
@@ -639,7 +641,7 @@ class PollingThread:
 
         print('echanger_secret public %s' % message)
 
-        requete = await formatter_message(self.__appareil.watchdog, message, kind=2,
+        requete = await self.__appareil.cryptographie.formatter_message(message, kind=2,
                                           domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI,
                                           action=CONST_COMMANDE_ECHANGE_CLES,
                                           buffer=self.__buffer, ajouter_certificat=True)

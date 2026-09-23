@@ -35,7 +35,7 @@ CONST_CSR_BEGIN = const('-----BEGIN CERTIFICATE REQUEST-----')
 CONST_CSR_END = const('-----END CERTIFICATE REQUEST-----')
 
 
-async def generer_message_inscription(watchdog, buffer, action='inscrire', domaine=None):
+async def generer_message_inscription(cryptographie, watchdog, buffer, action='inscrire', domaine=None):
     # Generer message d'inscription
     message_inscription = {
         "uuid_appareil": NOM_APPAREIL,
@@ -45,8 +45,8 @@ async def generer_message_inscription(watchdog, buffer, action='inscrire', domai
 
     #message_inscription = await signer_message(
     #    message_inscription, action=action, domaine=domaine, buffer=buffer)
-    message_inscription = await formatter_message(
-        watchdog, message_inscription, kind=1, action=action, domaine=domaine,
+    message_inscription = await cryptographie.formatter_message(
+        message_inscription, kind=1, action=action, domaine=domaine,
         buffer=buffer, ajouter_certificat=False)
 
     buffer.clear()
@@ -108,12 +108,12 @@ async def post_inscription(url, buffer):
         reponse.close()
 
 
-async def valider_reponse(watchdog, status_code: int, reponse: dict, buffer=None):
+async def valider_reponse(cryptographie, watchdog, status_code: int, reponse: dict, buffer=None):
     
     if status_code not in[200, 202]:
         print("Erreur inscription : %s" % reponse.get('err'))
     else:    
-        info_certificat = await verifier_message(watchdog, reponse, buffer=buffer)
+        info_certificat = await cryptographie.verifier_message(reponse, buffer=buffer)
         print("reponse valide, info certificat:\n%s" % info_certificat)
         roles = info_certificat.get('roles') or list()
         exchanges = info_certificat.get('exchanges') or list()
@@ -204,7 +204,7 @@ async def run_inscription(appareil, url_relai: str, ui_lock, buffer):
     async with appareil.watchdog as watchdog:
         try:
             # Faire une demande d'inscription
-            await generer_message_inscription(watchdog, buffer)
+            await generer_message_inscription(appareil.cryptographie, watchdog, buffer)
 
             # Garbage collect
             # await sleep_ms(1)
@@ -227,7 +227,7 @@ async def run_inscription(appareil, url_relai: str, ui_lock, buffer):
 
             reponse_dict = json.loads(buffer_reponse.get_data())
 
-            if await valider_reponse(watchdog, status_code, reponse_dict, buffer=buffer) is True:
+            if await valider_reponse(appareil.cryptographie, watchdog, status_code, reponse_dict, buffer=buffer) is True:
                 # Extraire le certificat si fourni dans contenu
                 buffer.set_text(reponse_dict['contenu'])
                 reponse_dict = None
@@ -321,8 +321,7 @@ async def run_inscription(appareil, url_relai: str, ui_lock, buffer):
 #         else:
 #             await recevoir_certificat(watchdog, certificat)
 
-
-async def verifier_renouveler_certificat_ws(watchdog, websocket, buffer):
+async def verifier_renouveler_certificat_ws(cryptographie, watchdog, websocket, buffer):
     date_expiration, _ = get_expiration_certificat_local()
     print("Date expiration certificat local : %s" % date_expiration)
     if time.time() > (date_expiration - CONST_RENOUVELLEMENT_DELAI):
@@ -331,7 +330,7 @@ async def verifier_renouveler_certificat_ws(watchdog, websocket, buffer):
         print("Cert valide jusqu'a %s" % date_expiration)
         return False
     
-    await generer_message_inscription(watchdog, buffer, action='signerAppareil', domaine='SenseursPassifs')
+    await generer_message_inscription(cryptographie, watchdog, buffer, action='signerAppareil', domaine='SenseursPassifs')
 
     # Garbage collect
     # sleep_ms(1)  # Yield
@@ -346,13 +345,13 @@ async def verifier_renouveler_certificat_ws(watchdog, websocket, buffer):
     return True
 
 
-async def recuperer_ca(watchdog, buffer=None):
+async def recuperer_ca(cryptographie, watchdog, buffer=None):
     from millegrilles.certificat import sauvegarder_ca
     
     print("Init millegrille")
     idmg = get_idmg()
     # Charger et valider la fiche - (no_validation est pour le certificat seulement)
-    fiche, certificat = await charger_fiche(watchdog, no_validation=True, buffer=buffer)
+    fiche, certificat = await charger_fiche(cryptographie, watchdog, no_validation=True, buffer=buffer)
     # del fiche['_millegrille']
     
     if fiche['idmg'] != idmg:
@@ -364,7 +363,7 @@ async def recuperer_ca(watchdog, buffer=None):
     sauvegarder_ca(fiche['ca'], idmg)
     
     # Valider le certificat avec le CA et conserver relais
-    #info_cert = await verifier_message(fiche)
+    #info_cert = await cryptographie.verifier_message(fiche)
     info_cert = await valider_certificats(watchdog, certificat)
     print("Verifier roles cert fiche : %s" % info_cert['roles'])
     if 'core' not in info_cert['roles']:
@@ -374,7 +373,7 @@ async def recuperer_ca(watchdog, buffer=None):
     sauvegarder_relais(fiche)
 
 
-async def charger_fiche(watchdog, no_validation=False, buffer=None):
+async def charger_fiche(cryptographie, watchdog, no_validation=False, buffer=None):
     liste_urls = set()
     relais = get_relais()
     if len(relais) == 0:
@@ -462,7 +461,7 @@ async def charger_fiche(watchdog, no_validation=False, buffer=None):
         certificat = message_fiche.get('certificat')
         if no_validation is False:
             await watchdog.yield_duration(1)
-            info_cert = await verifier_message(watchdog, message_fiche, buffer=buffer)
+            info_cert = await cryptographie.verifier_message(message_fiche, buffer=buffer)
             if 'core' not in info_cert['roles']:
                 raise Exception('Fiche a un mauvais certificat')
             certificat = None  # Certificat valide, cleanup
@@ -482,13 +481,13 @@ async def charger_fiche(watchdog, no_validation=False, buffer=None):
     return None, None
 
 
-async def generer_message_timeinfo(watchdog, timezone_str: str):
+async def generer_message_timeinfo(cryptographie, watchdog, timezone_str: str):
     # Generer message d'inscription
     message_inscription = {
         "timezone": timezone_str,
     }
     # message_inscription = await signer_message(message_inscription, action='getTimezoneInfo')
-    message_inscription = await formatter_message(watchdog, message_inscription, kind=1, action='getTimezoneInfo', ajouter_certificat=False)
+    message_inscription = await cryptographie.formatter_message(message_inscription, kind=1, action='getTimezoneInfo', ajouter_certificat=False)
     
     # Garbage collect
     # await sleep_ms(200)

@@ -59,7 +59,7 @@ async def traiter_commande(buffer, websocket, appareil, commande: dict, info_cer
     elif action == 'commandeAppareil':
         await recevoir_commande_appareil(appareil, commande, info_certificat)
     elif action == 'echangerSecret':
-        await recevoir_echanger_secret(appareil.watchdog, buffer, websocket, appareil, commande, info_certificat)
+        await recevoir_echanger_secret(appareil.cryptographie, appareil.watchdog, buffer, websocket, appareil, commande, info_certificat)
     elif action == 'resetSecret':
         await recevoir_reset_secret(appareil)
     elif action == 'majConfigurationAppareil':
@@ -180,7 +180,7 @@ async def appareil_set_switch_value(appareil, senseur_id, value):
     appareil.trigger_stale_event()
 
 
-async def recevoir_echanger_secret(watchdog, buffer, websocket, appareil, reponse, info_certificat):
+async def recevoir_echanger_secret(cryptographie, watchdog, buffer, websocket, appareil, reponse, info_certificat):
     print("recevoir_echanger_secret Info certificat : %s" % info_certificat)
     print("recevoir_echanger_secret reponse : %s" % reponse)
 
@@ -192,8 +192,8 @@ async def recevoir_echanger_secret(watchdog, buffer, websocket, appareil, repons
 
     # Emettre un message de confirmation - sert de permission pour relayer l'etat non signe de l'appareil
     conf = {'fingerprint': fingerprint}
-    message_inscription = await formatter_message(
-        watchdog, conf, kind=2, action='confirmerRelai', domaine='SenseursPassifs',
+    message_inscription = await cryptographie.formatter_message(
+        conf, kind=2, action='confirmerRelai', domaine='SenseursPassifs',
         buffer=buffer, ajouter_certificat=True)
 
     buffer.clear()

@@ -11,6 +11,7 @@ SRC_MILLEGRILLES = \
     millegrilles/config.mpy \
     millegrilles/const_leds.mpy \
     millegrilles/constantes.mpy \
+    millegrilles/cryptographie.mpy \
     millegrilles/etat.mpy \
     millegrilles/feed_display.mpy \
     millegrilles/ledblink.mpy \

@@ -489,7 +489,7 @@ class BluetoothHandler:
 
         # Verifier le certificat et la signature du message.
         # Une erreur est lancee si la signature ou le certificat sont invalides.
-        info_certificat = await verifier_message(self.watchdog, params, buffer=BUFFER_COMMANDE_BLUETOOTH)
+        info_certificat = await self.__runner.cryptographie.verifier_message(params, buffer=BUFFER_COMMANDE_BLUETOOTH)
         print("BLE Auth info : ", info_certificat)
 
         if info_certificat['user_id'] != get_user_id():

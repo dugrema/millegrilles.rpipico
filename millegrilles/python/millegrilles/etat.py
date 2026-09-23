@@ -3,27 +3,27 @@ from .mgmessages import signer_message
 CONST_NB_LECTURES_TEMP = 10
 
 # Generateur d'etat interne
-async def generer_etat(watchdog, timeout_http=60):
-    import wifi
-    import time
-    timestamp = time.time()
-    etat = {
-        'lectures_senseurs': {
-            'rp2pico/wifi': {
-                'valeur_str': wifi.get_etat_wifi()['ip'],
-                'timestamp': timestamp,
-                'type': 'ip',
-            },
-            'rp2pico/temperature': {
-                'valeur': await lire_temperature_interne(),
-                'timestamp': timestamp,
-                'type': 'temperature',
-            }
-        },
-        'timeout_http': timeout_http,
-    }
-    print("Generer etat")
-    return await signer_message(watchdog, etat, domaine='SenseursPassifs', action='etatAppareil')
+# async def generer_etat(watchdog, timeout_http=60):
+#     import wifi
+#     import time
+#     timestamp = time.time()
+#     etat = {
+#         'lectures_senseurs': {
+#             'rp2pico/wifi': {
+#                 'valeur_str': wifi.get_etat_wifi()['ip'],
+#                 'timestamp': timestamp,
+#                 'type': 'ip',
+#             },
+#             'rp2pico/temperature': {
+#                 'valeur': await lire_temperature_interne(),
+#                 'timestamp': timestamp,
+#                 'type': 'temperature',
+#             }
+#         },
+#         'timeout_http': timeout_http,
+#     }
+#     print("Generer etat")
+#     return await signer_message(watchdog, etat, domaine='SenseursPassifs', action='etatAppareil')
 
 
 async def lire_temperature_interne():

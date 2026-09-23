@@ -15,6 +15,7 @@ from millegrilles import const_leds, feed_display, mgmessages
 from millegrilles.certificat import PATH_CERT
 from millegrilles.certificat import entretien_certificat as __entretien_certificat
 from millegrilles.chiffrage import ChiffrageMessages
+from .cryptographie import Cryptographie
 
 from millegrilles.watchdog import Watchdog  # watchdog_thread
 # from dev import config
@@ -98,13 +99,23 @@ async def entretien_certificat():
 class Runner:
     def __init__(self):
         self._mode_operation = 0
+
+        # Wiring top-level utility modules first
+        self._watchdog = Watchdog()
+        self.__chiffrage_messages = ChiffrageMessages()
+        self._cryptographie = Cryptographie(self._watchdog, self.__chiffrage_messages)
+
+        # Services
         self._device_handler = DeviceHandler(self)
         self._programmes_handler = ProgrammesHandler(self)
         self._bluetooth_handler = BluetoothHandler(self)
-        self._watchdog = Watchdog()
+        self.__etat_wifi = StatusWifi()
 
+        # Data holders
         self._lectures_courantes = dict()
         self._lectures_externes = dict()
+
+        # Semaphores
         self.__emit_event = (
             asyncio.Event()
         )  # Indique que l'etat a ete modifie, doit etre emis
@@ -123,10 +134,10 @@ class Runner:
         self.__websocket_disconnected = (
             None  # Utilise pour detecter probleme de reconnexion, timestamp epoch secs
         )
+
+        # Status holders
         self.__url_relais = None
         self.__ui_lock = None  # Lock pour evenements UI (led, ecrans)
-
-        self.__etat_wifi = StatusWifi()
         self.__prochain_entretien_certificat = 0
         self.__prochain_refresh_fiche = 0
         self.__timezone_offset = None
@@ -138,9 +149,6 @@ class Runner:
         self.__override_display_expiration = None
         self.__display_actif = False
         self.__start_time = None  # Sets the start time on first successful ntp sync
-
-        # Information de chiffrage
-        self.__chiffrage_messages = ChiffrageMessages()
 
     def set_rtc_pret(self):
         if self.__rtc_pret.is_set() is not True:
@@ -160,14 +168,12 @@ class Runner:
             self.__websocket_disconnected = time.time()
 
     @property
+    def cryptographie(self):
+        return self._cryptographie
+
+    @property
     def watchdog(self):
         return self._watchdog
-
-    # def feed_watchdog(self):
-    #     self._watchdog.feed()
-
-    # def feed_watchdog_yield(self, duration):
-    #     self._watchdog.yield_duration(duration)
 
     @property
     def rtc_pret(self) -> asyncio.Event:
@@ -562,7 +568,7 @@ class Runner:
                 print("charger_urls pre-refresh %s" % relais)
                 if refresh:
                     try:
-                        fiche, certificat = await charger_fiche(self.watchdog, buffer=BUFFER_MESSAGE)
+                        fiche, certificat = await charger_fiche(self.cryptographie, self.watchdog, buffer=BUFFER_MESSAGE)
                         if fiche is not None:
                             relais = sauvegarder_relais(fiche)
                             print("charger_url relais fiche sauvegardee %s" % relais)
@@ -623,7 +629,7 @@ class Runner:
         await initialisation()
 
     async def __recuperer_ca(self):
-        await recuperer_ca(self.watchdog, buffer=BUFFER_MESSAGE)
+        await recuperer_ca(self.cryptographie, self.watchdog, buffer=BUFFER_MESSAGE)
 
     async def __main(self):
         self._mode_operation = await detecter_mode_operation()
