@@ -1,12 +1,9 @@
 import _thread
 import binascii
-# import json
-# import math
 import time
 import uasyncio as asyncio
 import oryx_crypto
 from . import certificat
-# om io import IOBase
 
 from .mgmessages import message_stringify, prep_message_1
 
@@ -33,8 +30,8 @@ class Cryptographie:
             info_certificat = await certificat.valider_certificats(self.__watchdog, message['certificat'], fingerprint=pubkey,
                                                                    err_ca_ok=err_ca_ok)  # , fingerprint=message['pubkey'])
             self.__watchdog.feed()
-            print("verifier_message verifier certificat %s duree %d" % (pubkey,
-                                                                        time.ticks_diff(time.ticks_ms(), ticks_debut)))
+            print("verifier_message verifier certificat duree ")
+            print(time.ticks_diff(time.ticks_ms(), ticks_debut))
             del message['certificat']
             await self.__watchdog.yield_duration(1)
         except KeyError as ke:
@@ -100,7 +97,8 @@ class Cryptographie:
             self.__watchdog.feed()
             await self.__watchdog.yield_duration(1)
         print("Cle publique : %s" % binascii.hexlify(cle_publique))
-        print("signer_message_2023_5 ed25519generatepubkey duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
+        print("signer_message_2023_5 ed25519generatepubkey duree ")
+        print(time.ticks_diff(time.ticks_ms(), ticks_debut))
         # await asyncio.sleep_ms(1)
         await self.__watchdog.yield_duration(1)
 
@@ -110,12 +108,10 @@ class Cryptographie:
         ticks_debut = time.ticks_ms()
         self.__watchdog.feed()
         signature = oryx_crypto.ed25519sign(cle_privee, cle_publique, hachage)
-        self.__watchdog.feed()
-        print("__signer_message_2 ed25519sign duree %d" % time.ticks_diff(time.ticks_ms(), ticks_debut))
-
-        # await asyncio.sleep_ms(1)
+        print("__signer_message_2 ed25519sign duree")
+        print(time.ticks_diff(time.ticks_ms(), ticks_debut))
         await self.__watchdog.yield_duration(1)
-        # signature = multibase.encode('base64', signature)
+
         signature = binascii.hexlify(signature).decode('utf-8')
 
         return signature
