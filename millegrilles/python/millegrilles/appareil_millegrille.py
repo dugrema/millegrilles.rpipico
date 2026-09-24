@@ -29,7 +29,7 @@ from millegrilles.config import (
     initialiser_wifi,
     sauvegarder_relais,
     set_time,
-    transition_timezone,
+    transition_timezone, get_workaround_enable_bluetooth,
 )
 from millegrilles.constantes import (
     CONST_MODE_CHARGER_URL_RELAIS,
@@ -56,7 +56,6 @@ from millegrilles.message_inscription import (
 # )
 
 # from mgbluetooth import BluetoothHandler
-from millegrilles.mgbluetooth import BluetoothHandler
 from millegrilles.websocket_messages import PollingThread
 from millegrilles.webutils import reboot
 from millegrilles.wifi import StatusWifi
@@ -96,6 +95,10 @@ async def entretien_certificat():
 #         sys.print_exception(e)
 
 
+class DummyHandler:
+    async def run(self):
+        pass
+
 class Runner:
     def __init__(self):
         self._mode_operation = 0
@@ -108,7 +111,14 @@ class Runner:
         # Services
         self._device_handler = DeviceHandler(self)
         self._programmes_handler = ProgrammesHandler(self)
-        self._bluetooth_handler = BluetoothHandler(self)
+        bluetooth_actif = get_workaround_enable_bluetooth()
+        if bluetooth_actif:
+            print("Bluetooth enabled")
+            from millegrilles.mgbluetooth import BluetoothHandler
+            self._bluetooth_handler = BluetoothHandler(self)
+        else:
+            print("Bluetooth disabled")
+            self._bluetooth_handler = DummyHandler()
         self.__etat_wifi = StatusWifi()
 
         # Data holders
@@ -143,7 +153,7 @@ class Runner:
         self.__timezone_offset = None
         self.__erreurs_memory = 0  # Nombre de MemoryErrors depuis succes
         self.__erreurs_enomem = (
-            0  # Nombre de Errno12 ENOMEM (ussl.wrap_socket) depuis succes
+            0  # Nombre de Errno12 ENOMEM (ssl.wrap_socket) depuis succes
         )
         self.__override_display = None
         self.__override_display_expiration = None

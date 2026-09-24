@@ -73,7 +73,7 @@ async def request(
     if proto == "http:":
         port = 80
     elif proto == "https:":
-        import ussl
+        import ssl
 
         port = 443
     else:
@@ -119,7 +119,7 @@ async def request(
                 if lock is not None:
                     await lock.acquire()
                     # print("https lock acquired")
-                s = ussl.wrap_socket(s, server_hostname=host)
+                s = ssl.wrap_socket(s, server_hostname=host)
             finally:
                 if lock is not None:
                     # print("https release lock")
