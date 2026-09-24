@@ -14,15 +14,16 @@
 #include "../../oryx-embedded/cyclone_crypto/cipher/cipher_algorithms.h"
 #include "../../oryx-embedded/cyclone_crypto/aead/chacha20_poly1305.h"
 
+#define STATIC static
 #define DIGEST_BLAKE2S_LEN 32
 #define DIGEST_BLAKE2B_LEN 64
 #define X25519_OUTPUT_LEN 32
 
-const mp_rom_error_text_t LEN_INVALIDE = "len invalide";
-const mp_rom_error_text_t OPERATION_INVALIDE = "oper invalide";
-const mp_rom_error_text_t SIGNATURE_INVALIDE = "sign invalide";
-const mp_rom_error_text_t DATE_INVALIDE = "date invalide";
-const mp_rom_error_text_t ERREUR_PAS_X509 = "pas x509CertInfo";
+#define LEN_INVALIDE MP_ERROR_TEXT("len invalide")
+#define OPERATION_INVALIDE MP_ERROR_TEXT("oper invalide")
+#define SIGNATURE_INVALIDE MP_ERROR_TEXT("sign invalide")
+#define DATE_INVALIDE MP_ERROR_TEXT("date invalide")
+#define ERREUR_PAS_X509 MP_ERROR_TEXT("pas x509CertInfo")
 
 // const uint8_t X509_MG_EXTENSION_EXCHANGES[4] = {0x2a, 0x03, 0x04, 0x00};
 

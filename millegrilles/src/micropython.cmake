@@ -21,9 +21,9 @@ target_sources(usermod_oryx_lib PUBLIC
     ${ORYX_LIB}/cyclone_crypto/aead/chacha20_poly1305.c
 
     # hash
-    # ${ORYX_LIB}/cyclone_crypto/hash/blake2s.c
+    ${ORYX_LIB}/cyclone_crypto/hash/blake2s.c
     ${ORYX_LIB}/cyclone_crypto/hash/blake2s256.c
-    # ${ORYX_LIB}/cyclone_crypto/hash/blake2b.c
+    ${ORYX_LIB}/cyclone_crypto/hash/blake2b.c
     ${ORYX_LIB}/cyclone_crypto/hash/blake2b512.c
     ${ORYX_LIB}/cyclone_crypto/hash/sha1.c
     ${ORYX_LIB}/cyclone_crypto/hash/sha512.c
@@ -64,7 +64,7 @@ target_sources(usermod_oryx_lib PUBLIC
     ${ORYX_LIB}/cyclone_crypto/pkix/x509_csr_create.c
     ${ORYX_LIB}/cyclone_crypto/pkix/x509_key_format.c
     ${ORYX_LIB}/cyclone_crypto/pkix/x509_key_parse.c
-    # ${ORYX_LIB}/cyclone_crypto/pkix/x509_signature.c
+    ${ORYX_LIB}/cyclone_crypto/pkix/x509_signature.c
 )
 
 target_include_directories(usermod_oryx_lib PUBLIC
