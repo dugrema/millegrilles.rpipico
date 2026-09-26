@@ -161,15 +161,21 @@ class LcdApi:
         """
         for char in string:
             self.putchar(char)
-            time.sleep_ms(1)
+            time.sleep_us(40)
 
     async def putstr_async(self, string):
         """Write the indicated string to the LCD at the current cursor
         position and advances the cursor position appropriately.
         """
+        ct = 0
         for char in string:
             self.putchar(char)
-            await sleep_ms(1)
+            ct += 1
+            if ct == 4:
+                ct = 0
+                await sleep_ms(2)  # Give buffer time to empty
+            else:
+                time.sleep_us(40)
 
     def custom_char(self, location, charmap):
         """Write a character to one of the 8 CGRAM locations, available

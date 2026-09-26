@@ -31,13 +31,12 @@ class LCD1602(OutputLignes):
         await self._ui_lock.acquire()
         try:
             self._instance.move_to(0, self.__ligne)
-            # await asyncio.sleep_ms(5)
             await self._appareil.watchdog.yield_duration(0)
             ligne_data = '{:<16}'.format(data)
             if flag is not None:
                 ligne_data = ligne_data[:15] + flag
-            await self._instance.putstr_async(ligne_data)
-            # await asyncio.sleep_ms(5)
+            self._instance.putstr(ligne_data)
+            # await self._instance.putstr_async(ligne_data)
             await self._appareil.watchdog.yield_duration(5)
         finally:
             self.__ligne += 1
