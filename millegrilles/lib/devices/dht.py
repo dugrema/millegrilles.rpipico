@@ -3,6 +3,8 @@ from machine import Pin
 from micropython import const
 
 from handler_devices import Driver
+from millegrilles.watchdog import Watchdog
+
 
 class DriverDHT(Driver):
     
@@ -28,15 +30,15 @@ class DriverDHT(Driver):
             return None  # La lecture de cet appareil est lente
 
         self.__instance.measure()
-        await asyncio.sleep_ms(1)  # Yield
+        await self._appareil.watchdog.yield_duration(1)  # Yield
         device_id = self.device_id
         return {
             '%s/temperature' % device_id: {
-                'valeur': self.__instance.temperature(),
+                'valeur': round(self.__instance.temperature(), 1),
                 'type': 'temperature',
             },
             '%s/humidite' % device_id: {
-                'valeur': self.__instance.humidity(),
+                'valeur': round(self.__instance.humidity(), 1),
                 'type': 'humidite',
             }
         }
