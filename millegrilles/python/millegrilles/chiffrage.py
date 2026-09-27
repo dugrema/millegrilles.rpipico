@@ -8,13 +8,15 @@ from json import dumps
 
 from millegrilles.certificat import rnd_bytes, get_fingerprint_local
 from millegrilles.message_inscription import NOM_APPAREIL
+from millegrilles.watchdog import Watchdog
 
 EXPIRATION_SECRET = const(6*3600)
 
 
 class ChiffrageMessages:
 
-    def __init__(self):
+    def __init__(self, watchdog: Watchdog):
+        self.__watchdog = watchdog
         self.__cle_privee_echange = None
         self.__secret_echange = None
         self.__expiration_secret_echange = None
@@ -69,17 +71,22 @@ class ChiffrageMessages:
         return self.__secret_echange is not None
 
     async def chiffrer(self, message: dict) -> dict:
+        if not self.pret:
+            raise Exception('chiffrer(): chiffrage desactive')
         message = dumps(message)
+        await self.__watchdog.yield_duration(1)
 
         # ticks_debut = time.ticks_ms()
         nonce = rnd_bytes(12)
+        await self.__watchdog.yield_duration(1)
         ticks_debut = time.ticks_ms()
         tag = oryx_crypto.cipherchacha20poly1305encrypt(self.__secret_echange, nonce, message)
         print("chiffrer duree ", end="")
         print(time.ticks_diff(time.ticks_ms(), ticks_debut))
+        await self.__watchdog.yield_duration(1)
 
-        tag = b2a_base64(tag).decode('utf-8')[:-1]
-        nonce = b2a_base64(nonce).decode('utf-8')[:-1]
+        tag = b2a_base64(tag).decode('utf-8')
+        nonce = b2a_base64(nonce).decode('utf-8')
         # print("chiffrer duree %d ms" % time.ticks_diff(time.ticks_ms(), ticks_debut))
 
         return {
@@ -87,7 +94,7 @@ class ChiffrageMessages:
             'fingerprint': self.__fingerprint_local,
             'nonce': nonce,
             'tag': tag,
-            'ciphertext': b2a_base64(message).decode('utf-8')[:-1],
+            'ciphertext': b2a_base64(message).decode('utf-8'),
         }
 
     def dechiffrer(self, message: dict) -> bytes:

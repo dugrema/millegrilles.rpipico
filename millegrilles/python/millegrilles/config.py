@@ -489,7 +489,7 @@ def set_configuration_programmes(configuration: dict):
         dump(configuration, fichier)
 
 
-def sauvegarder_relais(fiche: dict):
+def sauvegarder_relais(fiche: dict, watchdog=None):
     app_instance_pathname = dict()
     for instance_id, app_params in fiche[CONST_CHAMP_APPLICATIONSV2][
         CONST_CHAMP_SENSEURSPASSIFS_RELAI
@@ -521,12 +521,12 @@ def sauvegarder_relais(fiche: dict):
             pass
 
     if len(url_relais) > 0:
-        sauvegarder_relais_liste(url_relais)
+        sauvegarder_relais_liste(url_relais, watchdog)
 
     return url_relais
 
 
-def sauvegarder_relais_liste(url_relais: list):
+def sauvegarder_relais_liste(url_relais: list, watchdog=None):
     """
     Sauvegarde la liste de relais recu d'une fiche de MilleGrille.
     Supprime relais.new.json.
@@ -535,12 +535,18 @@ def sauvegarder_relais_liste(url_relais: list):
         # Empecher le retrait de tous les relais, on doit en garder au moins 1.
         raise ValueError("liste vide")
 
+    if watchdog:
+        watchdog.feed()
+
     info_relais = None
     try:
         with open(CONST_PATH_RELAIS) as fichier:
             info_relais = load(fichier)
     except (OSError, KeyError):
         print("%s non disponible" % CONST_PATH_RELAIS)
+
+    if watchdog:
+        watchdog.feed()
 
     # Verifier si le contenu a change
     change = False
@@ -556,6 +562,8 @@ def sauvegarder_relais_liste(url_relais: list):
     if change:
         print("Sauvegarder %s maj" % CONST_PATH_RELAIS)
         try:
+            if watchdog:
+                watchdog.feed()
             with open(CONST_PATH_RELAIS, CONST_WRITE_BINARY) as fichier:
                 dump({CONST_CHAMP_RELAIS: url_relais}, fichier)
         except Exception as e:
@@ -563,6 +571,9 @@ def sauvegarder_relais_liste(url_relais: list):
             print_exception(e)
     else:
         print("Relais non changes")
+
+    if watchdog:
+        watchdog.feed()
 
     try:
         # Cleanup relais.new.json

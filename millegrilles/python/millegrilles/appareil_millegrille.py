@@ -69,7 +69,7 @@ _CONST_INTERVALLE_REFRESH_FICHE = const(1 * 60 * 60)
 CONST_DUREE_THREAD_POLLING = const(24 * 60 * 60)
 
 # Initialiser classe de buffer
-BUFFER_MESSAGE = mgmessages.BufferMessage(16 * 1024)
+BUFFER_MESSAGE = mgmessages.BufferMessage(24 * 1024)
 
 
 INITIAL_TIME = (
@@ -105,7 +105,7 @@ class Runner:
 
         # Wiring top-level utility modules first
         self._watchdog = Watchdog()
-        self.__chiffrage_messages = ChiffrageMessages()
+        self.__chiffrage_messages = ChiffrageMessages(self._watchdog)
         self._cryptographie = Cryptographie(self._watchdog, self.__chiffrage_messages)
 
         # Services
@@ -580,7 +580,7 @@ class Runner:
                     try:
                         fiche, certificat = await charger_fiche(self.cryptographie, self.watchdog, buffer=BUFFER_MESSAGE)
                         if fiche is not None:
-                            relais = sauvegarder_relais(fiche)
+                            relais = sauvegarder_relais(fiche, self.watchdog)
                             print("charger_url relais fiche sauvegardee %s" % relais)
                             await asyncio.sleep(0)
                     except Exception as e:

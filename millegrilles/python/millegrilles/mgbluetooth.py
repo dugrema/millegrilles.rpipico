@@ -54,7 +54,7 @@ class BluetoothHandler:
         self.__runner = runner  # Appareil
         self.__optionnel = optionnel
 
-        self.__chiffrage_handler = ChiffrageMessages()
+        self.__chiffrage_handler = ChiffrageMessages(runner.watchdog)
 
         self.__temp_service = None
         self.__command_service = None

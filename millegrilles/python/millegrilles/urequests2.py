@@ -62,7 +62,7 @@ async def request(
 
         username, password = auth
         formated = b"{}:{}".format(username, password)
-        formated = str(ubinascii.b2a_base64(formated)[:-1], "ascii")
+        formated = str(ubinascii.b2a_base64(formated), "ascii")
         headers["Authorization"] = "Basic {}".format(formated)
 
     try:

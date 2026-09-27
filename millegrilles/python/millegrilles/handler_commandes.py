@@ -7,9 +7,12 @@ from millegrilles.config import set_configuration_display, update_configuration_
 
 from millegrilles.message_inscription import recevoir_certificat
 from millegrilles.mgthreads import dump_spawn
+from millegrilles.watchdog import Watchdog
 
 
 async def traiter_commande(buffer, websocket, appareil, commande: dict, info_certificat: dict):
+    watchdog: Watchdog = appareil.watchdog
+    await watchdog.yield_duration(1)
     try:
         routage = commande['routage']
         action = routage['action']
@@ -49,7 +52,7 @@ async def traiter_commande(buffer, websocket, appareil, commande: dict, info_cer
         except KeyError as e:
             print("Erreur reception certificat KeyError %s" % str(e))
     elif action == 'fichePublique':
-        await recevoir_fiche_publique(json.loads(commande['contenu']))
+        await recevoir_fiche_publique(json.loads(commande['contenu']), watchdog)
     elif action == 'relaisWeb':
         await recevoir_relais_web(json.loads(commande['contenu']))
     elif action == 'commandeAppareil':
@@ -134,8 +137,8 @@ async def recevoir_configuration_programmes(appareil, programmes):
     await update_configuration_programmes(programmes, appareil)
 
 
-async def recevoir_fiche_publique(fiche):
-    sauvegarder_relais(fiche)
+async def recevoir_fiche_publique(fiche, watchdog):
+    sauvegarder_relais(fiche, watchdog)
 
 
 async def recevoir_relais_web(reponse):

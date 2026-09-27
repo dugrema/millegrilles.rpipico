@@ -71,6 +71,8 @@ async def __preparer_message(cryptographie, watchdog, chiffrage_messages, timeou
     buffer.clear()
     #watchdog.feed()
     # dump(etat, buffer)
+    # print("dump_spawn etat")
+    # print(etat)
     await dump_spawn(watchdog, etat, buffer)
     #watchdog.feed()
     print("preparer_message dump duree ", end="")
@@ -172,13 +174,13 @@ async def requete_relais_web(cryptographie, watchdog, chiffrage_messages, websoc
     #    dict(), domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_RELAIS_WEB, buffer=buffer)
 
     watchdog.feed()
+    print('Requete relais web')
     if chiffrage_messages.pret is True:
         # Chiffrer le message
         requete = await chiffrage_messages.chiffrer(dict())
         watchdog.feed()
         requete['routage'] = {'action': CONST_REQUETE_RELAIS_WEB}
     else:
-        print('Requete relais web')
         requete = await cryptographie.formatter_message(dict(), kind=1,
                                           domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_RELAIS_WEB,
                                           buffer=buffer, ajouter_certificat=True)
@@ -323,7 +325,8 @@ class PollingThread:
         watchdog = self.__appareil.watchdog
         chiffrage_messages = self.__appareil.chiffrage_messages
 
-        if self.__refresh_step <= 1:
+        # Refresh secret for message encryption
+        if self.__refresh_step <= 1 and chiffrage_messages.doit_renouveler_secret:
             self.__refresh_step = 2
             await self.echanger_secret()
             return
