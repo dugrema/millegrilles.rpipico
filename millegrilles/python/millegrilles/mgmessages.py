@@ -140,6 +140,11 @@ class BufferMessage(IOBase):
         return memoryview(self.__buffer)[:self.__len]
 
     def set_text(self, data):
+        if not isinstance(data, str):
+            raise Exception('Unsupported data type')
+        # print('Buffer setText', end="")
+        # print(data)
+        self.clear()
         self.write(data.encode('utf-8'))  # Shortcut, may use a lot of memory
         # try:
         #     if len(data) > len(self.__buffer):

@@ -386,7 +386,7 @@ async def charger_fiche(cryptographie, watchdog, no_validation=False, buffer=Non
         # await sleep_ms(1)  # Yield
         try:
             watchdog.feed()
-            message_fiche = loads(buffer.get_data())
+            message_fiche = json.load(buffer)
         except Exception as e:
             print('Erreur parse fiche')
             with open('fiche.err', 'wb') as fiche:
@@ -409,12 +409,13 @@ async def charger_fiche(cryptographie, watchdog, no_validation=False, buffer=Non
             print("Parse contenu fiche %s" % message_fiche['id'])
             buffer.set_text(message_fiche['contenu'])
             message_fiche = None
-            await sleep_ms(1)  # Yield
+            await watchdog.yield_duration(1)
             collect()
-            await sleep_ms(1)  # Yield
-            return loads(buffer.get_data()), certificat
+            await watchdog.yield_duration(1)
+            return json.load(buffer), certificat
         except Exception as e:
-            print("Erreur parsing fiche %s", e)
+            print("Erreur parsing fiche", e)
+            print(buffer.get_data())
 
     return None, None
 
