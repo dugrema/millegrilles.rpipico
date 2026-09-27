@@ -177,25 +177,32 @@ async def requete_relais_web(cryptographie, watchdog, chiffrage_messages, websoc
     print('Requete relais web')
     if chiffrage_messages.pret is True:
         # Chiffrer le message
-        requete = await chiffrage_messages.chiffrer(dict())
+        print('req chiffree')
+        requete = await chiffrage_messages.chiffrer({'ok': True})  # Note: sending empty dict was causing issues after micropython 1.29
         watchdog.feed()
         requete['routage'] = {'action': CONST_REQUETE_RELAIS_WEB}
     else:
+        print('req signee')
         requete = await cryptographie.formatter_message(dict(), kind=1,
                                           domaine=CONST_DOMAINE_SENSEURSPASSIFS_RELAI, action=CONST_REQUETE_RELAIS_WEB,
                                           buffer=buffer, ajouter_certificat=True)
+    print('Requete prep done')
     await watchdog.yield_duration(1)
     buffer.clear()
+    watchdog.feed()
     # dump(requete, buffer)
+    print("Req to buf")
     await dump_spawn(watchdog, requete, buffer)
     watchdog.feed()
     requete = None
 
     # Cleanup memoire
+    print("collect")
     await watchdog.yield_duration(1)
     collect()
     await watchdog.yield_duration(1)
 
+    print("Sent requete relais web")
     websocket.send(buffer.get_data())
 
 
@@ -501,6 +508,9 @@ class PollingThread:
 
             if reponse is not None and len(reponse) > 0:
                 # Remettre memoryview dans buffer - ajuste len
+                print("Response len ", end="")
+                print(len(reponse))
+                await self.__appareil.watchdog.yield_duration(1)
                 self.__buffer.set_bytes(reponse)
                 reponse = None
 

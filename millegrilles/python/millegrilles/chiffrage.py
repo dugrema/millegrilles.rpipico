@@ -71,14 +71,14 @@ class ChiffrageMessages:
         return self.__secret_echange is not None
 
     async def chiffrer(self, message: dict) -> dict:
-        if not self.pret:
-            raise Exception('chiffrer(): chiffrage desactive')
         message = dumps(message)
         await self.__watchdog.yield_duration(1)
 
         # ticks_debut = time.ticks_ms()
         nonce = rnd_bytes(12)
         await self.__watchdog.yield_duration(1)
+        if not self.__secret_echange:
+            raise Exception('chiffrer(): chiffrage desactive')
         ticks_debut = time.ticks_ms()
         tag = oryx_crypto.cipherchacha20poly1305encrypt(self.__secret_echange, nonce, message)
         print("chiffrer duree ", end="")
