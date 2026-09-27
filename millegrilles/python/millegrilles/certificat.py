@@ -201,7 +201,7 @@ async def valider_certificats(watchdog, pem_certs: list, date_validation=None, i
         ticks_debut = time.ticks_ms()
         # oryx_crypto.x509validercertificate(cert, parent, date_validation)
         await x509validercertificate_spawn(watchdog, cert, parent, date_validation)
-        print("x509validercertificate duree ")
+        print("x509validercertificate duree ", end="")
         print(time.ticks_diff(time.ticks_ms(), ticks_debut))
         cert = parent  # Poursuivre la chaine
     else:
@@ -213,7 +213,7 @@ async def valider_certificats(watchdog, pem_certs: list, date_validation=None, i
             ticks_debut = time.ticks_ms()
             # oryx_crypto.x509validercertificate(cert, parent, date_validation)
             await x509validercertificate_spawn(watchdog, cert, parent, date_validation)
-            print("x509validercertificate duree ")
+            print("x509validercertificate duree ", end="")
             print(time.ticks_diff(time.ticks_ms(), ticks_debut))
         except OSError as e:
             if e.errno == 2:

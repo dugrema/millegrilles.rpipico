@@ -30,7 +30,7 @@ class Cryptographie:
             info_certificat = await certificat.valider_certificats(self.__watchdog, message['certificat'], fingerprint=pubkey,
                                                                    err_ca_ok=err_ca_ok)  # , fingerprint=message['pubkey'])
             self.__watchdog.feed()
-            print("verifier_message verifier certificat duree ")
+            print("verifier_message verifier certificat duree ", end="")
             print(time.ticks_diff(time.ticks_ms(), ticks_debut))
             del message['certificat']
             await self.__watchdog.yield_duration(1)
@@ -97,7 +97,7 @@ class Cryptographie:
             self.__watchdog.feed()
             await self.__watchdog.yield_duration(1)
         print("Cle publique : %s" % binascii.hexlify(cle_publique))
-        print("signer_message_2023_5 ed25519generatepubkey duree ")
+        print("signer_message_2023_5 ed25519generatepubkey duree ", end="")
         print(time.ticks_diff(time.ticks_ms(), ticks_debut))
         # await asyncio.sleep_ms(1)
         await self.__watchdog.yield_duration(1)
@@ -108,7 +108,7 @@ class Cryptographie:
         ticks_debut = time.ticks_ms()
         self.__watchdog.feed()
         signature = oryx_crypto.ed25519sign(cle_privee, cle_publique, hachage)
-        print("__signer_message_2 ed25519sign duree")
+        print("__signer_message_2 ed25519sign duree ", end="")
         print(time.ticks_diff(time.ticks_ms(), ticks_debut))
         await self.__watchdog.yield_duration(1)
 
