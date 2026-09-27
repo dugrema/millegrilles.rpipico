@@ -1,5 +1,6 @@
 import _thread
 import time
+import json
 import uasyncio as asyncio
 
 from json import dumps, loads, load
@@ -142,7 +143,8 @@ async def requete_configuration_displays(cryptographie, watchdog, chiffrage_mess
     requete = await cryptographie.formatter_message(message, kind=1,
                                       domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_DISPLAY,
                                       buffer=buffer, ajouter_certificat=True)
-    buffer.set_text(dumps(requete))
+    # buffer.set_text(dumps(requete))
+    json.dump(requete, buffer)
 
     # Cleanup memoire
     await asyncio.sleep_ms(1)
@@ -157,7 +159,8 @@ async def requete_configuration_programmes(cryptographie, watchdog, chiffrage_me
     requete = await cryptographie.formatter_message(dict(), kind=1,
                                       domaine=CONST_DOMAINE_SENSEURSPASSIFS, action=CONST_REQUETE_PROGRAMMES,
                                       buffer=buffer, ajouter_certificat=True)
-    buffer.set_text(dumps(requete))
+    json.dump(requete, buffer)
+    # buffer.set_text(dumps(requete))
     requete = None
 
     # Cleanup memoire
@@ -249,7 +252,8 @@ async def charger_timeinfo(cryptographie, watchdog, chiffrage_messages, websocke
     else:
         requete = await generer_message_timeinfo(cryptographie, watchdog, timezone_str)
 
-    buffer.set_text(dumps(requete))
+    # buffer.set_text(dumps(requete))
+    json.dump(requete, buffer)
 
     await asyncio.sleep_ms(1)  # Yield
     collect()
@@ -355,13 +359,13 @@ class PollingThread:
                 refresh=True
             )
             return
-        
+
         if self.__refresh_step <= 4:
             self.__refresh_step = 5
             # Recharger la configuration des programmes
             await requete_configuration_programmes(self.__appareil.cryptographie, watchdog, chiffrage_messages, self.__websocket, buffer=self.__buffer)
             return
-        
+
         if self.__refresh_step <= 5:
             self.__refresh_step = 6
             # Verifier si le certificat doit etre renouvelle
@@ -429,7 +433,8 @@ class PollingThread:
                     print("Expiration thread dans %s " % (expiration_thread - now))
 
                     if now > self.__prochain_refresh_config:
-                        await self._refresh_config()
+                        async with self.__buffer:
+                            await self._refresh_config()
                         # await asyncio.sleep_ms(1)
                         await self.__appareil.watchdog.yield_duration(1)
                         collect()
@@ -441,7 +446,8 @@ class PollingThread:
                     try:
                         print(const("debut ws poll"))
                         self.__appareil.watchdog.feed()
-                        await self._poll()
+                        async with self.__buffer:
+                            await self._poll()
                         self.__appareil.watchdog.feed()
                         print(const("fin ws poll OK"))
                         # Reset erreurs
@@ -502,7 +508,7 @@ class PollingThread:
                 self.__timeout_http,
                 self.__appareil.get_etat,
             )
-            
+
             # await asyncio.sleep_ms(1)  # Yield
             await self.__appareil.watchdog.yield_duration(1)
 
@@ -511,6 +517,7 @@ class PollingThread:
                 print("Response len ", end="")
                 print(len(reponse))
                 await self.__appareil.watchdog.yield_duration(1)
+                # self.__buffer.set_text(reponse)
                 self.__buffer.set_bytes(reponse)
                 reponse = None
 

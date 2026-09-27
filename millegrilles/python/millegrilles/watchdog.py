@@ -7,6 +7,8 @@ from millegrilles.config import get_workaround_disable_watchdog
 using_core1 = False
 core1_stopped = True
 
+THREAD_FEED_INTERVAL=50
+
 class Watchdog:
     def __init__(self):
         disabled = get_workaround_disable_watchdog() is True
@@ -90,7 +92,7 @@ def feed_watchdog_core1(wdt):
     print("Core 1 is dog food")
     while using_core1:
         wdt.feed()
-        time.sleep_ms(250)
+        time.sleep_ms(THREAD_FEED_INTERVAL)
     core1_stopped = True
     print("Core 1 done")
 

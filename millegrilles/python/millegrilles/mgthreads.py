@@ -188,7 +188,7 @@ async def dump_spawn(watchdog, message, buffer, separators=None):
         watchdog.feed()
     else:
         timeout = 0
-        while RESULT_VALUE_DUMP is None and timeout < 100:
+        while RESULT_VALUE_DUMP is None and timeout < 200:
             timeout += 1
             await asyncio.sleep_ms(100)
         value = RESULT_VALUE_DUMP

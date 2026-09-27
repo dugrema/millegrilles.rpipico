@@ -238,7 +238,8 @@ async def recevoir_maj_configuration_appareil(appareil, buffer, websocket, comma
     watchdog.feed()
     requete['routage'] = {'action': 'getTimezoneInfo'}
 
-    buffer.set_text(json.dumps(requete))
+    # buffer.set_text(json.dumps(requete))
+    json.dump(requete, buffer)
     await watchdog.yield_duration(1)
 
     # Emettre requete

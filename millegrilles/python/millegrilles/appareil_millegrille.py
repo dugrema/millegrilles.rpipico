@@ -373,9 +373,10 @@ class Runner:
             for url_relai in self.__url_relais:
                 try:
                     print("Signature certificat avec relai %s " % url_relai)
-                    await run_inscription(
-                        self, url_relai, self.__ui_lock, buffer=BUFFER_MESSAGE
-                    )
+                    async with BUFFER_MESSAGE:
+                        await run_inscription(
+                            self, url_relai, self.__ui_lock, buffer=BUFFER_MESSAGE
+                        )
                     certificat_recu = True
                     break
                 except OSError as ose:
@@ -639,7 +640,8 @@ class Runner:
         await initialisation()
 
     async def __recuperer_ca(self):
-        await recuperer_ca(self.cryptographie, self.watchdog, buffer=BUFFER_MESSAGE)
+        async with BUFFER_MESSAGE:
+            await recuperer_ca(self.cryptographie, self.watchdog, buffer=BUFFER_MESSAGE)
 
     async def __main(self):
         self._mode_operation = await detecter_mode_operation()
